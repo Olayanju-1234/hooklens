@@ -1,40 +1,32 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class SignatureService {
+  private readonly logger = new Logger(SignatureService.name);
+
   verify(
     provider: string,
     rawBody: string,
     signature: string,
     secret: string,
   ): boolean {
-    switch (provider) {
-      case 'paystack': {
-        const hash = crypto
-          .createHmac('sha512', secret)
-          .update(rawBody)
-          .digest('hex');
-        return crypto.timingSafeEqual(
-          Buffer.from(hash, 'hex'),
-          Buffer.from(signature, 'hex'),
-        );
+    try {
+      switch (provider) {
+        case 'paystack':
+          return this.verifyHmac('sha512', secret, rawBody, signature);
+        case 'flutterwave':
+          return secret === signature;
+        case 'mono':
+          return this.verifyHmac('sha512', secret, rawBody, signature);
+        default:
+          return true;
       }
-      case 'flutterwave': {
-        return secret === signature;
-      }
-      case 'mono': {
-        const hash = crypto
-          .createHmac('sha512', secret)
-          .update(rawBody)
-          .digest('hex');
-        return crypto.timingSafeEqual(
-          Buffer.from(hash, 'hex'),
-          Buffer.from(signature, 'hex'),
-        );
-      }
-      default:
-        return true;
+    } catch (err) {
+      this.logger.warn(
+        `Signature verification failed for ${provider}: ${(err as Error).message}`,
+      );
+      return false;
     }
   }
 
@@ -50,5 +42,26 @@ export class SignatureService {
     const key = headerMap[provider];
     if (!key) return null;
     return headers[key] ?? headers[key.toLowerCase()] ?? null;
+  }
+
+  private verifyHmac(
+    algorithm: string,
+    secret: string,
+    body: string,
+    signature: string,
+  ): boolean {
+    const hash = crypto
+      .createHmac(algorithm, secret)
+      .update(body)
+      .digest('hex');
+
+    // timingSafeEqual requires equal-length buffers
+    const hashBuffer = Buffer.from(hash, 'hex');
+    const sigBuffer = Buffer.from(signature, 'hex');
+    if (hashBuffer.length !== sigBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(hashBuffer, sigBuffer);
   }
 }

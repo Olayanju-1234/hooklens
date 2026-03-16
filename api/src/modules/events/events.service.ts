@@ -139,11 +139,17 @@ export class EventsService {
 
     const saved = await this.eventRepo.save(replay);
 
-    await this.forwardQueue.add('forward', {
-      eventId: saved.id,
-      endpointId: endpoint.id,
-      userId,
-    });
+    try {
+      await this.forwardQueue.add('forward', {
+        eventId: saved.id,
+        endpointId: endpoint.id,
+        userId,
+      });
+    } catch (err) {
+      this.logger.error(
+        `Failed to queue replay forward for event ${saved.id}: ${(err as Error).message}`,
+      );
+    }
 
     this.logger.log(`Replayed event ${original.id} → ${saved.id}`);
     return saved;

@@ -1,9 +1,13 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Logger } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
 @Controller('health')
+@SkipThrottle()
 export class HealthController {
+  private readonly logger = new Logger(HealthController.name);
+
   constructor(
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -27,7 +31,10 @@ export class HealthController {
     try {
       await this.dataSource.query('SELECT 1');
       return true;
-    } catch {
+    } catch (err) {
+      this.logger.error(
+        `Database health check failed: ${(err as Error).message}`,
+      );
       return false;
     }
   }

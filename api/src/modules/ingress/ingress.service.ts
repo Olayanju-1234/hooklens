@@ -100,27 +100,45 @@ export class IngressService {
       }
     }
 
-    await this.eventRepo.update(event.id, updates);
+    try {
+      await this.eventRepo.update(event.id, updates);
+    } catch (err) {
+      this.logger.error(
+        `Failed to update event ${event.id}: ${(err as Error).message}`,
+      );
+    }
 
-    // Broadcast to WebSocket
-    this.wsGateway.broadcastWebhook(event.userId, {
-      id: event.id,
-      provider: endpoint.provider,
-      eventType,
-      signatureValid: (updates.signatureValid as boolean) ?? null,
-      receivedAt: event.receivedAt,
-      forwardStatus: event.forwardStatus,
-      method: event.method,
-      path: event.path,
-      bodyPreview: JSON.stringify(event.body).slice(0, 200),
-    });
+    // Broadcast to WebSocket — non-critical, don't let it block
+    try {
+      this.wsGateway.broadcastWebhook(event.userId, {
+        id: event.id,
+        provider: endpoint.provider,
+        eventType,
+        signatureValid: (updates.signatureValid as boolean) ?? null,
+        receivedAt: event.receivedAt,
+        forwardStatus: event.forwardStatus,
+        method: event.method,
+        path: event.path,
+        bodyPreview: JSON.stringify(event.body).slice(0, 200),
+      });
+    } catch (err) {
+      this.logger.warn(
+        `WebSocket broadcast failed for event ${event.id}: ${(err as Error).message}`,
+      );
+    }
 
     // Queue forward
-    await this.forwardQueue.add('forward', {
-      eventId: event.id,
-      endpointId: endpoint.id,
-      userId: event.userId,
-    });
+    try {
+      await this.forwardQueue.add('forward', {
+        eventId: event.id,
+        endpointId: endpoint.id,
+        userId: event.userId,
+      });
+    } catch (err) {
+      this.logger.error(
+        `Failed to queue forward for event ${event.id}: ${(err as Error).message}`,
+      );
+    }
 
     this.logger.log(
       `Captured webhook ${event.id} (${endpoint.provider}:${eventType})`,

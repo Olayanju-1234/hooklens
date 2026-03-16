@@ -45,8 +45,8 @@ export class ForwardProcessor extends WorkerHost {
     }
 
     if (!endpoint.forwardUrl) {
-      await this.eventRepo.update(eventId, { forwardStatus: 'skipped' });
-      this.wsGateway.broadcastForwardResult(userId, {
+      await this.safeUpdateEvent(eventId, { forwardStatus: 'skipped' });
+      this.safeBroadcast(userId, {
         eventId,
         forwardStatus: 'skipped',
         forwardCode: null,
@@ -73,7 +73,7 @@ export class ForwardProcessor extends WorkerHost {
       });
 
       const latency = Date.now() - start;
-      await this.eventRepo.update(eventId, {
+      await this.safeUpdateEvent(eventId, {
         forwardStatus: 'forwarded',
         forwardCode: response.status,
         forwardBody: JSON.stringify(response.data).slice(0, 5000),
@@ -81,7 +81,7 @@ export class ForwardProcessor extends WorkerHost {
         forwardedAt: new Date(),
       });
 
-      this.wsGateway.broadcastForwardResult(userId, {
+      this.safeBroadcast(userId, {
         eventId,
         forwardStatus: 'forwarded',
         forwardCode: response.status,
@@ -93,11 +93,14 @@ export class ForwardProcessor extends WorkerHost {
       );
     } catch (err: unknown) {
       const latency = Date.now() - start;
-      const error = err as { response?: { status?: number }; message?: string };
+      const error = err as {
+        response?: { status?: number };
+        message?: string;
+      };
       const code = error.response?.status ?? 0;
       const body = (error.message ?? 'Unknown error').slice(0, 5000);
 
-      await this.eventRepo.update(eventId, {
+      await this.safeUpdateEvent(eventId, {
         forwardStatus: 'failed',
         forwardCode: code,
         forwardBody: body,
@@ -105,7 +108,7 @@ export class ForwardProcessor extends WorkerHost {
         forwardedAt: new Date(),
       });
 
-      this.wsGateway.broadcastForwardResult(userId, {
+      this.safeBroadcast(userId, {
         eventId,
         forwardStatus: 'failed',
         forwardCode: code,
@@ -114,6 +117,37 @@ export class ForwardProcessor extends WorkerHost {
 
       this.logger.warn(
         `Forward failed ${eventId} → ${endpoint.forwardUrl} (${code}, ${latency}ms)`,
+      );
+    }
+  }
+
+  private async safeUpdateEvent(
+    eventId: string,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      await this.eventRepo.update(eventId, data);
+    } catch (err) {
+      this.logger.error(
+        `DB update failed for event ${eventId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  private safeBroadcast(
+    userId: string,
+    payload: {
+      eventId: string;
+      forwardStatus: string;
+      forwardCode: number | null;
+      forwardLatency: number | null;
+    },
+  ): void {
+    try {
+      this.wsGateway.broadcastForwardResult(userId, payload);
+    } catch (err) {
+      this.logger.warn(
+        `WebSocket broadcast failed for event ${payload.eventId}: ${(err as Error).message}`,
       );
     }
   }
