@@ -1,0 +1,18 @@
+/dist
+/node_modules
+.env
+*.js.map
+*.d.ts
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+/coverage
