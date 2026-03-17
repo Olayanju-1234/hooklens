@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { TabRail } from "@/components/layout/tab-rail";
+import { WebSocketProvider } from "@/hooks/use-websocket";
 
 export default function DashboardLayout({
   children,
@@ -28,9 +29,11 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-bg-primary noise">
-      <TabRail />
-      <main className="flex-1 overflow-y-auto">{children}</main>
-    </div>
+    <WebSocketProvider>
+      <div className="flex flex-col h-screen overflow-hidden bg-bg-primary noise">
+        <TabRail />
+        <main className="flex-1 overflow-y-auto">{children}</main>
+      </div>
+    </WebSocketProvider>
   );
 }

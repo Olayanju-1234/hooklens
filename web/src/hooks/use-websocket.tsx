@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import { io, Socket } from "socket.io-client";
 import Cookies from "js-cookie";
 
@@ -25,7 +32,15 @@ interface ForwardResult {
   forwardLatency: number | null;
 }
 
-export function useWebSocket() {
+interface WebSocketContextType {
+  connected: boolean;
+  liveEvents: LiveEvent[];
+  clearEvents: () => void;
+}
+
+const WebSocketContext = createContext<WebSocketContextType | null>(null);
+
+export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
@@ -69,5 +84,16 @@ export function useWebSocket() {
 
   const clearEvents = useCallback(() => setLiveEvents([]), []);
 
-  return { connected, liveEvents, clearEvents };
+  return (
+    <WebSocketContext.Provider value={{ connected, liveEvents, clearEvents }}>
+      {children}
+    </WebSocketContext.Provider>
+  );
+}
+
+export function useWebSocket() {
+  const ctx = useContext(WebSocketContext);
+  if (!ctx)
+    throw new Error("useWebSocket must be used within WebSocketProvider");
+  return ctx;
 }
