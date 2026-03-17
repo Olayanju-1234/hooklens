@@ -1,6 +1,5 @@
 "use client";
 
-import { Topbar } from "@/components/layout/topbar";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { StatusBadge, MethodBadge, SignatureBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,8 +11,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Topbar title="Live Stream" />
-      <div className="px-6 pb-6">
+      <div className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full">
         <div className="flex items-center justify-between mb-5">
           <p className="text-sm text-text-tertiary font-mono tabular-nums">
             {liveEvents.length} event{liveEvents.length !== 1 ? "s" : ""}
@@ -41,7 +39,7 @@ export default function DashboardPage() {
             {liveEvents.map((event, i) => (
               <Link key={event.id} href={`/dashboard/events/${event.id}`}>
                 <div
-                  className="animate-slide-in flex items-center gap-3 px-4 py-3 rounded-xl
+                  className="animate-slide-in flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 rounded-xl
                     bg-bg-secondary border border-border-primary
                     hover:border-border-secondary hover:shadow-sm
                     cursor-pointer group"
@@ -61,10 +59,10 @@ export default function DashboardPage() {
                       {event.bodyPreview}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2.5 shrink-0">
+                  <div className="flex items-center gap-2.5 shrink-0 sm:ml-0 ml-0">
                     <SignatureBadge valid={event.signatureValid} />
                     <StatusBadge status={event.forwardStatus} />
-                    <span className="text-[11px] text-text-tertiary font-mono tabular-nums">
+                    <span className="text-[11px] text-text-tertiary font-mono tabular-nums ml-auto sm:ml-0">
                       {new Date(event.receivedAt).toLocaleTimeString()}
                     </span>
                   </div>

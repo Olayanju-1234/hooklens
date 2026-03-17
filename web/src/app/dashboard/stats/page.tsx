@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Topbar } from "@/components/layout/topbar";
 import { stats as statsApi, Stats } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { useCountUp, useFadeIn } from "@/hooks/use-gsap";
@@ -17,13 +16,17 @@ export default function StatsPage() {
   const [data, setData] = useState<Stats | null>(null);
   const [period, setPeriod] = useState("7d");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const contentRef = useFadeIn<HTMLDivElement>();
 
   const fetchStats = useCallback(async (p: string) => {
     setLoading(true);
+    setError("");
     try {
       const result = await statsApi.get(p);
       setData(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load stats");
     } finally {
       setLoading(false);
     }
@@ -35,8 +38,7 @@ export default function StatsPage() {
 
   return (
     <>
-      <Topbar title="Analytics" />
-      <div ref={contentRef} className="px-6 pb-6 max-w-5xl">
+      <div ref={contentRef} className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full">
         {/* Period selector */}
         <div className="flex items-center gap-1 mb-6 p-0.5 bg-bg-tertiary rounded-lg w-fit">
           {periods.map((p) => (
@@ -54,14 +56,24 @@ export default function StatsPage() {
           ))}
         </div>
 
-        {loading && !data ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center h-64 gap-3">
+            <p className="text-sm text-text-error">{error}</p>
+            <button
+              onClick={() => fetchStats(period)}
+              className="text-xs text-text-accent hover:underline cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        ) : loading && !data ? (
           <div className="flex items-center justify-center h-64">
             <div className="w-5 h-5 border-2 border-border-secondary border-t-text-accent rounded-full animate-spin" />
           </div>
         ) : data ? (
           <div className="space-y-5">
             {/* Top stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
               <AnimatedStatCard label="Total Events" value={data.total} />
               <AnimatedStatCard
                 label="Forwarded"
@@ -194,7 +206,7 @@ export default function StatsPage() {
                   <div className="h-full w-full" />
                 )}
               </div>
-              <div className="flex items-center gap-6 mt-3">
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6 mt-3">
                 <LegendItem color="bg-emerald-500" label="Forwarded" value={data.forwarded} />
                 <LegendItem color="bg-red-500" label="Failed" value={data.failed} />
                 <LegendItem color="bg-amber-500" label="Skipped" value={data.skipped} />

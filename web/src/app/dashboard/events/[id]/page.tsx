@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Topbar } from "@/components/layout/topbar";
 import { events as eventsApi, WebhookEvent } from "@/lib/api";
 import { StatusBadge, MethodBadge, SignatureBadge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -13,12 +12,15 @@ export default function EventDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [event, setEvent] = useState<WebhookEvent | null>(null);
+  const [error, setError] = useState("");
   const [replaying, setReplaying] = useState(false);
   const contentRef = useFadeIn<HTMLDivElement>();
 
   useEffect(() => {
     if (params.id) {
-      void eventsApi.get(params.id as string).then(setEvent);
+      eventsApi.get(params.id as string).then(setEvent).catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to load event");
+      });
     }
   }, [params.id]);
 
@@ -33,24 +35,34 @@ export default function EventDetailPage() {
     }
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <p className="text-sm text-text-error">{error}</p>
+        <button
+          onClick={() => router.back()}
+          className="text-xs text-text-accent hover:underline cursor-pointer"
+        >
+          Go back
+        </button>
+      </div>
+    );
+  }
+
   if (!event) {
     return (
-      <>
-        <Topbar title="Event Detail" />
-        <div className="flex items-center justify-center h-64">
-          <div className="w-5 h-5 border-2 border-border-secondary border-t-text-accent rounded-full animate-spin" />
-        </div>
-      </>
+      <div className="flex items-center justify-center h-64">
+        <div className="w-5 h-5 border-2 border-border-secondary border-t-text-accent rounded-full animate-spin" />
+      </div>
     );
   }
 
   return (
     <>
-      <Topbar title="Event Detail" />
-      <div ref={contentRef} className="px-6 pb-6 max-w-4xl">
+      <div ref={contentRef} className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => router.back()}
               className="p-2 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-hover cursor-pointer"

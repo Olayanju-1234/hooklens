@@ -121,6 +121,10 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border-secondary); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 
+/* Hide scrollbar but keep scrollable */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* Focus ring */
 *:focus-visible {
   outline: 2px solid var(--border-focus);

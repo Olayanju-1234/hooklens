@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
-import { Topbar } from "@/components/layout/topbar";
 import { endpoints as endpointsApi, Endpoint, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,11 +43,16 @@ export default function EndpointsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const listRef = useStaggerIn<HTMLDivElement>();
 
+  const [fetchError, setFetchError] = useState("");
+
   async function fetchEndpoints() {
     setLoading(true);
+    setFetchError("");
     try {
       const data = await endpointsApi.list();
       setItems(data);
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : "Failed to load endpoints");
     } finally {
       setLoading(false);
     }
@@ -125,8 +129,7 @@ export default function EndpointsPage() {
 
   return (
     <>
-      <Topbar title="Endpoints" />
-      <div className="px-6 pb-6 max-w-4xl">
+      <div className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full">
         <div className="flex items-center justify-between mb-5">
           <p className="text-sm text-text-tertiary font-mono tabular-nums">
             {items.length} endpoint{items.length !== 1 ? "s" : ""}
@@ -139,7 +142,17 @@ export default function EndpointsPage() {
           </Button>
         </div>
 
-        {items.length === 0 && !loading ? (
+        {fetchError ? (
+          <div className="flex flex-col items-center justify-center h-64 gap-3">
+            <p className="text-sm text-text-error">{fetchError}</p>
+            <button
+              onClick={() => void fetchEndpoints()}
+              className="text-xs text-text-accent hover:underline cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        ) : items.length === 0 && !loading ? (
           <EmptyState
             icon={
               <svg width="22" height="22" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -159,7 +172,7 @@ export default function EndpointsPage() {
             {items.map((ep) => (
               <div
                 key={ep.id}
-                className="flex items-center gap-4 px-5 py-4 rounded-xl
+                className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4 rounded-xl
                   bg-bg-secondary border border-border-primary
                   hover:border-border-secondary hover:shadow-sm group"
               >
@@ -184,7 +197,7 @@ export default function EndpointsPage() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => void handleToggle(ep)}
                     className="p-2 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-hover cursor-pointer"

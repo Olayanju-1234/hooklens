@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Topbar } from "@/components/layout/topbar";
 import { events as eventsApi, WebhookEvent } from "@/lib/api";
 import { StatusBadge, MethodBadge, SignatureBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,12 +20,14 @@ export default function EventsPage() {
   const [items, setItems] = useState<WebhookEvent[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const listRef = useStaggerIn<HTMLDivElement>();
 
   const fetchEvents = useCallback(
     async (cursor?: string) => {
       setLoading(true);
+      setError("");
       try {
         const params: Record<string, string> = {};
         if (statusFilter) params.forwardStatus = statusFilter;
@@ -34,6 +35,8 @@ export default function EventsPage() {
         const res = await eventsApi.list(params);
         setItems((prev) => (cursor ? [...prev, ...res.items] : res.items));
         setNextCursor(res.nextCursor);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load events");
       } finally {
         setLoading(false);
       }
@@ -47,11 +50,10 @@ export default function EventsPage() {
 
   return (
     <>
-      <Topbar title="Events" />
-      <div className="px-6 pb-6">
+      <div className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full">
         {/* Filter pills */}
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-1 p-0.5 bg-bg-tertiary rounded-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <div className="flex items-center gap-1 p-0.5 bg-bg-tertiary rounded-lg overflow-x-auto no-scrollbar">
             {statusFilters.map((f) => (
               <button
                 key={f.value}
@@ -75,7 +77,17 @@ export default function EventsPage() {
           </Button>
         </div>
 
-        {items.length === 0 && !loading ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center h-64 gap-3">
+            <p className="text-sm text-text-error">{error}</p>
+            <button
+              onClick={() => fetchEvents()}
+              className="text-xs text-text-accent hover:underline cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        ) : items.length === 0 && !loading ? (
           <EmptyState
             title="No events yet"
             description="Webhook events will show up here once your ingress URL receives requests"
@@ -85,7 +97,7 @@ export default function EventsPage() {
             {items.map((event) => (
               <Link key={event.id} href={`/dashboard/events/${event.id}`}>
                 <div
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl
+                  className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 rounded-xl
                     bg-bg-secondary border border-border-primary
                     hover:border-border-secondary hover:shadow-sm
                     cursor-pointer group"
@@ -106,7 +118,7 @@ export default function EventsPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
                     <SignatureBadge valid={event.signatureValid} />
                     <StatusBadge status={event.forwardStatus} />
                     {event.forwardLatency && (
@@ -114,7 +126,7 @@ export default function EventsPage() {
                         {event.forwardLatency}ms
                       </span>
                     )}
-                    <span className="text-[11px] text-text-tertiary font-mono tabular-nums">
+                    <span className="text-[11px] text-text-tertiary font-mono tabular-nums ml-auto sm:ml-0">
                       {new Date(event.receivedAt).toLocaleString()}
                     </span>
                   </div>
