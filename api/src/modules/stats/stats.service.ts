@@ -10,60 +10,54 @@ export class StatsService {
     private readonly eventRepo: Repository<WebhookEvent>,
   ) {}
 
-  async getStats(userId: string, period: '24h' | '7d' | '30d' = '24h') {
-    const periodMap = { '24h': 1, '7d': 7, '30d': 30 };
+  async getStats(userId: string, period: '24h' | '7d' | '30d' | 'all' = '24h') {
+    const periodMap: Record<string, number | null> = {
+      '24h': 1,
+      '7d': 7,
+      '30d': 30,
+      all: null,
+    };
     const days = periodMap[period];
-    const since = new Date();
-    since.setDate(since.getDate() - days);
+    const since =
+      days !== null ? new Date(Date.now() - days * 86_400_000) : null;
+
+    const baseQuery = (alias: string) => {
+      const qb = this.eventRepo
+        .createQueryBuilder(alias)
+        .where(`${alias}.userId = :userId`, { userId });
+      if (since) qb.andWhere(`${alias}.receivedAt >= :since`, { since });
+      return qb;
+    };
 
     const [total, forwarded, failed, avgLatency, byEventType, byProvider] =
       await Promise.all([
-        this.eventRepo
-          .createQueryBuilder('e')
-          .where('e.userId = :userId', { userId })
-          .andWhere('e.receivedAt >= :since', { since })
-          .getCount(),
+        baseQuery('e').getCount(),
 
-        this.eventRepo
-          .createQueryBuilder('e')
-          .where('e.userId = :userId', { userId })
-          .andWhere('e.receivedAt >= :since', { since })
+        baseQuery('e')
           .andWhere('e.forwardStatus = :status', { status: 'forwarded' })
           .getCount(),
 
-        this.eventRepo
-          .createQueryBuilder('e')
-          .where('e.userId = :userId', { userId })
-          .andWhere('e.receivedAt >= :since', { since })
+        baseQuery('e')
           .andWhere('e.forwardStatus = :status', { status: 'failed' })
           .getCount(),
 
-        this.eventRepo
-          .createQueryBuilder('e')
+        baseQuery('e')
           .select('AVG(e.forwardLatency)', 'avg')
-          .where('e.userId = :userId', { userId })
-          .andWhere('e.receivedAt >= :since', { since })
           .andWhere('e.forwardLatency IS NOT NULL')
           .getRawOne<{ avg: string }>(),
 
-        this.eventRepo
-          .createQueryBuilder('e')
+        baseQuery('e')
           .select('e.eventType', 'eventType')
           .addSelect('COUNT(*)', 'count')
-          .where('e.userId = :userId', { userId })
-          .andWhere('e.receivedAt >= :since', { since })
           .andWhere('e.eventType IS NOT NULL')
           .groupBy('e.eventType')
           .orderBy('count', 'DESC')
           .limit(10)
           .getRawMany<{ eventType: string; count: string }>(),
 
-        this.eventRepo
-          .createQueryBuilder('e')
+        baseQuery('e')
           .select('e.provider', 'provider')
           .addSelect('COUNT(*)', 'count')
-          .where('e.userId = :userId', { userId })
-          .andWhere('e.receivedAt >= :since', { since })
           .andWhere('e.provider IS NOT NULL')
           .groupBy('e.provider')
           .getRawMany<{ provider: string; count: string }>(),
