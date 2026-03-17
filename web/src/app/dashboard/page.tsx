@@ -62,7 +62,7 @@ const TEST_PAYLOADS = [
 ];
 
 export default function DashboardPage() {
-  const { liveEvents, clearEvents, addEvents } = useWebSocket();
+  const { liveEvents, clearEvents, addEvents, removeEvent } = useWebSocket();
   const { ingressSlug } = useAuth();
   const [sending, setSending] = useState(false);
 
@@ -72,12 +72,32 @@ export default function DashboardPage() {
     try {
       const payload =
         TEST_PAYLOADS[Math.floor(Math.random() * TEST_PAYLOADS.length)];
+
+      // Optimistic: show the event immediately
+      const optimisticId = `optimistic_${Date.now()}`;
+      const eventType = (payload.body as Record<string, unknown>)
+        .event as string;
+      addEvents([
+        {
+          id: optimisticId,
+          provider: "paystack",
+          eventType,
+          signatureValid: null,
+          receivedAt: new Date().toISOString(),
+          forwardStatus: "pending",
+          method: "POST",
+          path: `/in/${ingressSlug}`,
+          bodyPreview: JSON.stringify(payload.body).slice(0, 200),
+        },
+      ]);
+
       await fetch(`${BASE_URL}/in/${ingressSlug}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload.body),
       });
-      // Fallback: poll for latest events in case WebSocket missed the broadcast
+
+      // Replace optimistic event with real data from the server
       setTimeout(async () => {
         try {
           const res = await eventsApi.list({ limit: "5" });
@@ -92,11 +112,13 @@ export default function DashboardPage() {
             path: e.path,
             bodyPreview: e.body ? JSON.stringify(e.body).slice(0, 200) : "",
           }));
+          // Remove optimistic entry and merge real data
+          removeEvent(optimisticId);
           addEvents(mapped);
         } catch {
-          // Non-critical fallback, ignore errors
+          // Non-critical, ignore
         }
-      }, 1500);
+      }, 800);
     } finally {
       setSending(false);
     }

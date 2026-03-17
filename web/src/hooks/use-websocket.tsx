@@ -37,6 +37,7 @@ interface WebSocketContextType {
   liveEvents: LiveEvent[];
   clearEvents: () => void;
   addEvents: (events: LiveEvent[]) => void;
+  removeEvent: (id: string) => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
@@ -62,7 +63,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
     const socket = io(`${WS_URL}/live`, {
       auth: { token },
-      transports: ["websocket"],
+      transports: ["websocket", "polling"],
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 10,
     });
 
     socket.on("connect", () => setConnected(true));
@@ -94,9 +97,13 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const removeEvent = useCallback((id: string) => {
+    setLiveEvents((prev) => prev.filter((e) => e.id !== id));
+  }, []);
+
   return (
     <WebSocketContext.Provider
-      value={{ connected, liveEvents, clearEvents, addEvents }}
+      value={{ connected, liveEvents, clearEvents, addEvents, removeEvent }}
     >
       {children}
     </WebSocketContext.Provider>
