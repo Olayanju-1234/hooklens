@@ -24,7 +24,9 @@ export function TabRail() {
   const tabsRef = useRef<(HTMLAnchorElement | null)[]>([]);
 
   const activeIndex = tabs.findIndex(
-    (t) => pathname === t.href || (t.href !== "/dashboard" && pathname.startsWith(t.href))
+    (t) =>
+      pathname === t.href ||
+      (t.href !== "/dashboard" && pathname.startsWith(t.href)),
   );
 
   useEffect(() => {
@@ -43,7 +45,10 @@ export function TabRail() {
   return (
     <header className="relative flex items-center h-12 px-4 sm:px-6 bg-bg-secondary border-b border-border-primary shrink-0 z-30">
       {/* Logo */}
-      <Link href="/dashboard" className="flex items-center gap-2 mr-4 sm:mr-6 shrink-0">
+      <Link
+        href="/dashboard"
+        className="flex items-center gap-2 mr-4 sm:mr-6 shrink-0"
+      >
         <div className="w-6 h-6 rounded-md bg-bg-accent flex items-center justify-center">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
             <path
@@ -75,11 +80,14 @@ export function TabRail() {
             <Link
               key={tab.href}
               href={tab.href}
-              ref={(el) => { tabsRef.current[i] = el; }}
+              ref={(el) => {
+                tabsRef.current[i] = el;
+              }}
               className={`relative flex items-center h-full px-2.5 sm:px-3 text-[12px] sm:text-[13px] font-medium transition-colors whitespace-nowrap
-                ${active
-                  ? "text-text-accent"
-                  : "text-text-tertiary hover:text-text-primary"
+                ${
+                  active
+                    ? "text-text-accent"
+                    : "text-text-tertiary hover:text-text-primary"
                 }`}
             >
               {tab.label}
@@ -121,12 +129,28 @@ export function TabRail() {
           aria-label="Toggle theme"
         >
           {theme === "light" ? (
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
               <path d="M8 1v1M8 14v1M1 8h1M14 8h1M3.05 3.05l.7.7M12.25 12.25l.7.7M12.25 3.05l-.7.7M3.05 12.25l-.7.7" />
               <circle cx="8" cy="8" r="3" />
             </svg>
           ) : (
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
               <path d="M14 9.5A6 6 0 016.5 2 6 6 0 1014 9.5z" />
             </svg>
           )}
@@ -138,7 +162,15 @@ export function TabRail() {
           className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors cursor-pointer"
           aria-label="Log out"
         >
-          <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 18 18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          >
             <path d="M7 15H4a1 1 0 01-1-1V4a1 1 0 011-1h3M12 12l3-3-3-3M15 9H7" />
           </svg>
         </button>

@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-} from "react";
+import { createContext, useContext, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
 import { auth as authApi } from "./api";
@@ -32,7 +27,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const token = Cookies.get("token");
     const slug = Cookies.get("ingressSlug");
-    return { token: token || null, ingressSlug: slug || null, isLoading: false };
+    return {
+      token: token || null,
+      ingressSlug: slug || null,
+      isLoading: false,
+    };
   });
 
   const login = useCallback(
@@ -40,7 +39,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await authApi.login(email, password);
       Cookies.set("token", res.accessToken, { expires: 7 });
       Cookies.set("ingressSlug", res.ingressSlug, { expires: 7 });
-      setState({ token: res.accessToken, ingressSlug: res.ingressSlug, isLoading: false });
+      setState({
+        token: res.accessToken,
+        ingressSlug: res.ingressSlug,
+        isLoading: false,
+      });
       router.push("/dashboard");
     },
     [router],
@@ -51,7 +54,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await authApi.signup(email, password);
       Cookies.set("token", res.accessToken, { expires: 7 });
       Cookies.set("ingressSlug", res.ingressSlug, { expires: 7 });
-      setState({ token: res.accessToken, ingressSlug: res.ingressSlug, isLoading: false });
+      setState({
+        token: res.accessToken,
+        ingressSlug: res.ingressSlug,
+        isLoading: false,
+      });
       return res.ingressSlug;
     },
     [],

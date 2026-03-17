@@ -14,7 +14,11 @@ const variantStyles: Record<BadgeVariant, string> = {
   info: "bg-bg-info text-text-primary",
 };
 
-export function Badge({ children, variant = "default", className = "" }: BadgeProps) {
+export function Badge({
+  children,
+  variant = "default",
+  className = "",
+}: BadgeProps) {
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md

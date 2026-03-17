@@ -38,7 +38,10 @@ export default function StatsPage() {
 
   return (
     <>
-      <div ref={contentRef} className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full">
+      <div
+        ref={contentRef}
+        className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full"
+      >
         {/* Period selector */}
         <div className="flex items-center gap-1 mb-6 p-0.5 bg-bg-tertiary rounded-lg w-fit">
           {periods.map((p) => (
@@ -46,9 +49,10 @@ export default function StatsPage() {
               key={p.value}
               onClick={() => setPeriod(p.value)}
               className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer
-                ${period === p.value
-                  ? "bg-bg-secondary text-text-primary shadow-sm"
-                  : "text-text-tertiary hover:text-text-secondary"
+                ${
+                  period === p.value
+                    ? "bg-bg-secondary text-text-primary shadow-sm"
+                    : "text-text-tertiary hover:text-text-secondary"
                 }`}
             >
               {p.label}
@@ -78,7 +82,9 @@ export default function StatsPage() {
               <AnimatedStatCard
                 label="Forwarded"
                 value={data.forwarded}
-                sub={data.total > 0 ? `${data.successRate.toFixed(1)}%` : undefined}
+                sub={
+                  data.total > 0 ? `${data.successRate.toFixed(1)}%` : undefined
+                }
               />
               <AnimatedStatCard label="Failed" value={data.failed} />
               <AnimatedStatCard
@@ -92,13 +98,18 @@ export default function StatsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {/* By Event Type */}
               <Card>
-                <h3 className="text-sm font-semibold text-text-primary mb-4">By Event Type</h3>
+                <h3 className="text-sm font-semibold text-text-primary mb-4">
+                  By Event Type
+                </h3>
                 {data.byEventType.length === 0 ? (
-                  <p className="text-xs text-text-tertiary py-4 text-center">No data yet</p>
+                  <p className="text-xs text-text-tertiary py-4 text-center">
+                    No data yet
+                  </p>
                 ) : (
                   <div className="space-y-3">
                     {data.byEventType.slice(0, 8).map((item) => {
-                      const pct = data.total > 0 ? (item.count / data.total) * 100 : 0;
+                      const pct =
+                        data.total > 0 ? (item.count / data.total) * 100 : 0;
                       return (
                         <div key={item.eventType}>
                           <div className="flex items-center justify-between mb-1">
@@ -114,7 +125,8 @@ export default function StatsPage() {
                               className="h-full bg-bg-accent rounded-full"
                               style={{
                                 width: `${Math.max(pct, 2)}%`,
-                                transition: "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
+                                transition:
+                                  "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
                               }}
                             />
                           </div>
@@ -127,20 +139,27 @@ export default function StatsPage() {
 
               {/* By Provider */}
               <Card>
-                <h3 className="text-sm font-semibold text-text-primary mb-4">By Provider</h3>
+                <h3 className="text-sm font-semibold text-text-primary mb-4">
+                  By Provider
+                </h3>
                 {data.byProvider.length === 0 ? (
-                  <p className="text-xs text-text-tertiary py-4 text-center">No data yet</p>
+                  <p className="text-xs text-text-tertiary py-4 text-center">
+                    No data yet
+                  </p>
                 ) : (
                   <div className="space-y-3">
                     {data.byProvider.map((item) => {
-                      const pct = data.total > 0 ? (item.count / data.total) * 100 : 0;
+                      const pct =
+                        data.total > 0 ? (item.count / data.total) * 100 : 0;
                       return (
                         <div key={item.provider}>
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-2">
                               <div
                                 className="w-2 h-2 rounded-full"
-                                style={{ backgroundColor: providerColor(item.provider) }}
+                                style={{
+                                  backgroundColor: providerColor(item.provider),
+                                }}
                               />
                               <span className="text-xs font-medium text-text-secondary capitalize">
                                 {item.provider || "unknown"}
@@ -156,7 +175,8 @@ export default function StatsPage() {
                               style={{
                                 width: `${Math.max(pct, 2)}%`,
                                 backgroundColor: providerColor(item.provider),
-                                transition: "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
+                                transition:
+                                  "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
                               }}
                             />
                           </div>
@@ -170,7 +190,9 @@ export default function StatsPage() {
 
             {/* Delivery breakdown */}
             <Card>
-              <h3 className="text-sm font-semibold text-text-primary mb-4">Delivery Breakdown</h3>
+              <h3 className="text-sm font-semibold text-text-primary mb-4">
+                Delivery Breakdown
+              </h3>
               <div className="flex items-center gap-0.5 h-5 rounded-full overflow-hidden bg-bg-tertiary">
                 {data.total > 0 ? (
                   <>
@@ -207,9 +229,21 @@ export default function StatsPage() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-4 sm:gap-6 mt-3">
-                <LegendItem color="bg-emerald-500" label="Forwarded" value={data.forwarded} />
-                <LegendItem color="bg-red-500" label="Failed" value={data.failed} />
-                <LegendItem color="bg-amber-500" label="Skipped" value={data.skipped} />
+                <LegendItem
+                  color="bg-emerald-500"
+                  label="Forwarded"
+                  value={data.forwarded}
+                />
+                <LegendItem
+                  color="bg-red-500"
+                  label="Failed"
+                  value={data.failed}
+                />
+                <LegendItem
+                  color="bg-amber-500"
+                  label="Skipped"
+                  value={data.skipped}
+                />
               </div>
             </Card>
           </div>
@@ -239,19 +273,33 @@ function AnimatedStatCard({
       </p>
       <p className="text-2xl font-semibold text-text-primary mt-1.5 font-mono tabular-nums">
         <span ref={countRef}>0</span>
-        {suffix && <span className="text-sm text-text-tertiary ml-0.5">{suffix}</span>}
+        {suffix && (
+          <span className="text-sm text-text-tertiary ml-0.5">{suffix}</span>
+        )}
       </p>
-      {sub && <p className="text-xs text-text-accent mt-1 font-medium">{sub}</p>}
+      {sub && (
+        <p className="text-xs text-text-accent mt-1 font-medium">{sub}</p>
+      )}
     </div>
   );
 }
 
-function LegendItem({ color, label, value }: { color: string; label: string; value: number }) {
+function LegendItem({
+  color,
+  label,
+  value,
+}: {
+  color: string;
+  label: string;
+  value: number;
+}) {
   return (
     <div className="flex items-center gap-2">
       <div className={`w-2 h-2 rounded-full ${color}`} />
       <span className="text-xs text-text-secondary">{label}</span>
-      <span className="text-xs font-mono text-text-tertiary tabular-nums">{value}</span>
+      <span className="text-xs font-mono text-text-tertiary tabular-nums">
+        {value}
+      </span>
     </div>
   );
 }

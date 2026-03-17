@@ -47,7 +47,8 @@ export default function LoginPage() {
       <div
         className="absolute w-[500px] h-[500px] rounded-full opacity-20 blur-3xl pointer-events-none"
         style={{
-          background: "radial-gradient(circle, var(--bg-accent) 0%, transparent 70%)",
+          background:
+            "radial-gradient(circle, var(--bg-accent) 0%, transparent 70%)",
           top: "20%",
           left: "50%",
           transform: "translateX(-50%)",
@@ -57,15 +58,28 @@ export default function LoginPage() {
       <div ref={formRef} className="w-full max-w-sm relative z-10">
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-10">
-          <div className="w-9 h-9 rounded-xl bg-bg-accent flex items-center justify-center shadow-lg" style={{ boxShadow: "var(--glow)" }}>
+          <div
+            className="w-9 h-9 rounded-xl bg-bg-accent flex items-center justify-center shadow-lg"
+            style={{ boxShadow: "var(--glow)" }}
+          >
             <svg width="18" height="18" viewBox="0 0 14 14" fill="none">
-              <path d="M2 7h3l2-4 2 8 2-4h3" stroke="var(--text-inverse)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M2 7h3l2-4 2 8 2-4h3"
+                stroke="var(--text-inverse)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </div>
-          <span className="text-lg font-semibold text-text-primary tracking-tight">Hookdash</span>
+          <span className="text-lg font-semibold text-text-primary tracking-tight">
+            Hookdash
+          </span>
         </div>
 
-        <h1 className="text-2xl font-bold text-text-primary tracking-tight">Welcome back</h1>
+        <h1 className="text-2xl font-bold text-text-primary tracking-tight">
+          Welcome back
+        </h1>
         <p className="text-sm text-text-secondary mt-1.5 mb-8">
           Sign in to continue debugging webhooks
         </p>
@@ -100,7 +114,10 @@ export default function LoginPage() {
 
         <p className="text-sm text-text-tertiary text-center mt-8">
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-text-accent font-medium hover:underline">
+          <Link
+            href="/signup"
+            className="text-text-accent font-medium hover:underline"
+          >
             Sign up
           </Link>
         </p>

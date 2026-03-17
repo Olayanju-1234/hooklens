@@ -54,7 +54,9 @@ export function StatCard({
       <p className="text-2xl font-semibold text-text-primary mt-1.5 font-mono tabular-nums">
         {value}
       </p>
-      {sub && <p className="text-xs text-text-accent mt-1 font-medium">{sub}</p>}
+      {sub && (
+        <p className="text-xs text-text-accent mt-1 font-medium">{sub}</p>
+      )}
     </div>
   );
 }

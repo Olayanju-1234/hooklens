@@ -3,7 +3,11 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { events as eventsApi, WebhookEvent } from "@/lib/api";
-import { StatusBadge, MethodBadge, SignatureBadge } from "@/components/ui/badge";
+import {
+  StatusBadge,
+  MethodBadge,
+  SignatureBadge,
+} from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useStaggerIn } from "@/hooks/use-gsap";
@@ -59,9 +63,10 @@ export default function EventsPage() {
                 key={f.value}
                 onClick={() => setStatusFilter(f.value)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer
-                  ${statusFilter === f.value
-                    ? "bg-bg-secondary text-text-primary shadow-sm"
-                    : "text-text-tertiary hover:text-text-secondary"
+                  ${
+                    statusFilter === f.value
+                      ? "bg-bg-secondary text-text-primary shadow-sm"
+                      : "text-text-tertiary hover:text-text-secondary"
                   }`}
               >
                 {f.label}
@@ -69,7 +74,15 @@ export default function EventsPage() {
             ))}
           </div>
           <Button variant="ghost" size="sm" onClick={() => fetchEvents()}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
               <path d="M1 7a6 6 0 0111.5-2.5M13 7a6 6 0 01-11.5 2.5" />
               <path d="M12.5 1v3.5H9M1.5 13V9.5H5" />
             </svg>
@@ -109,7 +122,9 @@ export default function EventsPage() {
                         {event.eventType || "unknown"}
                       </span>
                       {event.provider && (
-                        <span className="text-[11px] text-text-tertiary font-medium">{event.provider}</span>
+                        <span className="text-[11px] text-text-tertiary font-medium">
+                          {event.provider}
+                        </span>
                       )}
                       {event.isReplay && (
                         <span className="text-[9px] uppercase tracking-widest text-text-accent font-semibold bg-bg-accent-subtle px-1.5 py-0.5 rounded">

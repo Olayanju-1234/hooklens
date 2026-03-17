@@ -5,7 +5,12 @@ interface EmptyStateProps {
   action?: React.ReactNode;
 }
 
-export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+export function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+}: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
       {icon && (
@@ -14,7 +19,9 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
         </div>
       )}
       <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
-      <p className="text-xs text-text-tertiary mt-1.5 max-w-xs">{description}</p>
+      <p className="text-xs text-text-tertiary mt-1.5 max-w-xs">
+        {description}
+      </p>
       {action && <div className="mt-5">{action}</div>}
     </div>
   );

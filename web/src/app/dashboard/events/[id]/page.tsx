@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { events as eventsApi, WebhookEvent } from "@/lib/api";
-import { StatusBadge, MethodBadge, SignatureBadge } from "@/components/ui/badge";
+import {
+  StatusBadge,
+  MethodBadge,
+  SignatureBadge,
+} from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFadeIn } from "@/hooks/use-gsap";
@@ -18,9 +22,12 @@ export default function EventDetailPage() {
 
   useEffect(() => {
     if (params.id) {
-      eventsApi.get(params.id as string).then(setEvent).catch((err) => {
-        setError(err instanceof Error ? err.message : "Failed to load event");
-      });
+      eventsApi
+        .get(params.id as string)
+        .then(setEvent)
+        .catch((err) => {
+          setError(err instanceof Error ? err.message : "Failed to load event");
+        });
     }
   }, [params.id]);
 
@@ -59,7 +66,10 @@ export default function EventDetailPage() {
 
   return (
     <>
-      <div ref={contentRef} className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full">
+      <div
+        ref={contentRef}
+        className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full"
+      >
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3 min-w-0">
@@ -67,7 +77,15 @@ export default function EventDetailPage() {
               onClick={() => router.back()}
               className="p-2 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-hover cursor-pointer"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              >
                 <path d="M10 4l-4 4 4 4" />
               </svg>
             </button>
@@ -81,8 +99,21 @@ export default function EventDetailPage() {
               </span>
             )}
           </div>
-          <Button variant="secondary" size="sm" loading={replaying} onClick={handleReplay}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={replaying}
+            onClick={handleReplay}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
               <path d="M1 7a6 6 0 0111.5-2.5M13 7a6 6 0 01-11.5 2.5" />
               <path d="M12.5 1v3.5H9M1.5 13V9.5H5" />
             </svg>
@@ -92,8 +123,14 @@ export default function EventDetailPage() {
 
         {/* Meta grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
-          <MetaItem label="Status" value={<StatusBadge status={event.forwardStatus} />} />
-          <MetaItem label="Signature" value={<SignatureBadge valid={event.signatureValid} />} />
+          <MetaItem
+            label="Status"
+            value={<StatusBadge status={event.forwardStatus} />}
+          />
+          <MetaItem
+            label="Signature"
+            value={<SignatureBadge valid={event.signatureValid} />}
+          />
           <MetaItem
             label="Latency"
             value={

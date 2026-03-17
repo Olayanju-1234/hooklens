@@ -59,35 +59,57 @@ export default function SignupPage() {
         <div
           className="absolute w-[500px] h-[500px] rounded-full opacity-20 blur-3xl pointer-events-none"
           style={{
-            background: "radial-gradient(circle, var(--bg-accent) 0%, transparent 70%)",
+            background:
+              "radial-gradient(circle, var(--bg-accent) 0%, transparent 70%)",
             top: "20%",
             left: "50%",
             transform: "translateX(-50%)",
           }}
         />
 
-        <div ref={successRef} className="w-full max-w-sm text-center relative z-10">
+        <div
+          ref={successRef}
+          className="w-full max-w-sm text-center relative z-10"
+        >
           <div
             className="w-14 h-14 rounded-2xl bg-bg-accent flex items-center justify-center mx-auto mb-5 shadow-lg"
             style={{ boxShadow: "var(--glow)" }}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-inverse)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--text-inverse)"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M6 12l4 4 8-8" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-text-primary tracking-tight">You&apos;re in</h1>
+          <h1 className="text-2xl font-bold text-text-primary tracking-tight">
+            You&apos;re in
+          </h1>
           <p className="text-sm text-text-secondary mt-2">
             Your unique webhook ingress URL:
           </p>
           <div className="mt-5 px-4 py-3.5 rounded-xl bg-bg-tertiary border border-border-primary">
             <p className="font-mono text-sm text-text-accent break-all">
-              {typeof window !== "undefined" ? window.location.origin.replace("3001", "3000") : ""}/in/{slug}
+              {typeof window !== "undefined"
+                ? window.location.origin.replace("3001", "3000")
+                : ""}
+              /in/{slug}
             </p>
           </div>
           <p className="text-xs text-text-tertiary mt-3">
-            Set this as your webhook URL in Paystack, Flutterwave, or any provider.
+            Set this as your webhook URL in Paystack, Flutterwave, or any
+            provider.
           </p>
-          <Button onClick={() => router.push("/dashboard")} className="w-full mt-8">
+          <Button
+            onClick={() => router.push("/dashboard")}
+            className="w-full mt-8"
+          >
             Go to Dashboard
           </Button>
         </div>
@@ -101,7 +123,8 @@ export default function SignupPage() {
       <div
         className="absolute w-[500px] h-[500px] rounded-full opacity-20 blur-3xl pointer-events-none"
         style={{
-          background: "radial-gradient(circle, var(--bg-accent) 0%, transparent 70%)",
+          background:
+            "radial-gradient(circle, var(--bg-accent) 0%, transparent 70%)",
           top: "20%",
           left: "50%",
           transform: "translateX(-50%)",
@@ -110,15 +133,28 @@ export default function SignupPage() {
 
       <div ref={formRef} className="w-full max-w-sm relative z-10">
         <div className="flex items-center gap-2.5 mb-10">
-          <div className="w-9 h-9 rounded-xl bg-bg-accent flex items-center justify-center shadow-lg" style={{ boxShadow: "var(--glow)" }}>
+          <div
+            className="w-9 h-9 rounded-xl bg-bg-accent flex items-center justify-center shadow-lg"
+            style={{ boxShadow: "var(--glow)" }}
+          >
             <svg width="18" height="18" viewBox="0 0 14 14" fill="none">
-              <path d="M2 7h3l2-4 2 8 2-4h3" stroke="var(--text-inverse)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M2 7h3l2-4 2 8 2-4h3"
+                stroke="var(--text-inverse)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </div>
-          <span className="text-lg font-semibold text-text-primary tracking-tight">Hookdash</span>
+          <span className="text-lg font-semibold text-text-primary tracking-tight">
+            Hookdash
+          </span>
         </div>
 
-        <h1 className="text-2xl font-bold text-text-primary tracking-tight">Create your account</h1>
+        <h1 className="text-2xl font-bold text-text-primary tracking-tight">
+          Create your account
+        </h1>
         <p className="text-sm text-text-secondary mt-1.5 mb-8">
           Start debugging webhooks in seconds
         </p>
@@ -154,7 +190,10 @@ export default function SignupPage() {
 
         <p className="text-sm text-text-tertiary text-center mt-8">
           Already have an account?{" "}
-          <Link href="/login" className="text-text-accent font-medium hover:underline">
+          <Link
+            href="/login"
+            className="text-text-accent font-medium hover:underline"
+          >
             Sign in
           </Link>
         </p>

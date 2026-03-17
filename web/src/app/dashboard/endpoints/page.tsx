@@ -52,7 +52,9 @@ export default function EndpointsPage() {
       const data = await endpointsApi.list();
       setItems(data);
     } catch (err) {
-      setFetchError(err instanceof Error ? err.message : "Failed to load endpoints");
+      setFetchError(
+        err instanceof Error ? err.message : "Failed to load endpoints",
+      );
     } finally {
       setLoading(false);
     }
@@ -102,7 +104,9 @@ export default function EndpointsPage() {
           provider: form.provider,
           forwardUrl: form.forwardUrl || null,
         });
-        setItems((prev) => prev.map((ep) => (ep.id === editingId ? updated : ep)));
+        setItems((prev) =>
+          prev.map((ep) => (ep.id === editingId ? updated : ep)),
+        );
       }
       setModalOpen(false);
     } catch (err) {
@@ -123,7 +127,9 @@ export default function EndpointsPage() {
   }
 
   async function handleToggle(ep: Endpoint) {
-    const updated = await endpointsApi.update(ep.id, { isActive: !ep.isActive });
+    const updated = await endpointsApi.update(ep.id, {
+      isActive: !ep.isActive,
+    });
     setItems((prev) => prev.map((e) => (e.id === ep.id ? updated : e)));
   }
 
@@ -135,7 +141,15 @@ export default function EndpointsPage() {
             {items.length} endpoint{items.length !== 1 ? "s" : ""}
           </p>
           <Button size="sm" onClick={openCreate}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
               <path d="M7 2v10M2 7h10" />
             </svg>
             New Endpoint
@@ -155,7 +169,16 @@ export default function EndpointsPage() {
         ) : items.length === 0 && !loading ? (
           <EmptyState
             icon={
-              <svg width="22" height="22" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 18 18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M3 9h3l2-4 2 8 2-4h3" />
               </svg>
             }
@@ -178,7 +201,9 @@ export default function EndpointsPage() {
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2.5">
-                    <span className="text-sm font-semibold text-text-primary">{ep.name}</span>
+                    <span className="text-sm font-semibold text-text-primary">
+                      {ep.name}
+                    </span>
                     <ProviderTag provider={ep.provider} />
                     <span
                       className={`text-[9px] uppercase tracking-widest font-semibold px-1.5 py-0.5 rounded ${
@@ -204,12 +229,26 @@ export default function EndpointsPage() {
                     title={ep.isActive ? "Pause" : "Activate"}
                   >
                     {ep.isActive ? (
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
                         <rect x="4" y="3" width="2.5" height="10" rx="0.5" />
                         <rect x="9.5" y="3" width="2.5" height="10" rx="0.5" />
                       </svg>
                     ) : (
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
                         <path d="M5 3l8 5-8 5V3z" />
                       </svg>
                     )}
@@ -218,7 +257,14 @@ export default function EndpointsPage() {
                     onClick={() => openEdit(ep)}
                     className="p-2 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-hover cursor-pointer"
                   >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                    >
                       <path d="M11.5 2.5l2 2L5 13H3v-2l8.5-8.5z" />
                     </svg>
                   </button>
@@ -230,7 +276,14 @@ export default function EndpointsPage() {
                     {deletingId === ep.id ? (
                       <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                     ) : (
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
                         <path d="M3 5h10M5 5v8a1 1 0 001 1h4a1 1 0 001-1V5M7 3h2" />
                       </svg>
                     )}
@@ -267,25 +320,34 @@ export default function EndpointsPage() {
               </div>
             )}
 
-            <form onSubmit={(e) => void handleSubmit(e)} className="px-6 pb-6 space-y-4">
+            <form
+              onSubmit={(e) => void handleSubmit(e)}
+              className="px-6 pb-6 space-y-4"
+            >
               <Input
                 label="Name"
                 value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
                 placeholder="e.g. Paystack Production"
                 required
               />
               <Select
                 label="Provider"
                 value={form.provider}
-                onChange={(e) => setForm((f) => ({ ...f, provider: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, provider: e.target.value }))
+                }
                 options={providerOptions}
               />
               <Input
                 label="Forward URL"
                 type="url"
                 value={form.forwardUrl}
-                onChange={(e) => setForm((f) => ({ ...f, forwardUrl: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, forwardUrl: e.target.value }))
+                }
                 placeholder="https://your-api.com/webhooks"
               />
               {modalMode === "create" && (
@@ -293,7 +355,9 @@ export default function EndpointsPage() {
                   label="Webhook Secret"
                   type="password"
                   value={form.webhookSecret}
-                  onChange={(e) => setForm((f) => ({ ...f, webhookSecret: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, webhookSecret: e.target.value }))
+                  }
                   placeholder="Provider's webhook signing secret"
                 />
               )}

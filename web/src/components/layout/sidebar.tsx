@@ -11,7 +11,15 @@ const navItems = [
     label: "Live",
     href: "/dashboard",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 18 18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      >
         <circle cx="9" cy="9" r="2.5" />
         <path d="M5.5 4a7 7 0 010 10M12.5 4a7 7 0 000 10" />
       </svg>
@@ -21,7 +29,15 @@ const navItems = [
     label: "Events",
     href: "/dashboard/events",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 18 18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      >
         <path d="M3 5h12M3 9h8M3 13h10" />
       </svg>
     ),
@@ -30,7 +46,16 @@ const navItems = [
     label: "Endpoints",
     href: "/dashboard/endpoints",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 18 18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <path d="M3 9h3l2-4 2 8 2-4h3" />
       </svg>
     ),
@@ -39,7 +64,15 @@ const navItems = [
     label: "Stats",
     href: "/dashboard/stats",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 18 18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      >
         <rect x="3" y="10" width="3" height="5" rx="0.5" />
         <rect x="7.5" y="6" width="3" height="9" rx="0.5" />
         <rect x="12" y="3" width="3" height="12" rx="0.5" />
@@ -90,7 +123,10 @@ export function Sidebar() {
 
       {/* Logo */}
       <div className="h-14 flex items-center px-3.5 shrink-0">
-        <Link href="/dashboard" className="flex items-center gap-2.5 overflow-hidden">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2.5 overflow-hidden"
+        >
           <div className="w-7 h-7 rounded-lg bg-bg-accent flex items-center justify-center shrink-0">
             <svg width="15" height="15" viewBox="0 0 14 14" fill="none">
               <path
@@ -123,9 +159,10 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={`group flex items-center gap-2.5 h-10 px-2.5 rounded-lg transition-colors
-                ${active
-                  ? "text-text-accent bg-bg-accent-subtle"
-                  : "text-text-tertiary hover:text-text-primary hover:bg-bg-hover"
+                ${
+                  active
+                    ? "text-text-accent bg-bg-accent-subtle"
+                    : "text-text-tertiary hover:text-text-primary hover:bg-bg-hover"
                 }`}
             >
               <span className="shrink-0 flex items-center justify-center w-5">
@@ -163,7 +200,15 @@ export function Sidebar() {
           className="w-full flex items-center gap-2.5 h-10 px-2.5 rounded-lg text-text-tertiary
             hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer"
         >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 18 18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          >
             <path d="M7 15H4a1 1 0 01-1-1V4a1 1 0 011-1h3M12 12l3-3-3-3M15 9H7" />
           </svg>
           <span

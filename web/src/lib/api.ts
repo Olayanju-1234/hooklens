@@ -114,9 +114,7 @@ export interface EventsResponse {
 
 export const events = {
   list: (params?: Record<string, string>) => {
-    const query = params
-      ? "?" + new URLSearchParams(params).toString()
-      : "";
+    const query = params ? "?" + new URLSearchParams(params).toString() : "";
     return request<EventsResponse>(`/events${query}`);
   },
   get: (id: string) => request<WebhookEvent>(`/events/${id}`),
@@ -126,7 +124,10 @@ export const events = {
     request<{
       event1: { id: string; body: unknown; receivedAt: string };
       event2: { id: string; body: unknown; receivedAt: string };
-      headersDiff: Record<string, { old: unknown; new: unknown; status: string }>;
+      headersDiff: Record<
+        string,
+        { old: unknown; new: unknown; status: string }
+      >;
       bodyDiff: Record<string, { old: unknown; new: unknown; status: string }>;
     }>(`/events/${id1}/diff/${id2}`),
 };
