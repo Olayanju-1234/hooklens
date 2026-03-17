@@ -36,6 +36,7 @@ interface WebSocketContextType {
   connected: boolean;
   liveEvents: LiveEvent[];
   clearEvents: () => void;
+  addEvents: (events: LiveEvent[]) => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
@@ -84,8 +85,19 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   const clearEvents = useCallback(() => setLiveEvents([]), []);
 
+  const addEvents = useCallback((events: LiveEvent[]) => {
+    setLiveEvents((prev) => {
+      const ids = new Set(prev.map((e) => e.id));
+      const newEvents = events.filter((e) => !ids.has(e.id));
+      if (newEvents.length === 0) return prev;
+      return [...newEvents, ...prev].slice(0, 100);
+    });
+  }, []);
+
   return (
-    <WebSocketContext.Provider value={{ connected, liveEvents, clearEvents }}>
+    <WebSocketContext.Provider
+      value={{ connected, liveEvents, clearEvents, addEvents }}
+    >
       {children}
     </WebSocketContext.Provider>
   );

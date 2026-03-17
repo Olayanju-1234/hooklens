@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useAuth } from "@/lib/auth-context";
+import { events as eventsApi } from "@/lib/api";
 import {
   StatusBadge,
   MethodBadge,
@@ -61,7 +62,7 @@ const TEST_PAYLOADS = [
 ];
 
 export default function DashboardPage() {
-  const { liveEvents, clearEvents } = useWebSocket();
+  const { liveEvents, clearEvents, addEvents } = useWebSocket();
   const { ingressSlug } = useAuth();
   const [sending, setSending] = useState(false);
 
@@ -76,6 +77,26 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload.body),
       });
+      // Fallback: poll for latest events in case WebSocket missed the broadcast
+      setTimeout(async () => {
+        try {
+          const res = await eventsApi.list({ limit: "5" });
+          const mapped = res.items.map((e) => ({
+            id: e.id,
+            provider: e.provider,
+            eventType: e.eventType,
+            signatureValid: e.signatureValid,
+            receivedAt: e.receivedAt,
+            forwardStatus: e.forwardStatus,
+            method: e.method,
+            path: e.path,
+            bodyPreview: e.body ? JSON.stringify(e.body).slice(0, 200) : "",
+          }));
+          addEvents(mapped);
+        } catch {
+          // Non-critical fallback, ignore errors
+        }
+      }, 1500);
     } finally {
       setSending(false);
     }
