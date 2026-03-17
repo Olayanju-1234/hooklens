@@ -53,7 +53,9 @@ import { HealthModule } from './modules/health/health.module.js';
         return {
           ...base,
           entities: [User, Endpoint, WebhookEvent],
-          synchronize: !isProd,
+          migrations: ['dist/migrations/*.js'],
+          migrationsRun: true,
+          synchronize: false,
           logging: !isProd,
         };
       },
