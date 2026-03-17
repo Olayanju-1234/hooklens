@@ -33,17 +33,30 @@ import { HealthModule } from './modules/health/health.module.js';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('database.host'),
-        port: configService.get<number>('database.port'),
-        username: configService.get<string>('database.username'),
-        password: configService.get<string>('database.password'),
-        database: configService.get<string>('database.name'),
-        entities: [User, Endpoint, WebhookEvent],
-        synchronize: configService.get<string>('nodeEnv') === 'development',
-        logging: configService.get<string>('nodeEnv') === 'development',
-      }),
+      useFactory: (configService: ConfigService) => {
+        const databaseUrl = configService.get<string>('databaseUrl');
+        const isProd = configService.get<string>('nodeEnv') === 'production';
+        const base = databaseUrl
+          ? {
+              type: 'postgres' as const,
+              url: databaseUrl,
+              ssl: isProd ? { rejectUnauthorized: false } : false,
+            }
+          : {
+              type: 'postgres' as const,
+              host: configService.get<string>('database.host'),
+              port: configService.get<number>('database.port'),
+              username: configService.get<string>('database.username'),
+              password: configService.get<string>('database.password'),
+              database: configService.get<string>('database.name'),
+            };
+        return {
+          ...base,
+          entities: [User, Endpoint, WebhookEvent],
+          synchronize: !isProd,
+          logging: !isProd,
+        };
+      },
     }),
     BullModule.forRootAsync({
       imports: [ConfigModule],
@@ -52,6 +65,9 @@ import { HealthModule } from './modules/health/health.module.js';
         connection: {
           host: configService.get<string>('redis.host'),
           port: configService.get<number>('redis.port'),
+          password: configService.get<string>('redis.password'),
+          tls: configService.get('redis.tls'),
+          maxRetriesPerRequest: null,
         },
       }),
     }),
