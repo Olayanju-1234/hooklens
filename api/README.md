@@ -1,6 +1,6 @@
-# HookLens API
+# Hookdash API
 
-NestJS backend for HookLens. Handles webhook ingestion, signature verification, forwarding, and real-time streaming.
+NestJS backend for Hookdash. Handles webhook ingestion, signature verification, forwarding, and real-time streaming.
 
 ## Modules
 

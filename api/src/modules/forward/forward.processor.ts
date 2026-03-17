@@ -62,8 +62,8 @@ export class ForwardProcessor extends WorkerHost {
         url: endpoint.forwardUrl,
         headers: {
           'Content-Type': 'application/json',
-          'X-HookLens-Event-Id': event.id,
-          'X-HookLens-Original-Signature':
+          'X-Hookdash-Event-Id': event.id,
+          'X-Hookdash-Original-Signature':
             event.headers['x-paystack-signature'] ??
             event.headers['verif-hash'] ??
             '',

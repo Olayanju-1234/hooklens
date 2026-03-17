@@ -1,10 +1,10 @@
-# HookLens
+# Hookdash
 
 Webhook debugger for African payment providers. Inspect, replay, and forward webhooks from Paystack, Flutterwave, Mono, or any custom source — in real time.
 
 ## What it does
 
-HookLens gives you a unique ingress URL. Point your payment provider's webhook settings at it, and every incoming event gets:
+Hookdash gives you a unique ingress URL. Point your payment provider's webhook settings at it, and every incoming event gets:
 
 - **Captured** — headers, body, signature, IP, everything
 - **Verified** — provider-specific signature validation (Paystack HMAC-SHA512, Flutterwave hash verification, Mono SHA256)
@@ -29,7 +29,7 @@ No more `ngrok` + `console.log` guesswork.
 ```
 
 ```
-hooklens/
+hookdash/
 ├── api/          NestJS 11 backend
 ├── web/          Next.js 16 frontend
 └── docker-compose.yml
@@ -115,9 +115,9 @@ npm run dev             # http://localhost:3001
 # api/.env
 DB_HOST=localhost
 DB_PORT=5433
-DB_USERNAME=hooklens
-DB_PASSWORD=hooklens_secret
-DB_NAME=hooklens
+DB_USERNAME=hookdash
+DB_PASSWORD=hookdash_secret
+DB_NAME=hookdash
 REDIS_HOST=localhost
 REDIS_PORT=6380
 JWT_SECRET=dev-jwt-secret-change-in-production

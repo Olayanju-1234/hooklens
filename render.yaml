@@ -1,12 +1,12 @@
 databases:
-  - name: hooklens-db
+  - name: hookdash-db
     plan: free
-    databaseName: hooklens
-    user: hooklens
+    databaseName: hookdash
+    user: hookdash
 
 services:
   - type: web
-    name: hooklens-api
+    name: hookdash-api
     runtime: docker
     plan: free
     dockerfilePath: ./api/Dockerfile
@@ -14,7 +14,7 @@ services:
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: hooklens-db
+          name: hookdash-db
           property: connectionString
       - key: REDIS_URL
         sync: false # Paste your Upstash Redis URL here after deploy
@@ -25,21 +25,21 @@ services:
       - key: NODE_ENV
         value: production
       - key: CORS_ORIGIN
-        value: https://hooklens-web.onrender.com
+        value: https://hookdash-web.onrender.com
       - key: PORT
         value: 3000
     healthCheckPath: /api/health
 
   - type: web
-    name: hooklens-web
+    name: hookdash-web
     runtime: docker
     plan: free
     dockerfilePath: ./web/Dockerfile
     dockerContext: ./web
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        value: https://hooklens-api.onrender.com/api
+        value: https://hookdash-api.onrender.com/api
       - key: NEXT_PUBLIC_WS_URL
-        value: https://hooklens-api.onrender.com
+        value: https://hookdash-api.onrender.com
       - key: PORT
         value: 3001

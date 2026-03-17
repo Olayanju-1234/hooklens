@@ -56,7 +56,7 @@ export function TabRail() {
           </svg>
         </div>
         <span className="hidden sm:inline text-sm font-semibold text-text-primary tracking-tight">
-          HookLens
+          Hookdash
         </span>
       </Link>
 

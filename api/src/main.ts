@@ -46,6 +46,6 @@ async function bootstrap() {
   await app.listen(port);
 
   const logger = new Logger('Bootstrap');
-  logger.log(`HookLens API running on port ${port}`);
+  logger.log(`Hookdash API running on port ${port}`);
 }
 void bootstrap();

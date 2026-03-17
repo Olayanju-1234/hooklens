@@ -62,7 +62,7 @@ export default function LoginPage() {
               <path d="M2 7h3l2-4 2 8 2-4h3" stroke="var(--text-inverse)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <span className="text-lg font-semibold text-text-primary tracking-tight">HookLens</span>
+          <span className="text-lg font-semibold text-text-primary tracking-tight">Hookdash</span>
         </div>
 
         <h1 className="text-2xl font-bold text-text-primary tracking-tight">Welcome back</h1>

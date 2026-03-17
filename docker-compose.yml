@@ -13,9 +13,9 @@ services:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_USERNAME: hooklens
-      DB_PASSWORD: hooklens_secret
-      DB_NAME: hooklens
+      DB_USERNAME: hookdash
+      DB_PASSWORD: hookdash_secret
+      DB_NAME: hookdash
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_SECRET: change-me-in-production
@@ -43,13 +43,13 @@ services:
     ports:
       - "5433:5432"
     environment:
-      POSTGRES_USER: hooklens
-      POSTGRES_PASSWORD: hooklens_secret
-      POSTGRES_DB: hooklens
+      POSTGRES_USER: hookdash
+      POSTGRES_PASSWORD: hookdash_secret
+      POSTGRES_DB: hookdash
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hooklens"]
+      test: ["CMD-SHELL", "pg_isready -U hookdash"]
       interval: 5s
       timeout: 5s
       retries: 5

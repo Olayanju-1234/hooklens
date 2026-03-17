@@ -1,6 +1,6 @@
-# HookLens Web
+# Hookdash Web
 
-Next.js 16 frontend for HookLens. Real-time webhook dashboard with live streaming, event inspection, and analytics.
+Next.js 16 frontend for Hookdash. Real-time webhook dashboard with live streaming, event inspection, and analytics.
 
 ## Stack
 

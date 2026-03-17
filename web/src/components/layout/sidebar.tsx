@@ -109,7 +109,7 @@ export function Sidebar() {
               transition: "opacity 0.2s ease",
             }}
           >
-            HookLens
+            Hookdash
           </span>
         </Link>
       </div>

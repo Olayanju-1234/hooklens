@@ -26,9 +26,9 @@ export default () => {
     database: {
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432', 10),
-      username: process.env.DB_USERNAME || 'hooklens',
-      password: process.env.DB_PASSWORD || 'hooklens_secret',
-      name: process.env.DB_NAME || 'hooklens',
+      username: process.env.DB_USERNAME || 'hookdash',
+      password: process.env.DB_PASSWORD || 'hookdash_secret',
+      name: process.env.DB_NAME || 'hookdash',
     },
     redis,
     jwt: {

@@ -13,7 +13,7 @@ const ThemeContext = createContext<ThemeContextType | null>(null);
 
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "light";
-  const stored = localStorage.getItem("hooklens-theme") as Theme | null;
+  const stored = localStorage.getItem("hookdash-theme") as Theme | null;
   const preferred = window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
@@ -28,7 +28,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const toggle = useCallback(() => {
     setTheme((prev) => {
       const next = prev === "light" ? "dark" : "light";
-      localStorage.setItem("hooklens-theme", next);
+      localStorage.setItem("hookdash-theme", next);
       document.documentElement.setAttribute("data-theme", next);
       return next;
     });
