@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { Sidebar } from "@/components/layout/sidebar";
+import { TabRail } from "@/components/layout/tab-rail";
 
 export default function DashboardLayout({
   children,
@@ -28,8 +28,8 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg-primary noise">
-      <Sidebar />
+    <div className="flex flex-col h-screen overflow-hidden bg-bg-primary noise">
+      <TabRail />
       <main className="flex-1 overflow-y-auto">{children}</main>
     </div>
   );
