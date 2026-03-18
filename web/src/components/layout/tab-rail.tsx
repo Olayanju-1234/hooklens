@@ -12,7 +12,10 @@ const tabs = [
   { label: "Live", href: "/dashboard" },
   { label: "Events", href: "/dashboard/events" },
   { label: "Endpoints", href: "/dashboard/endpoints" },
+  { label: "Test", href: "/dashboard/test" },
   { label: "Analytics", href: "/dashboard/stats" },
+  { label: "Alerts", href: "/dashboard/alerts" },
+  { label: "Docs", href: "/dashboard/docs" },
 ];
 
 export function TabRail() {
@@ -121,6 +124,27 @@ export function TabRail() {
             </code>
           </div>
         )}
+
+        {/* Settings */}
+        <Link
+          href="/dashboard/settings"
+          className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors"
+          aria-label="Settings"
+        >
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="8" cy="8" r="2.5" />
+            <path d="M13.3 10a1.1 1.1 0 00.2 1.2l.04.04a1.33 1.33 0 11-1.88 1.88l-.04-.04a1.1 1.1 0 00-1.2-.2 1.1 1.1 0 00-.67 1.01v.12a1.33 1.33 0 11-2.67 0v-.06A1.1 1.1 0 006 12.84a1.1 1.1 0 00-1.2.2l-.04.04a1.33 1.33 0 11-1.88-1.88l.04-.04a1.1 1.1 0 00.2-1.2 1.1 1.1 0 00-1.01-.67h-.12a1.33 1.33 0 110-2.67h.06A1.1 1.1 0 003.16 6a1.1 1.1 0 00-.2-1.2l-.04-.04a1.33 1.33 0 111.88-1.88l.04.04a1.1 1.1 0 001.2.2h.05a1.1 1.1 0 00.67-1.01v-.12a1.33 1.33 0 112.67 0v.06A1.1 1.1 0 0010 3.16a1.1 1.1 0 001.2-.2l.04-.04a1.33 1.33 0 111.88 1.88l-.04.04a1.1 1.1 0 00-.2 1.2v.05a1.1 1.1 0 001.01.67h.12a1.33 1.33 0 010 2.67h-.06a1.1 1.1 0 00-1.01.67z" />
+          </svg>
+        </Link>
 
         {/* Theme toggle */}
         <button

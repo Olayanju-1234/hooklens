@@ -10,6 +10,9 @@ import {
 import { Exclude } from 'class-transformer';
 import { User } from './user.entity.js';
 import { WebhookEvent } from './webhook-event.entity.js';
+import { Workspace } from './workspace.entity.js';
+import { ForwardDestination } from './forward-destination.entity.js';
+import { TransformRule } from './transform-rule.entity.js';
 
 export type Provider = 'paystack' | 'flutterwave' | 'mono' | 'custom';
 
@@ -20,6 +23,9 @@ export class Endpoint {
 
   @Column({ type: 'uuid' })
   userId!: string;
+
+  @Column({ type: 'uuid' })
+  workspaceId!: string;
 
   @Column({ type: 'varchar', length: 255 })
   name!: string;
@@ -37,6 +43,12 @@ export class Endpoint {
   @Column({ type: 'boolean', default: true })
   isActive!: boolean;
 
+  @Column({ type: 'integer', default: 0 })
+  retryMaxAttempts!: number;
+
+  @Column({ type: 'integer', default: 1000 })
+  retryBackoffMs!: number;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 
@@ -44,6 +56,18 @@ export class Endpoint {
   @JoinColumn({ name: 'userId' })
   user!: User;
 
+  @ManyToOne(() => Workspace, (workspace) => workspace.endpoints, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'workspaceId' })
+  workspace!: Workspace;
+
   @OneToMany(() => WebhookEvent, (event) => event.endpoint)
   events!: WebhookEvent[];
+
+  @OneToMany(() => ForwardDestination, (dest) => dest.endpoint)
+  destinations!: ForwardDestination[];
+
+  @OneToMany(() => TransformRule, (rule) => rule.endpoint)
+  transformRules!: TransformRule[];
 }

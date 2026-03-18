@@ -1,3 +1,13 @@
 export { User } from './user.entity.js';
 export { Endpoint } from './endpoint.entity.js';
 export { WebhookEvent } from './webhook-event.entity.js';
+export { Workspace } from './workspace.entity.js';
+export { WorkspaceMember } from './workspace-member.entity.js';
+export { WorkspaceInvite } from './workspace-invite.entity.js';
+export { ForwardDestination } from './forward-destination.entity.js';
+export { ForwardResult } from './forward-result.entity.js';
+export { DeadLetterEvent } from './dead-letter-event.entity.js';
+export { TransformRule } from './transform-rule.entity.js';
+export { AlertChannel } from './alert-channel.entity.js';
+export { AlertRule } from './alert-rule.entity.js';
+export { AlertHistory } from './alert-history.entity.js';

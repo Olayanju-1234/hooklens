@@ -1,10 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
 
+export interface LatencyBucket {
+  bucket: string;
+  p50: number | null;
+  p95: number | null;
+  p99: number | null;
+}
+
 @Injectable()
 export class StatsService {
+  private readonly logger = new Logger(StatsService.name);
+
   constructor(
     @InjectRepository(WebhookEvent)
     private readonly eventRepo: Repository<WebhookEvent>,
@@ -81,6 +90,80 @@ export class StatsService {
         provider: r.provider,
         count: parseInt(r.count),
       })),
+    };
+  }
+
+  async getLatencyPercentiles(
+    userId: string,
+    period: '24h' | '7d' | '30d' | 'all' = '7d',
+  ) {
+    const periodMap: Record<string, number | null> = {
+      '24h': 1,
+      '7d': 7,
+      '30d': 30,
+      all: null,
+    };
+    const days = periodMap[period];
+    const since =
+      days !== null ? new Date(Date.now() - days * 86_400_000) : null;
+
+    // Overall percentiles
+    const percentilesQb = this.eventRepo
+      .createQueryBuilder('e')
+      .select([
+        'percentile_cont(0.5) WITHIN GROUP (ORDER BY e."forwardLatency") as "p50"',
+        'percentile_cont(0.95) WITHIN GROUP (ORDER BY e."forwardLatency") as "p95"',
+        'percentile_cont(0.99) WITHIN GROUP (ORDER BY e."forwardLatency") as "p99"',
+      ])
+      .where('e.userId = :userId', { userId })
+      .andWhere('e.forwardLatency IS NOT NULL');
+
+    if (since) {
+      percentilesQb.andWhere('e.receivedAt >= :since', { since });
+    }
+
+    // Time series bucketed percentiles
+    const truncUnit = period === '24h' ? 'hour' : 'day';
+
+    const timeSeriesQb = this.eventRepo
+      .createQueryBuilder('e')
+      .select([
+        `date_trunc('${truncUnit}', e."receivedAt") as "bucket"`,
+        'percentile_cont(0.5) WITHIN GROUP (ORDER BY e."forwardLatency") as "p50"',
+        'percentile_cont(0.95) WITHIN GROUP (ORDER BY e."forwardLatency") as "p95"',
+        'percentile_cont(0.99) WITHIN GROUP (ORDER BY e."forwardLatency") as "p99"',
+      ])
+      .where('e.userId = :userId', { userId })
+      .andWhere('e.forwardLatency IS NOT NULL')
+      .groupBy('bucket')
+      .orderBy('bucket', 'ASC');
+
+    if (since) {
+      timeSeriesQb.andWhere('e.receivedAt >= :since', { since });
+    }
+
+    const [result, timeSeriesRaw] = await Promise.all([
+      percentilesQb.getRawOne<{ p50: string; p95: string; p99: string }>(),
+      timeSeriesQb.getRawMany<{
+        bucket: string;
+        p50: string;
+        p95: string;
+        p99: string;
+      }>(),
+    ]);
+
+    const timeSeries: LatencyBucket[] = timeSeriesRaw.map((r) => ({
+      bucket: r.bucket,
+      p50: r.p50 ? Math.round(parseFloat(r.p50)) : null,
+      p95: r.p95 ? Math.round(parseFloat(r.p95)) : null,
+      p99: r.p99 ? Math.round(parseFloat(r.p99)) : null,
+    }));
+
+    return {
+      p50: result?.p50 ? Math.round(parseFloat(result.p50)) : null,
+      p95: result?.p95 ? Math.round(parseFloat(result.p95)) : null,
+      p99: result?.p99 ? Math.round(parseFloat(result.p99)) : null,
+      timeSeries,
     };
   }
 }

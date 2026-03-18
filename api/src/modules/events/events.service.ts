@@ -9,9 +9,18 @@ import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
+import { ForwardResult } from '../../entities/forward-result.entity.js';
 import { EventsQueryDto } from './dto/events-query.dto.js';
 import { ForwardJobData } from '../forward/forward.processor.js';
 import { Endpoint } from '../../entities/endpoint.entity.js';
+
+export interface TimelineStep {
+  step: string;
+  timestamp: string;
+  latencyMs: number | null;
+  status: 'success' | 'warning' | 'error' | 'pending';
+  detail: string;
+}
 
 @Injectable()
 export class EventsService {
@@ -22,6 +31,8 @@ export class EventsService {
     private readonly eventRepo: Repository<WebhookEvent>,
     @InjectRepository(Endpoint)
     private readonly endpointRepo: Repository<Endpoint>,
+    @InjectRepository(ForwardResult)
+    private readonly forwardResultRepo: Repository<ForwardResult>,
     @InjectQueue('webhook-forward')
     private readonly forwardQueue: Queue<ForwardJobData>,
   ) {}
@@ -42,6 +53,7 @@ export class EventsService {
         'e.forwardCode',
         'e.forwardLatency',
         'e.isReplay',
+        'e.isDuplicate',
         'e.receivedAt',
         'e.createdAt',
       ])
@@ -61,6 +73,17 @@ export class EventsService {
       qb.andWhere('e.forwardStatus = :forwardStatus', {
         forwardStatus: query.forwardStatus,
       });
+    }
+    if (query.provider) {
+      qb.andWhere('e.provider = :provider', { provider: query.provider });
+    }
+    if (query.search) {
+      qb.andWhere('CAST(e.body AS text) ILIKE :search', {
+        search: `%${query.search}%`,
+      });
+    }
+    if (query.isDuplicate === 'true') {
+      qb.andWhere('e.isDuplicate = true');
     }
     if (query.from) {
       qb.andWhere('e.receivedAt >= :from', { from: query.from });
@@ -87,6 +110,90 @@ export class EventsService {
     if (!event) throw new NotFoundException('Event not found');
     if (event.userId !== userId) throw new ForbiddenException();
     return event;
+  }
+
+  async getTimeline(eventId: string, userId: string) {
+    const event = await this.findOne(eventId, userId);
+
+    const forwardResults = await this.forwardResultRepo.find({
+      where: { eventId },
+      order: { attempt: 'ASC' },
+      relations: ['destination'],
+    });
+
+    const steps: TimelineStep[] = [];
+
+    // Step 1: Received
+    steps.push({
+      step: 'received',
+      timestamp: event.receivedAt.toISOString(),
+      latencyMs: null,
+      status: 'success',
+      detail: `${event.method} webhook received`,
+    });
+
+    // Step 2: Parsed
+    steps.push({
+      step: 'parsed',
+      timestamp: event.receivedAt.toISOString(),
+      latencyMs: null,
+      status: event.eventType ? 'success' : 'warning',
+      detail: event.eventType
+        ? `Event type: ${event.eventType}`
+        : 'Could not parse event type',
+    });
+
+    // Step 3: Signature verified
+    if (event.signatureValid !== null) {
+      steps.push({
+        step: 'verified',
+        timestamp: event.receivedAt.toISOString(),
+        latencyMs: null,
+        status: event.signatureValid ? 'success' : 'error',
+        detail: event.signatureValid ? 'Signature valid' : 'Signature invalid',
+      });
+    }
+
+    // Step 4+: Forward results
+    for (const result of forwardResults) {
+      steps.push({
+        step: result.attempt > 1 ? 'retried' : 'forwarded',
+        timestamp:
+          result.forwardedAt?.toISOString() ?? result.createdAt.toISOString(),
+        latencyMs: result.latency,
+        status:
+          result.status === 'forwarded'
+            ? 'success'
+            : result.status === 'pending'
+              ? 'pending'
+              : 'error',
+        detail: result.destination
+          ? `${result.destination.label || result.destination.url} → ${result.responseCode || result.status}`
+          : `Attempt ${result.attempt}: ${result.status}`,
+      });
+    }
+
+    // If no forward results, use legacy fields
+    if (forwardResults.length === 0 && event.forwardStatus !== 'pending') {
+      steps.push({
+        step: 'forwarded',
+        timestamp:
+          event.forwardedAt?.toISOString() ?? event.createdAt.toISOString(),
+        latencyMs: event.forwardLatency,
+        status:
+          event.forwardStatus === 'forwarded'
+            ? 'success'
+            : event.forwardStatus === 'skipped'
+              ? 'warning'
+              : 'error',
+        detail:
+          event.forwardStatus === 'skipped'
+            ? 'No forward URL configured'
+            : `Forward ${event.forwardStatus} (${event.forwardCode || 'N/A'})`,
+      });
+    }
+
+    return { eventId, steps };
   }
 
   async diff(id1: string, id2: string, userId: string) {
@@ -122,6 +229,7 @@ export class EventsService {
     const replay = this.eventRepo.create({
       endpointId: original.endpointId,
       userId: original.userId,
+      workspaceId: original.workspaceId,
       method: original.method,
       path: original.path,
       headers: original.headers,

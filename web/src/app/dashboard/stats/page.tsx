@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { stats as statsApi, Stats } from "@/lib/api";
-import { Card } from "@/components/ui/card";
+import { stats as statsApi, latency as latencyApi, Stats, LatencyStats } from "@/lib/api";
+import { Card, CardHeader } from "@/components/ui/card";
+import { Sparkline } from "@/components/ui/sparkline";
 import { useCountUp, useFadeIn } from "@/hooks/use-gsap";
 
 const periods = [
@@ -14,6 +15,7 @@ const periods = [
 
 export default function StatsPage() {
   const [data, setData] = useState<Stats | null>(null);
+  const [latencyData, setLatencyData] = useState<LatencyStats | null>(null);
   const [period, setPeriod] = useState("7d");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -23,8 +25,12 @@ export default function StatsPage() {
     setLoading(true);
     setError("");
     try {
-      const result = await statsApi.get(p);
+      const [result, latResult] = await Promise.all([
+        statsApi.get(p),
+        latencyApi.get(p).catch(() => null),
+      ]);
       setData(result);
+      setLatencyData(latResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load stats");
     } finally {
@@ -246,6 +252,72 @@ export default function StatsPage() {
                 />
               </div>
             </Card>
+
+            {/* Latency Percentiles */}
+            {latencyData && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <AnimatedStatCard
+                    label="p50 Latency"
+                    value={latencyData.p50 ? Math.round(latencyData.p50) : 0}
+                    suffix="ms"
+                  />
+                  <AnimatedStatCard
+                    label="p95 Latency"
+                    value={latencyData.p95 ? Math.round(latencyData.p95) : 0}
+                    suffix="ms"
+                  />
+                  <AnimatedStatCard
+                    label="p99 Latency"
+                    value={latencyData.p99 ? Math.round(latencyData.p99) : 0}
+                    suffix="ms"
+                  />
+                </div>
+
+                {latencyData.timeSeries.length > 1 && (
+                  <Card>
+                    <CardHeader
+                      title="Latency Over Time"
+                      description="p50 / p95 / p99 percentiles"
+                    />
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkline
+                          data={latencyData.timeSeries.map((t) => t.p50)}
+                          width={600}
+                          height={40}
+                          color="var(--bg-accent)"
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Sparkline
+                          data={latencyData.timeSeries.map((t) => t.p95)}
+                          width={600}
+                          height={40}
+                          color="#F59E0B"
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Sparkline
+                          data={latencyData.timeSeries.map((t) => t.p99)}
+                          width={600}
+                          height={40}
+                          color="#EF4444"
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                        <LegendItem color="bg-blue-500" label="p50" value={latencyData.p50 ? Math.round(latencyData.p50) : 0} />
+                        <LegendItem color="bg-amber-500" label="p95" value={latencyData.p95 ? Math.round(latencyData.p95) : 0} />
+                        <LegendItem color="bg-red-500" label="p99" value={latencyData.p99 ? Math.round(latencyData.p99) : 0} />
+                      </div>
+                    </div>
+                  </Card>
+                )}
+              </>
+            )}
           </div>
         ) : null}
       </div>

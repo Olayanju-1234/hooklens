@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,6 +7,7 @@ import { Queue } from 'bullmq';
 import { User } from '../../entities/user.entity.js';
 import { Endpoint } from '../../entities/endpoint.entity.js';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
+import { Workspace } from '../../entities/workspace.entity.js';
 import { SignatureService } from '../signature/signature.service.js';
 import { WebhookGateway } from '../websocket/webhook.gateway.js';
 import { ForwardJobData } from '../forward/forward.processor.js';
@@ -32,6 +34,8 @@ export class IngressService {
     private readonly endpointRepo: Repository<Endpoint>,
     @InjectRepository(WebhookEvent)
     private readonly eventRepo: Repository<WebhookEvent>,
+    @InjectRepository(Workspace)
+    private readonly workspaceRepo: Repository<Workspace>,
     private readonly signatureService: SignatureService,
     private readonly wsGateway: WebhookGateway,
     @InjectQueue('webhook-forward')
@@ -41,46 +45,112 @@ export class IngressService {
   async resolveEndpoint(
     slug: string,
   ): Promise<{ endpoint: Endpoint; userId: string } | null> {
+    // Try resolving by user ingressSlug first
     const user = await this.userRepo.findOne({ where: { ingressSlug: slug } });
-    if (!user) return null;
+    if (user) {
+      const endpoints = await this.endpointRepo
+        .createQueryBuilder('ep')
+        .addSelect('ep.webhookSecret')
+        .where('ep.userId = :userId', { userId: user.id })
+        .andWhere('ep.isActive = :isActive', { isActive: true })
+        .getMany();
 
-    const endpoints = await this.endpointRepo
-      .createQueryBuilder('ep')
-      .addSelect('ep.webhookSecret')
-      .where('ep.userId = :userId', { userId: user.id })
-      .andWhere('ep.isActive = :isActive', { isActive: true })
-      .getMany();
+      if (endpoints.length > 0) {
+        return { endpoint: endpoints[0], userId: user.id };
+      }
+    }
 
-    if (endpoints.length === 0) return null;
+    // Fall back to resolving by workspace slug
+    const workspace = await this.workspaceRepo.findOne({
+      where: { slug },
+    });
+    if (workspace) {
+      const endpoints = await this.endpointRepo
+        .createQueryBuilder('ep')
+        .addSelect('ep.webhookSecret')
+        .where('ep.workspaceId = :workspaceId', {
+          workspaceId: workspace.id,
+        })
+        .andWhere('ep.isActive = :isActive', { isActive: true })
+        .getMany();
 
-    // For now, use the first active endpoint.
-    // Future: route based on path or header matching.
-    return { endpoint: endpoints[0], userId: user.id };
+      if (endpoints.length > 0) {
+        return { endpoint: endpoints[0], userId: endpoints[0].userId };
+      }
+    }
+
+    return null;
   }
 
   async capture(params: CaptureParams): Promise<WebhookEvent> {
+    const bodyHash = crypto
+      .createHash('sha256')
+      .update(params.rawBody)
+      .digest('hex');
+
+    // Resolve workspaceId from the endpoint
+    const endpoint = await this.endpointRepo.findOne({
+      where: { id: params.endpointId },
+    });
+
     const event = this.eventRepo.create({
       endpointId: params.endpointId,
       userId: params.userId,
+      workspaceId: endpoint?.workspaceId ?? params.endpointId,
       method: params.method,
       path: params.path,
       headers: params.headers,
       body: params.body,
       rawBody: params.rawBody,
       sourceIp: params.sourceIp,
+      bodyHash,
       receivedAt: new Date(),
     });
 
-    return this.eventRepo.save(event);
+    const saved = await this.eventRepo.save(event);
+
+    // Idempotency detection — check for existing event with same bodyHash on same endpoint
+    try {
+      const duplicate = await this.eventRepo.findOne({
+        where: {
+          endpointId: params.endpointId,
+          bodyHash,
+        },
+        order: { receivedAt: 'ASC' },
+      });
+
+      if (duplicate && duplicate.id !== saved.id) {
+        await this.eventRepo.update(saved.id, {
+          isDuplicate: true,
+          duplicateOfId: duplicate.id,
+        });
+        saved.isDuplicate = true;
+        saved.duplicateOfId = duplicate.id;
+      }
+    } catch (err) {
+      this.logger.error(
+        `Duplicate detection failed for event ${saved.id}: ${(err as Error).message}`,
+      );
+    }
+
+    return saved;
   }
 
   async processEvent(event: WebhookEvent, endpoint: Endpoint): Promise<void> {
     // Parse event type from body
     const eventType = this.extractEventType(endpoint.provider, event.body);
+    const idempotencyKey = this.extractIdempotencyKey(
+      endpoint.provider,
+      event.body,
+    );
     const updates: Record<string, unknown> = {
       provider: endpoint.provider,
       eventType,
     };
+
+    if (idempotencyKey) {
+      updates.idempotencyKey = idempotencyKey;
+    }
 
     // Verify signature if secret is configured
     if (endpoint.webhookSecret) {
@@ -127,12 +197,23 @@ export class IngressService {
       );
     }
 
-    // Queue forward
+    // Queue forward with retry config from endpoint
     try {
-      await this.forwardQueue.add('forward', {
+      const jobData: ForwardJobData = {
         eventId: event.id,
         endpointId: endpoint.id,
         userId: event.userId,
+      };
+
+      const attempts =
+        endpoint.retryMaxAttempts > 0 ? endpoint.retryMaxAttempts + 1 : 1;
+
+      await this.forwardQueue.add('forward', jobData, {
+        attempts,
+        backoff:
+          endpoint.retryMaxAttempts > 0
+            ? { type: 'exponential', delay: endpoint.retryBackoffMs }
+            : undefined,
       });
     } catch (err) {
       this.logger.error(
@@ -159,6 +240,27 @@ export class IngressService {
         return (body.event as string) ?? null;
       default:
         return (body.event as string) ?? (body.type as string) ?? null;
+    }
+  }
+
+  private extractIdempotencyKey(
+    provider: string,
+    body: Record<string, unknown> | null,
+  ): string | null {
+    if (!body) return null;
+    switch (provider) {
+      case 'paystack': {
+        const data = body.data as Record<string, unknown> | undefined;
+        return (data?.id as string) ?? (data?.reference as string) ?? null;
+      }
+      case 'flutterwave': {
+        const data = body.data as Record<string, unknown> | undefined;
+        return (data?.id as string) ?? (data?.tx_ref as string) ?? null;
+      }
+      case 'mono':
+        return (body.id as string) ?? null;
+      default:
+        return (body.id as string) ?? (body.idempotency_key as string) ?? null;
     }
   }
 }

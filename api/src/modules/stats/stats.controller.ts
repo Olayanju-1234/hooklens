@@ -16,4 +16,12 @@ export class StatsController {
   ) {
     return this.statsService.getStats(user.sub, period ?? '24h');
   }
+
+  @Get('latency')
+  getLatencyPercentiles(
+    @CurrentUser() user: JwtPayload,
+    @Query('period') period?: '24h' | '7d' | '30d' | 'all',
+  ) {
+    return this.statsService.getLatencyPercentiles(user.sub, period ?? '7d');
+  }
 }

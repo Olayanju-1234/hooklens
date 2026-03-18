@@ -1,0 +1,23 @@
+{
+  "name": "hookdash",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "CLI tunnel for Hookdash webhook debugger",
+  "bin": {
+    "hookdash": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "commander": "^13.0.0",
+    "socket.io-client": "^4.8.0",
+    "chalk": "^5.4.0",
+    "ora": "^8.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

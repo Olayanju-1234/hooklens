@@ -2,31 +2,47 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { events as eventsApi, WebhookEvent } from "@/lib/api";
+import Link from "next/link";
+import {
+  events as eventsApi,
+  timeline as timelineApi,
+  WebhookEvent,
+  TimelineStep,
+} from "@/lib/api";
 import {
   StatusBadge,
   MethodBadge,
   SignatureBadge,
 } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { EventTimeline } from "@/components/event-timeline";
 import { useFadeIn } from "@/hooks/use-gsap";
 
 export default function EventDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [event, setEvent] = useState<WebhookEvent | null>(null);
+  const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>([]);
   const [error, setError] = useState("");
   const [replaying, setReplaying] = useState(false);
   const contentRef = useFadeIn<HTMLDivElement>();
 
   useEffect(() => {
     if (params.id) {
+      const eventId = params.id as string;
       eventsApi
-        .get(params.id as string)
+        .get(eventId)
         .then(setEvent)
         .catch((err) => {
           setError(err instanceof Error ? err.message : "Failed to load event");
+        });
+      timelineApi
+        .get(eventId)
+        .then((res) => setTimelineSteps(res.steps))
+        .catch(() => {
+          // Timeline is optional, don't block on failure
         });
     }
   }, [params.id]);
@@ -98,6 +114,19 @@ export default function EventDetailPage() {
                 replay
               </span>
             )}
+            {(event as WebhookEvent & { isDuplicate?: boolean; originalEventId?: string }).isDuplicate && (
+              <Badge variant="warning">
+                duplicate
+                {(event as WebhookEvent & { originalEventId?: string }).originalEventId && (
+                  <Link
+                    href={`/dashboard/events/${(event as WebhookEvent & { originalEventId?: string }).originalEventId}`}
+                    className="ml-1 underline"
+                  >
+                    (original)
+                  </Link>
+                )}
+              </Badge>
+            )}
           </div>
           <Button
             variant="secondary"
@@ -148,6 +177,66 @@ export default function EventDetailPage() {
             }
           />
         </div>
+
+        {/* Event Timeline */}
+        {timelineSteps.length > 0 && (
+          <Card className="mb-3">
+            <CardHeader title="Event Timeline" description="Step-by-step processing trace" />
+            <EventTimeline steps={timelineSteps} />
+          </Card>
+        )}
+
+        {/* Forward Results (per-destination) */}
+        {(event as WebhookEvent & { forwardResults?: Array<{ destinationId: string; url: string; statusCode: number | null; error: string | null; latencyMs: number | null }> }).forwardResults &&
+          (event as WebhookEvent & { forwardResults: Array<{ destinationId: string; url: string; statusCode: number | null; error: string | null; latencyMs: number | null }> }).forwardResults.length > 0 && (
+          <Card className="mb-3">
+            <CardHeader title="Forward Results" description="Per-destination delivery status" />
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border-primary">
+                    <th className="text-left py-2 pr-4 font-medium text-text-tertiary uppercase tracking-widest text-[10px]">
+                      Destination
+                    </th>
+                    <th className="text-left py-2 pr-4 font-medium text-text-tertiary uppercase tracking-widest text-[10px]">
+                      Status
+                    </th>
+                    <th className="text-left py-2 pr-4 font-medium text-text-tertiary uppercase tracking-widest text-[10px]">
+                      Latency
+                    </th>
+                    <th className="text-left py-2 font-medium text-text-tertiary uppercase tracking-widest text-[10px]">
+                      Error
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(event as WebhookEvent & { forwardResults: Array<{ destinationId: string; url: string; statusCode: number | null; error: string | null; latencyMs: number | null }> }).forwardResults.map((result, idx) => (
+                    <tr key={idx} className="border-b border-border-primary last:border-0">
+                      <td className="py-2 pr-4 font-mono text-text-secondary truncate max-w-[200px]">
+                        {result.url}
+                      </td>
+                      <td className="py-2 pr-4">
+                        {result.statusCode ? (
+                          <Badge variant={result.statusCode < 400 ? "success" : "error"}>
+                            {result.statusCode}
+                          </Badge>
+                        ) : (
+                          <Badge variant="default">--</Badge>
+                        )}
+                      </td>
+                      <td className="py-2 pr-4 font-mono text-text-tertiary tabular-nums">
+                        {result.latencyMs !== null ? `${result.latencyMs}ms` : "\u2014"}
+                      </td>
+                      <td className="py-2 text-text-error truncate max-w-[200px]">
+                        {result.error || "\u2014"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
 
         {/* Forward Response */}
         {event.forwardCode && (

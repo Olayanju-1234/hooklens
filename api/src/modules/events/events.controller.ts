@@ -31,6 +31,14 @@ export class EventsController {
     return this.eventsService.findOne(id, user.sub);
   }
 
+  @Get(':id/timeline')
+  getTimeline(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.eventsService.getTimeline(id, user.sub);
+  }
+
   @Get(':id/diff/:otherId')
   diff(
     @CurrentUser() user: JwtPayload,

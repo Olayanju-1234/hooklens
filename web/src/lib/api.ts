@@ -150,4 +150,315 @@ export const stats = {
     request<Stats>(`/stats${period ? `?period=${period}` : ""}`),
 };
 
+// Workspaces
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  retentionDays: number;
+  createdAt: string;
+}
+
+export interface WorkspaceMember {
+  id: string;
+  userId: string;
+  email: string;
+  role: "owner" | "member";
+  createdAt: string;
+}
+
+export const workspaces = {
+  list: () => request<Workspace[]>("/workspaces"),
+  get: (id: string) =>
+    request<Workspace & { members: WorkspaceMember[] }>(`/workspaces/${id}`),
+  create: (name: string) =>
+    request<Workspace>("/workspaces", { method: "POST", body: { name } }),
+  update: (id: string, data: Partial<Workspace>) =>
+    request<Workspace>(`/workspaces/${id}`, { method: "PATCH", body: data }),
+  delete: (id: string) =>
+    request<void>(`/workspaces/${id}`, { method: "DELETE" }),
+  invite: (id: string, email: string, role?: string) =>
+    request<void>(`/workspaces/${id}/invite`, {
+      method: "POST",
+      body: { email, role },
+    }),
+  acceptInvite: (token: string) =>
+    request<void>(`/workspaces/accept-invite/${token}`, { method: "POST" }),
+  removeMember: (workspaceId: string, userId: string) =>
+    request<void>(`/workspaces/${workspaceId}/members/${userId}`, {
+      method: "DELETE",
+    }),
+};
+
+// Forward Destinations
+export interface ForwardDestination {
+  id: string;
+  endpointId: string;
+  url: string;
+  label: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export const destinations = {
+  list: (endpointId: string) =>
+    request<ForwardDestination[]>(`/endpoints/${endpointId}/destinations`),
+  create: (endpointId: string, data: { url: string; label?: string }) =>
+    request<ForwardDestination>(`/endpoints/${endpointId}/destinations`, {
+      method: "POST",
+      body: data,
+    }),
+  update: (
+    endpointId: string,
+    id: string,
+    data: Partial<ForwardDestination>,
+  ) =>
+    request<ForwardDestination>(`/endpoints/${endpointId}/destinations/${id}`, {
+      method: "PATCH",
+      body: data,
+    }),
+  delete: (endpointId: string, id: string) =>
+    request<void>(`/endpoints/${endpointId}/destinations/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// Transforms
+export interface TransformRule {
+  id: string;
+  endpointId: string;
+  name: string;
+  isActive: boolean;
+  operations: Array<{
+    type: string;
+    path: string;
+    newPath?: string;
+    value?: unknown;
+  }>;
+  priority: number;
+  createdAt: string;
+}
+
+export const transforms = {
+  list: (endpointId: string) =>
+    request<TransformRule[]>(`/endpoints/${endpointId}/transforms`),
+  create: (
+    endpointId: string,
+    data: {
+      name: string;
+      operations: TransformRule["operations"];
+      priority?: number;
+    },
+  ) =>
+    request<TransformRule>(`/endpoints/${endpointId}/transforms`, {
+      method: "POST",
+      body: data,
+    }),
+  update: (endpointId: string, id: string, data: Partial<TransformRule>) =>
+    request<TransformRule>(`/endpoints/${endpointId}/transforms/${id}`, {
+      method: "PATCH",
+      body: data,
+    }),
+  delete: (endpointId: string, id: string) =>
+    request<void>(`/endpoints/${endpointId}/transforms/${id}`, {
+      method: "DELETE",
+    }),
+  test: (
+    endpointId: string,
+    data: {
+      operations: TransformRule["operations"];
+      body: Record<string, unknown>;
+    },
+  ) =>
+    request<Record<string, unknown>>(
+      `/endpoints/${endpointId}/transforms/test`,
+      { method: "POST", body: data },
+    ),
+};
+
+// Alert Channels
+export interface AlertChannel {
+  id: string;
+  type: "slack" | "email" | "discord";
+  name: string;
+  config: Record<string, string>;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export const alertChannels = {
+  list: () => request<AlertChannel[]>("/alert-channels"),
+  create: (data: {
+    type: string;
+    name: string;
+    config: Record<string, string>;
+  }) =>
+    request<AlertChannel>("/alert-channels", { method: "POST", body: data }),
+  update: (id: string, data: Partial<AlertChannel>) =>
+    request<AlertChannel>(`/alert-channels/${id}`, {
+      method: "PATCH",
+      body: data,
+    }),
+  delete: (id: string) =>
+    request<void>(`/alert-channels/${id}`, { method: "DELETE" }),
+  test: (id: string) =>
+    request<void>(`/alert-channels/${id}/test`, { method: "POST" }),
+};
+
+// Alert Rules
+export interface AlertRule {
+  id: string;
+  name: string;
+  type: "forward_failure" | "signature_failure" | "no_events";
+  isActive: boolean;
+  config: Record<string, unknown>;
+  channels: AlertChannel[];
+  createdAt: string;
+}
+
+export const alertRules = {
+  list: () => request<AlertRule[]>("/alert-rules"),
+  create: (data: {
+    name: string;
+    type: string;
+    config: Record<string, unknown>;
+    channelIds: string[];
+  }) => request<AlertRule>("/alert-rules", { method: "POST", body: data }),
+  update: (
+    id: string,
+    data: Partial<{
+      name: string;
+      type: string;
+      config: Record<string, unknown>;
+      isActive: boolean;
+      channelIds: string[];
+    }>,
+  ) => request<AlertRule>(`/alert-rules/${id}`, { method: "PATCH", body: data }),
+  delete: (id: string) =>
+    request<void>(`/alert-rules/${id}`, { method: "DELETE" }),
+};
+
+// Alert History
+export interface AlertHistoryEntry {
+  id: string;
+  alertRuleId: string;
+  channelId: string;
+  payload: Record<string, unknown> | null;
+  sentAt: string;
+}
+
+export const alertHistory = {
+  list: () => request<AlertHistoryEntry[]>("/alert-history"),
+};
+
+// Test Payloads
+export interface TestProvider {
+  provider: string;
+  displayName: string;
+  eventCount: number;
+}
+
+export interface TestEventType {
+  eventType: string;
+  description: string;
+}
+
+export const testPayloads = {
+  providers: () => request<TestProvider[]>("/test-payloads"),
+  eventTypes: (provider: string) =>
+    request<TestEventType[]>(`/test-payloads/${provider}`),
+  payload: (provider: string, eventType: string) =>
+    request<{ payload: Record<string, unknown> }>(
+      `/test-payloads/${provider}/${eventType}`,
+    ),
+  send: (provider: string, eventType: string) =>
+    request<{ status: string }>(
+      `/test-payloads/${provider}/${eventType}/send`,
+      { method: "POST" },
+    ),
+};
+
+// Docs
+export interface ProviderDoc {
+  provider: string;
+  displayName: string;
+  description: string;
+  signatureHeader: string;
+  signatureMethod: string;
+  eventCount: number;
+}
+
+export interface EventDoc {
+  eventType: string;
+  description: string;
+  fields: Array<{
+    path: string;
+    type: string;
+    description: string;
+    required: boolean;
+  }>;
+}
+
+export const docs = {
+  providers: () => request<ProviderDoc[]>("/docs/providers"),
+  provider: (provider: string) =>
+    request<ProviderDoc & { events: EventDoc[] }>(`/docs/providers/${provider}`),
+  event: (provider: string, eventType: string) =>
+    request<EventDoc>(`/docs/providers/${provider}/events/${eventType}`),
+};
+
+// Timeline
+export interface TimelineStep {
+  step: string;
+  timestamp: string;
+  latencyMs: number | null;
+  status: "success" | "warning" | "error" | "pending";
+  detail: string;
+}
+
+export const timeline = {
+  get: (eventId: string) =>
+    request<{ eventId: string; steps: TimelineStep[] }>(
+      `/events/${eventId}/timeline`,
+    ),
+};
+
+// Latency
+export interface LatencyStats {
+  p50: number | null;
+  p95: number | null;
+  p99: number | null;
+  timeSeries: Array<{ bucket: string; p50: number; p95: number; p99: number }>;
+}
+
+export const latency = {
+  get: (period?: string) =>
+    request<LatencyStats>(
+      `/stats/latency${period ? `?period=${period}` : ""}`,
+    ),
+};
+
+// Dead Letter
+export interface DeadLetterEntry {
+  id: string;
+  eventId: string;
+  endpointId: string;
+  lastAttempt: number;
+  lastError: string | null;
+  exhaustedAt: string;
+}
+
+export const deadLetter = {
+  list: (endpointId: string) =>
+    request<DeadLetterEntry[]>(`/endpoints/${endpointId}/dead-letter`),
+  retry: (endpointId: string, id: string) =>
+    request<void>(`/endpoints/${endpointId}/dead-letter/${id}/retry`, {
+      method: "POST",
+    }),
+  discard: (endpointId: string, id: string) =>
+    request<void>(`/endpoints/${endpointId}/dead-letter/${id}`, {
+      method: "DELETE",
+    }),
+};
+
 export { ApiError };

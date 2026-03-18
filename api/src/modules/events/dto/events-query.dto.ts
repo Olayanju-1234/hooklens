@@ -4,6 +4,7 @@ import {
   IsString,
   IsDateString,
   IsInt,
+  IsIn,
   Min,
   Max,
 } from 'class-validator';
@@ -21,6 +22,18 @@ export class EventsQueryDto {
   @IsOptional()
   @IsString()
   forwardStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  provider?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  isDuplicate?: string;
 
   @IsOptional()
   @IsDateString()

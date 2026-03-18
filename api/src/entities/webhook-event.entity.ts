@@ -5,9 +5,11 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
   Index,
 } from 'typeorm';
 import { Endpoint } from './endpoint.entity.js';
+import { ForwardResult } from './forward-result.entity.js';
 
 export type ForwardStatus = 'pending' | 'forwarded' | 'failed' | 'skipped';
 
@@ -24,6 +26,9 @@ export class WebhookEvent {
 
   @Column({ type: 'uuid' })
   userId!: string;
+
+  @Column({ type: 'uuid' })
+  workspaceId!: string;
 
   // Inbound data
   @Column({ type: 'varchar', length: 10 })
@@ -80,6 +85,19 @@ export class WebhookEvent {
   @Column({ type: 'uuid', nullable: true })
   originalEventId!: string | null;
 
+  // Deduplication
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  bodyHash!: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  idempotencyKey!: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  isDuplicate!: boolean;
+
+  @Column({ type: 'uuid', nullable: true })
+  duplicateOfId!: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 
@@ -88,4 +106,7 @@ export class WebhookEvent {
   })
   @JoinColumn({ name: 'endpointId' })
   endpoint!: Endpoint;
+
+  @OneToMany(() => ForwardResult, (result) => result.event)
+  forwardResults!: ForwardResult[];
 }

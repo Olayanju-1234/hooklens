@@ -8,6 +8,16 @@ import configuration from './config/configuration.js';
 import { User } from './entities/user.entity.js';
 import { Endpoint } from './entities/endpoint.entity.js';
 import { WebhookEvent } from './entities/webhook-event.entity.js';
+import { Workspace } from './entities/workspace.entity.js';
+import { WorkspaceMember } from './entities/workspace-member.entity.js';
+import { WorkspaceInvite } from './entities/workspace-invite.entity.js';
+import { ForwardDestination } from './entities/forward-destination.entity.js';
+import { ForwardResult } from './entities/forward-result.entity.js';
+import { DeadLetterEvent } from './entities/dead-letter-event.entity.js';
+import { TransformRule } from './entities/transform-rule.entity.js';
+import { AlertChannel } from './entities/alert-channel.entity.js';
+import { AlertRule } from './entities/alert-rule.entity.js';
+import { AlertHistory } from './entities/alert-history.entity.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { EndpointsModule } from './modules/endpoints/endpoints.module.js';
 import { IngressModule } from './modules/ingress/ingress.module.js';
@@ -16,6 +26,12 @@ import { EventsModule } from './modules/events/events.module.js';
 import { StatsModule } from './modules/stats/stats.module.js';
 import { WebsocketModule } from './modules/websocket/websocket.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { WorkspacesModule } from './modules/workspaces/workspaces.module.js';
+import { AlertingModule } from './modules/alerting/alerting.module.js';
+import { TransformModule } from './modules/transform/transform.module.js';
+import { TestPayloadsModule } from './modules/test-payloads/test-payloads.module.js';
+import { DocsModule } from './modules/docs/docs.module.js';
+import { RetentionModule } from './modules/retention/retention.module.js';
 
 @Module({
   imports: [
@@ -52,7 +68,21 @@ import { HealthModule } from './modules/health/health.module.js';
             };
         return {
           ...base,
-          entities: [User, Endpoint, WebhookEvent],
+          entities: [
+            User,
+            Endpoint,
+            WebhookEvent,
+            Workspace,
+            WorkspaceMember,
+            WorkspaceInvite,
+            ForwardDestination,
+            ForwardResult,
+            DeadLetterEvent,
+            TransformRule,
+            AlertChannel,
+            AlertRule,
+            AlertHistory,
+          ],
           migrations: ['dist/migrations/*.js'],
           migrationsRun: true,
           synchronize: false,
@@ -81,6 +111,12 @@ import { HealthModule } from './modules/health/health.module.js';
     StatsModule,
     WebsocketModule,
     HealthModule,
+    WorkspacesModule,
+    AlertingModule,
+    TransformModule,
+    TestPayloadsModule,
+    DocsModule,
+    RetentionModule,
   ],
   providers: [
     {

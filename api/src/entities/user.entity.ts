@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { Endpoint } from './endpoint.entity.js';
+import { WorkspaceMember } from './workspace-member.entity.js';
 
 @Entity('users')
 export class User {
@@ -28,4 +29,7 @@ export class User {
 
   @OneToMany(() => Endpoint, (endpoint) => endpoint.user)
   endpoints!: Endpoint[];
+
+  @OneToMany(() => WorkspaceMember, (member) => member.user)
+  memberships!: WorkspaceMember[];
 }
