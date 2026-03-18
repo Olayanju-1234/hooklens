@@ -335,7 +335,7 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-bg-primary">
+    <div data-theme="dark" className="min-h-screen bg-aurora">
       {/* ── Nav ─────────────────────────────────────────── */}
       <nav className="relative z-20 flex items-center justify-between px-6 sm:px-10 py-5 max-w-7xl mx-auto">
         <div className="flex items-center gap-2.5">
