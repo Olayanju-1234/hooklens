@@ -17,6 +17,7 @@ import {
   UpdateWorkspaceDto,
   InviteMemberDto,
 } from './dto/workspace.dto.js';
+import { EmailService } from '../email/email.service.js';
 
 @Injectable()
 export class WorkspacesService {
@@ -29,6 +30,7 @@ export class WorkspacesService {
     private readonly memberRepo: Repository<WorkspaceMember>,
     @InjectRepository(WorkspaceInvite)
     private readonly inviteRepo: Repository<WorkspaceInvite>,
+    private readonly emailService: EmailService,
   ) {}
 
   async create(userId: string, dto: CreateWorkspaceDto): Promise<Workspace> {
@@ -130,6 +132,24 @@ export class WorkspacesService {
       expiresAt,
     });
     const saved = await this.inviteRepo.save(invite);
+
+    // Send invite email
+    const workspace = await this.workspaceRepo.findOne({
+      where: { id: workspaceId },
+    });
+    this.emailService
+      .sendInvite(
+        dto.email,
+        workspace?.name ?? 'Hookdash Workspace',
+        token,
+        'team@hookdash.dev',
+      )
+      .catch((err: Error) => {
+        this.logger.error(
+          `Failed to send invite email to ${dto.email}: ${err.message}`,
+        );
+      });
+
     this.logger.log(
       `Invite created for ${dto.email} in workspace ${workspaceId}`,
     );

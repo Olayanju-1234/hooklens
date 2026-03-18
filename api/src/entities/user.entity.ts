@@ -18,11 +18,29 @@ export class User {
   email!: string;
 
   @Exclude()
-  @Column({ type: 'varchar', length: 255, select: false })
-  passwordHash!: string;
+  @Column({ type: 'varchar', length: 255, select: false, nullable: true })
+  passwordHash!: string | null;
 
   @Column({ type: 'varchar', length: 20, unique: true })
   ingressSlug!: string;
+
+  @Column({ type: 'boolean', default: false })
+  emailVerified!: boolean;
+
+  @Exclude()
+  @Column({ type: 'varchar', length: 255, nullable: true, select: false })
+  verificationToken!: string | null;
+
+  @Exclude()
+  @Column({ type: 'varchar', length: 255, nullable: true, select: false })
+  resetToken!: string | null;
+
+  @Exclude()
+  @Column({ type: 'timestamptz', nullable: true, select: false })
+  resetTokenExpiresAt!: Date | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  oauthProvider!: string | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;

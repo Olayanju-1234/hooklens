@@ -12,6 +12,8 @@ import { TransformRule } from './entities/transform-rule.entity.js';
 import { AlertChannel } from './entities/alert-channel.entity.js';
 import { AlertRule } from './entities/alert-rule.entity.js';
 import { AlertHistory } from './entities/alert-history.entity.js';
+import { ApiKey } from './entities/api-key.entity.js';
+import { AuditLog } from './entities/audit-log.entity.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 const isProd = process.env.NODE_ENV === 'production';
@@ -47,6 +49,8 @@ export const AppDataSource = new DataSource({
     AlertChannel,
     AlertRule,
     AlertHistory,
+    ApiKey,
+    AuditLog,
   ],
   migrations: ['dist/migrations/*.js'],
   synchronize: false,

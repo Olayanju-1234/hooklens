@@ -35,5 +35,22 @@ export default () => {
       secret: process.env.JWT_SECRET || 'dev-jwt-secret',
       expiry: process.env.JWT_EXPIRY || '7d',
     },
+    resendApiKey: process.env.RESEND_API_KEY || '',
+    emailFrom: process.env.EMAIL_FROM || 'Hookdash <noreply@hookdash.dev>',
+    appUrl: process.env.APP_URL || 'https://hookdash-web.onrender.com',
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID || '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+      callbackUrl:
+        process.env.GOOGLE_CALLBACK_URL ||
+        'https://hookdash-api.onrender.com/api/auth/google/callback',
+    },
+    github: {
+      clientId: process.env.GITHUB_CLIENT_ID || '',
+      clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
+      callbackUrl:
+        process.env.GITHUB_CALLBACK_URL ||
+        'https://hookdash-api.onrender.com/api/auth/github/callback',
+    },
   };
 };

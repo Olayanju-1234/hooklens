@@ -18,6 +18,8 @@ import { TransformRule } from './entities/transform-rule.entity.js';
 import { AlertChannel } from './entities/alert-channel.entity.js';
 import { AlertRule } from './entities/alert-rule.entity.js';
 import { AlertHistory } from './entities/alert-history.entity.js';
+import { ApiKey } from './entities/api-key.entity.js';
+import { AuditLog } from './entities/audit-log.entity.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { EndpointsModule } from './modules/endpoints/endpoints.module.js';
 import { IngressModule } from './modules/ingress/ingress.module.js';
@@ -32,6 +34,9 @@ import { TransformModule } from './modules/transform/transform.module.js';
 import { TestPayloadsModule } from './modules/test-payloads/test-payloads.module.js';
 import { DocsModule } from './modules/docs/docs.module.js';
 import { RetentionModule } from './modules/retention/retention.module.js';
+import { EmailModule } from './modules/email/email.module.js';
+import { ApiKeysModule } from './modules/api-keys/api-keys.module.js';
+import { AuditModule } from './modules/audit/audit.module.js';
 
 @Module({
   imports: [
@@ -82,6 +87,8 @@ import { RetentionModule } from './modules/retention/retention.module.js';
             AlertChannel,
             AlertRule,
             AlertHistory,
+            ApiKey,
+            AuditLog,
           ],
           migrations: ['dist/migrations/*.js'],
           migrationsRun: true,
@@ -117,6 +124,9 @@ import { RetentionModule } from './modules/retention/retention.module.js';
     TestPayloadsModule,
     DocsModule,
     RetentionModule,
+    EmailModule,
+    ApiKeysModule,
+    AuditModule,
   ],
   providers: [
     {

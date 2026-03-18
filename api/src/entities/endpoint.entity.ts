@@ -49,6 +49,15 @@ export class Endpoint {
   @Column({ type: 'integer', default: 1000 })
   retryBackoffMs!: number;
 
+  @Column({ type: 'integer', default: 200 })
+  responseStatusCode!: number;
+
+  @Column({ type: 'text', nullable: true })
+  responseBody!: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  blockInvalidSignatures!: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

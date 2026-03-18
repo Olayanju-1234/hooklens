@@ -178,6 +178,15 @@ export class IngressService {
       );
     }
 
+    // Block forwarding if signature is invalid and enforcement is on
+    if (endpoint.blockInvalidSignatures && updates.signatureValid === false) {
+      await this.eventRepo.update(event.id, { forwardStatus: 'blocked' });
+      this.logger.warn(
+        `Event ${event.id} blocked — invalid signature (enforcement enabled)`,
+      );
+      return;
+    }
+
     // Broadcast to WebSocket — non-critical, don't let it block
     try {
       this.wsGateway.broadcastWebhook(event.userId, {

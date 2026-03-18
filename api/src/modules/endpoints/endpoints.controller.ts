@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Headers,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
@@ -21,8 +22,12 @@ export class EndpointsController {
   constructor(private readonly endpointsService: EndpointsService) {}
 
   @Post()
-  create(@CurrentUser() user: JwtPayload, @Body() dto: CreateEndpointDto) {
-    return this.endpointsService.create(user.sub, dto);
+  create(
+    @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
+    @Body() dto: CreateEndpointDto,
+  ) {
+    return this.endpointsService.create(user.sub, dto, workspaceId);
   }
 
   @Get()

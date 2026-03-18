@@ -6,10 +6,12 @@ import { WorkspaceInvite } from '../../entities/workspace-invite.entity.js';
 import { WorkspacesController } from './workspaces.controller.js';
 import { WorkspacesService } from './workspaces.service.js';
 import { WorkspaceGuard } from './guards/workspace.guard.js';
+import { EmailModule } from '../email/email.module.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Workspace, WorkspaceMember, WorkspaceInvite]),
+    EmailModule,
   ],
   controllers: [WorkspacesController],
   providers: [WorkspacesService, WorkspaceGuard],

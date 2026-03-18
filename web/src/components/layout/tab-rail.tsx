@@ -15,12 +15,13 @@ const tabs = [
   { label: "Test", href: "/dashboard/test" },
   { label: "Analytics", href: "/dashboard/stats" },
   { label: "Alerts", href: "/dashboard/alerts" },
+  { label: "Audit", href: "/dashboard/audit" },
   { label: "Docs", href: "/dashboard/docs" },
 ];
 
 export function TabRail() {
   const pathname = usePathname();
-  const { logout, ingressSlug } = useAuth();
+  const { logout, ingressSlug, currentWorkspaceId, workspaceList, switchWorkspace } = useAuth();
   const { theme, toggle } = useTheme();
   const { connected } = useWebSocket();
   const indicatorRef = useRef<HTMLDivElement>(null);
@@ -113,6 +114,21 @@ export function TabRail() {
 
       {/* Right side */}
       <div className="ml-auto flex items-center gap-2">
+        {/* Workspace switcher */}
+        {workspaceList.length > 0 && (
+          <select
+            value={currentWorkspaceId ?? ""}
+            onChange={(e) => switchWorkspace(e.target.value)}
+            className="hidden sm:block text-[11px] px-2 py-1 rounded-md bg-bg-tertiary text-text-primary border border-border-primary focus:outline-none focus:ring-1 focus:ring-bg-accent cursor-pointer"
+          >
+            {workspaceList.map((ws) => (
+              <option key={ws.id} value={ws.id}>
+                {ws.name}
+              </option>
+            ))}
+          </select>
+        )}
+
         {/* Ingress slug */}
         {ingressSlug && (
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-bg-tertiary">

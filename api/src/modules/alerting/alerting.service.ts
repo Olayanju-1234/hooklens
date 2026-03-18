@@ -335,7 +335,7 @@ export class AlertingService {
           );
           return;
         }
-        this.emailSender.send(email, 'Hookdash Alert', message);
+        await this.emailSender.send(email, 'Hookdash Alert', message);
         break;
       }
       default:

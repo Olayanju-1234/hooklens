@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter.js';
 
@@ -24,7 +25,7 @@ async function bootstrap() {
     origin: process.env.CORS_ORIGIN ?? 'http://localhost:3001',
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-workspace-id'],
   });
 
   // Strip unknown fields, transform types, block unexpected properties
@@ -41,6 +42,16 @@ async function bootstrap() {
   app.setGlobalPrefix('api', {
     exclude: ['in/:slug'],
   });
+
+  // Swagger / OpenAPI docs
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Hookdash API')
+    .setDescription('Webhook inspection and debugging platform')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

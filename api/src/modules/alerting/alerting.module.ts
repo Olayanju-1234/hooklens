@@ -12,6 +12,7 @@ import { AlertingProcessor } from './alerting.processor.js';
 import { SlackSender } from './channels/slack.sender.js';
 import { DiscordSender } from './channels/discord.sender.js';
 import { EmailSender } from './channels/email.sender.js';
+import { EmailModule } from '../email/email.module.js';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { EmailSender } from './channels/email.sender.js';
     ]),
     BullModule.registerQueue({ name: 'alert-check' }),
     HttpModule.register({ timeout: 10_000 }),
+    EmailModule,
   ],
   controllers: [AlertingController],
   providers: [

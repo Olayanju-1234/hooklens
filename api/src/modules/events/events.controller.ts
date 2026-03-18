@@ -4,10 +4,12 @@ import {
   Post,
   Param,
   Query,
+  Res,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import type { Response } from 'express';
 import { EventsService } from './events.service.js';
 import { EventsQueryDto } from './dto/events-query.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
@@ -54,5 +56,56 @@ export class EventsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.eventsService.replay(id, user.sub);
+  }
+
+  @Get('export/:format')
+  async exportEvents(
+    @CurrentUser() user: JwtPayload,
+    @Param('format') format: string,
+    @Query() query: EventsQueryDto,
+    @Res() res: Response,
+  ) {
+    const { items } = await this.eventsService.findAll(user.sub, {
+      ...query,
+      limit: 1000,
+    });
+
+    if (format === 'csv') {
+      const headers = [
+        'id',
+        'provider',
+        'eventType',
+        'method',
+        'forwardStatus',
+        'forwardCode',
+        'signatureValid',
+        'receivedAt',
+      ];
+      const csv = [
+        headers.join(','),
+        ...items.map((e) =>
+          headers
+            .map((h) => {
+              const val = e[h as keyof typeof e] as
+                | string
+                | number
+                | boolean
+                | null
+                | undefined;
+              return val === null || val === undefined ? '' : String(val);
+            })
+            .join(','),
+        ),
+      ].join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=events.csv');
+      return res.send(csv);
+    }
+
+    // Default: JSON
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename=events.json');
+    return res.json(items);
   }
 }

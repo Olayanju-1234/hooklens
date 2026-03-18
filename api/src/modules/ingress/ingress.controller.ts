@@ -47,7 +47,7 @@ export class IngressController {
       sourceIp: req.ip ?? null,
     });
 
-    // Process async — don't block the 200 response
+    // Process async — don't block the response
     void this.ingressService
       .processEvent(event, endpoint)
       .catch((err: Error) => {
@@ -56,6 +56,10 @@ export class IngressController {
         );
       });
 
-    return res.status(200).json({ status: 'ok' });
+    const statusCode = endpoint.responseStatusCode ?? 200;
+    const responseBody = endpoint.responseBody
+      ? (JSON.parse(endpoint.responseBody) as Record<string, unknown>)
+      : { status: 'ok' };
+    return res.status(statusCode).json(responseBody);
   }
 }

@@ -11,7 +11,12 @@ import {
 import { Endpoint } from './endpoint.entity.js';
 import { ForwardResult } from './forward-result.entity.js';
 
-export type ForwardStatus = 'pending' | 'forwarded' | 'failed' | 'skipped';
+export type ForwardStatus =
+  | 'pending'
+  | 'forwarded'
+  | 'failed'
+  | 'skipped'
+  | 'blocked';
 
 @Entity('webhook_events')
 @Index('idx_events_user_time', ['userId', 'receivedAt'])

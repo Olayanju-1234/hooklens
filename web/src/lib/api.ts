@@ -20,6 +20,7 @@ class ApiError extends Error {
 
 async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const token = Cookies.get("token");
+  const workspaceId = Cookies.get("workspaceId");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...options.headers,
@@ -27,6 +28,10 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
+  }
+
+  if (workspaceId) {
+    headers["x-workspace-id"] = workspaceId;
   }
 
   const res = await fetch(`${API_URL}${path}`, {
@@ -56,6 +61,21 @@ export const auth = {
     request<{ accessToken: string; ingressSlug: string }>("/auth/login", {
       method: "POST",
       body: { email, password },
+    }),
+  forgotPassword: (email: string) =>
+    request<{ sent: boolean }>("/auth/forgot-password", {
+      method: "POST",
+      body: { email },
+    }),
+  resetPassword: (token: string, newPassword: string) =>
+    request<{ success: boolean }>("/auth/reset-password", {
+      method: "POST",
+      body: { token, newPassword },
+    }),
+  verifyEmail: (token: string) =>
+    request<{ success: boolean }>("/auth/verify-email", {
+      method: "POST",
+      body: { token },
     }),
 };
 
@@ -459,6 +479,68 @@ export const deadLetter = {
     request<void>(`/endpoints/${endpointId}/dead-letter/${id}`, {
       method: "DELETE",
     }),
+};
+
+// Audit Logs
+export interface AuditLogEntry {
+  id: string;
+  workspaceId: string;
+  userId: string | null;
+  action: string;
+  resource: string;
+  resourceId: string | null;
+  metadata: Record<string, unknown> | null;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
+export const auditLogs = {
+  list: (limit?: number, offset?: number) => {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", String(limit));
+    if (offset) params.set("offset", String(offset));
+    const query = params.toString();
+    return request<{ items: AuditLogEntry[]; total: number }>(
+      `/audit-logs${query ? `?${query}` : ""}`,
+    );
+  },
+};
+
+// API Keys
+export interface ApiKeyEntry {
+  id: string;
+  workspaceId: string;
+  name: string;
+  keyPrefix: string;
+  isActive: boolean;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export const apiKeys = {
+  list: () => request<ApiKeyEntry[]>("/api-keys"),
+  create: (name: string, expiresAt?: string) =>
+    request<{ apiKey: ApiKeyEntry; rawKey: string }>("/api-keys", {
+      method: "POST",
+      body: { name, expiresAt },
+    }),
+  revoke: (id: string) =>
+    request<void>(`/api-keys/${id}/revoke`, { method: "POST" }),
+  delete: (id: string) =>
+    request<void>(`/api-keys/${id}`, { method: "DELETE" }),
+};
+
+// Event Export
+export const eventExport = {
+  csvUrl: (params?: Record<string, string>) => {
+    const query = params ? "?" + new URLSearchParams(params).toString() : "";
+    return `${API_URL}/events/export/csv${query}`;
+  },
+  jsonUrl: (params?: Record<string, string>) => {
+    const query = params ? "?" + new URLSearchParams(params).toString() : "";
+    return `${API_URL}/events/export/json${query}`;
+  },
 };
 
 export { ApiError };

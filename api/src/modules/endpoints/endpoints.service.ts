@@ -18,9 +18,14 @@ export class EndpointsService {
     private readonly endpointRepo: Repository<Endpoint>,
   ) {}
 
-  async create(userId: string, dto: CreateEndpointDto): Promise<Endpoint> {
+  async create(
+    userId: string,
+    dto: CreateEndpointDto,
+    workspaceId?: string,
+  ): Promise<Endpoint> {
     const endpoint = this.endpointRepo.create({
       userId,
+      workspaceId,
       name: dto.name,
       provider: dto.provider,
       forwardUrl: dto.forwardUrl ?? null,

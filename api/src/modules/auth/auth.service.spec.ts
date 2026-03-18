@@ -5,6 +5,9 @@ import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service.js';
 import { User } from '../../entities/user.entity.js';
+import { Workspace } from '../../entities/workspace.entity.js';
+import { WorkspaceMember } from '../../entities/workspace-member.entity.js';
+import { EmailService } from '../email/email.service.js';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -19,10 +22,23 @@ describe('AuthService', () => {
     findOne: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
+    update: jest.fn(),
     createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+  };
+  const mockWorkspaceRepo = {
+    create: jest.fn(),
+    save: jest.fn(),
+  };
+  const mockMemberRepo = {
+    create: jest.fn(),
+    save: jest.fn(),
   };
   const mockJwtService = {
     sign: jest.fn().mockReturnValue('mock_jwt_token'),
+  };
+  const mockEmailService = {
+    sendEmailVerification: jest.fn().mockResolvedValue(undefined),
+    sendPasswordReset: jest.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(async () => {
@@ -30,7 +46,16 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
+        {
+          provide: getRepositoryToken(Workspace),
+          useValue: mockWorkspaceRepo,
+        },
+        {
+          provide: getRepositoryToken(WorkspaceMember),
+          useValue: mockMemberRepo,
+        },
         { provide: JwtService, useValue: mockJwtService },
+        { provide: EmailService, useValue: mockEmailService },
       ],
     }).compile();
 
@@ -49,6 +74,19 @@ describe('AuthService', () => {
         ...user,
         id: 'user-uuid',
       }));
+      mockWorkspaceRepo.create.mockImplementation(
+        (data: Partial<Workspace>) => data,
+      );
+      mockWorkspaceRepo.save.mockImplementation(
+        (ws: Partial<Workspace>) => ({
+          ...ws,
+          id: 'ws-uuid',
+        }),
+      );
+      mockMemberRepo.create.mockImplementation(
+        (data: Partial<WorkspaceMember>) => data,
+      );
+      mockMemberRepo.save.mockResolvedValue({});
 
       const result = await service.signup({
         email: 'test@example.com',
