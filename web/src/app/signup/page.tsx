@@ -118,18 +118,8 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-primary px-4 relative overflow-hidden">
-      <div className="absolute inset-0 bg-grid bg-grid-fade opacity-40" />
-      <div
-        className="absolute w-[500px] h-[500px] rounded-full opacity-20 blur-3xl pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(circle, var(--bg-accent) 0%, transparent 70%)",
-          top: "20%",
-          left: "50%",
-          transform: "translateX(-50%)",
-        }}
-      />
+    <div data-theme="dark" className="min-h-screen flex items-center justify-center bg-aurora px-4 relative overflow-hidden">
+      <div className="absolute inset-0 bg-grid bg-grid-fade opacity-[0.06]" />
 
       <div ref={formRef} className="w-full max-w-sm relative z-10">
         <div className="flex items-center gap-2.5 mb-10">

@@ -177,6 +177,16 @@ a, button, input, select, textarea,
   transform: none;
 }
 
+/* Aurora background for auth & landing pages */
+.bg-aurora {
+  background-color: #0a0a09;
+  background-image:
+    radial-gradient(ellipse 60% 50% at 80% 10%, rgba(59, 130, 246, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 15% 80%, rgba(46, 196, 162, 0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 40% 40% at 50% 30%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 50% at 60% 90%, rgba(46, 196, 162, 0.04) 0%, transparent 50%);
+}
+
 /* Grid background for auth pages */
 .bg-grid {
   background-image:

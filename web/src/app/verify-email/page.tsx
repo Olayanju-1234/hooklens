@@ -61,8 +61,9 @@ function VerifyEmailContent() {
   const token = searchParams.get("token") ?? "";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-primary px-4">
-      <div className="w-full max-w-sm text-center">
+    <div data-theme="dark" className="min-h-screen flex items-center justify-center bg-aurora px-4 relative overflow-hidden">
+      <div className="absolute inset-0 bg-grid bg-grid-fade opacity-[0.06]" />
+      <div className="w-full max-w-sm text-center relative z-10">
         <Suspense
           fallback={
             <p className="text-text-secondary">Verifying your email...</p>
