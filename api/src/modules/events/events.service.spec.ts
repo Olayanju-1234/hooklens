@@ -4,6 +4,7 @@ import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { EventsService } from './events.service.js';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
 import { Endpoint } from '../../entities/endpoint.entity.js';
+import { ForwardResult } from '../../entities/forward-result.entity.js';
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -17,6 +18,9 @@ describe('EventsService', () => {
   const mockEndpointRepo = {
     findOne: jest.fn(),
   };
+  const mockForwardResultRepo = {
+    find: jest.fn(),
+  };
   const mockForwardQueue = {
     add: jest.fn(),
   };
@@ -27,6 +31,10 @@ describe('EventsService', () => {
         EventsService,
         { provide: getRepositoryToken(WebhookEvent), useValue: mockEventRepo },
         { provide: getRepositoryToken(Endpoint), useValue: mockEndpointRepo },
+        {
+          provide: getRepositoryToken(ForwardResult),
+          useValue: mockForwardResultRepo,
+        },
         { provide: 'BullQueue_webhook-forward', useValue: mockForwardQueue },
       ],
     }).compile();
