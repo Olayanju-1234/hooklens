@@ -77,12 +77,10 @@ describe('AuthService', () => {
       mockWorkspaceRepo.create.mockImplementation(
         (data: Partial<Workspace>) => data,
       );
-      mockWorkspaceRepo.save.mockImplementation(
-        (ws: Partial<Workspace>) => ({
-          ...ws,
-          id: 'ws-uuid',
-        }),
-      );
+      mockWorkspaceRepo.save.mockImplementation((ws: Partial<Workspace>) => ({
+        ...ws,
+        id: 'ws-uuid',
+      }));
       mockMemberRepo.create.mockImplementation(
         (data: Partial<WorkspaceMember>) => data,
       );

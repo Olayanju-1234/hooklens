@@ -165,6 +165,13 @@ a, button, input, select, textarea,
   50% { transform: translateY(-3px); }
 }
 
+/* Shimmer gradient text */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  50% { background-position: 0% 0; }
+  100% { background-position: 200% 0; }
+}
+
 /* Grid background for auth pages */
 .bg-grid {
   background-image:
