@@ -11,6 +11,7 @@ import { ForwardResult } from '../../entities/forward-result.entity.js';
 import { DeadLetterEvent } from '../../entities/dead-letter-event.entity.js';
 import { TransformRule } from '../../entities/transform-rule.entity.js';
 import { WebhookGateway } from '../websocket/webhook.gateway.js';
+import { AlertingService } from '../alerting/alerting.service.js';
 
 export interface ForwardJobData {
   eventId: string;
@@ -46,6 +47,7 @@ export class ForwardProcessor extends WorkerHost {
     private readonly transformRuleRepo: Repository<TransformRule>,
     private readonly httpService: HttpService,
     private readonly wsGateway: WebhookGateway,
+    private readonly alertingService: AlertingService,
   ) {
     super();
   }
@@ -240,6 +242,15 @@ export class ForwardProcessor extends WorkerHost {
         ) {
           throw err;
         }
+
+        // Trigger alert evaluation on legacy forward failure (fire-and-forget)
+        this.alertingService
+          .evaluateForwardFailure(event.workspaceId, event.id)
+          .catch((evalErr: unknown) => {
+            this.logger.error(
+              `Alert evaluation failed for forward failure on event ${event.id}: ${(evalErr as Error).message}`,
+            );
+          });
       }
     }
 
@@ -266,6 +277,17 @@ export class ForwardProcessor extends WorkerHost {
         forwardLatency: bestLatency,
         forwardedAt: new Date(),
       });
+
+      // Trigger alert evaluation on forward failure (fire-and-forget)
+      if (aggregateStatus === 'failed') {
+        this.alertingService
+          .evaluateForwardFailure(event.workspaceId, event.id)
+          .catch((err: unknown) => {
+            this.logger.error(
+              `Alert evaluation failed for forward failure on event ${event.id}: ${(err as Error).message}`,
+            );
+          });
+      }
     }
 
     // Broadcast aggregate result

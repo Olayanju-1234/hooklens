@@ -10,6 +10,7 @@ import { DeadLetterEvent } from '../../entities/dead-letter-event.entity.js';
 import { TransformRule } from '../../entities/transform-rule.entity.js';
 import { ForwardProcessor } from './forward.processor.js';
 import { WebsocketModule } from '../websocket/websocket.module.js';
+import { AlertingModule } from '../alerting/alerting.module.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { WebsocketModule } from '../websocket/websocket.module.js';
     BullModule.registerQueue({ name: 'webhook-forward' }),
     HttpModule.register({ timeout: 15_000 }),
     WebsocketModule,
+    AlertingModule,
   ],
   providers: [ForwardProcessor],
   exports: [BullModule],

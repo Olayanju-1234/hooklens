@@ -9,6 +9,7 @@ import { IngressController } from './ingress.controller.js';
 import { IngressService } from './ingress.service.js';
 import { SignatureModule } from '../signature/signature.module.js';
 import { WebsocketModule } from '../websocket/websocket.module.js';
+import { AlertingModule } from '../alerting/alerting.module.js';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { WebsocketModule } from '../websocket/websocket.module.js';
     BullModule.registerQueue({ name: 'webhook-forward' }),
     SignatureModule,
     WebsocketModule,
+    AlertingModule,
   ],
   controllers: [IngressController],
   providers: [IngressService],

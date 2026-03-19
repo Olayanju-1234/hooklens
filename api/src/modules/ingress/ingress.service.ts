@@ -11,6 +11,7 @@ import { Workspace } from '../../entities/workspace.entity.js';
 import { SignatureService } from '../signature/signature.service.js';
 import { WebhookGateway } from '../websocket/webhook.gateway.js';
 import { ForwardJobData } from '../forward/forward.processor.js';
+import { AlertingService } from '../alerting/alerting.service.js';
 
 interface CaptureParams {
   endpointId: string;
@@ -38,6 +39,7 @@ export class IngressService {
     private readonly workspaceRepo: Repository<Workspace>,
     private readonly signatureService: SignatureService,
     private readonly wsGateway: WebhookGateway,
+    private readonly alertingService: AlertingService,
     @InjectQueue('webhook-forward')
     private readonly forwardQueue: Queue<ForwardJobData>,
   ) {}
@@ -176,6 +178,17 @@ export class IngressService {
       this.logger.error(
         `Failed to update event ${event.id}: ${(err as Error).message}`,
       );
+    }
+
+    // Trigger alert evaluation on signature failure (fire-and-forget)
+    if (updates.signatureValid === false) {
+      this.alertingService
+        .evaluateSignatureFailure(event.workspaceId, event.id)
+        .catch((err: unknown) => {
+          this.logger.error(
+            `Alert evaluation failed for signature failure on event ${event.id}: ${(err as Error).message}`,
+          );
+        });
     }
 
     // Block forwarding if signature is invalid and enforcement is on
