@@ -12,10 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useFadeIn } from "@/hooks/use-gsap";
+import { useAuth } from "@/lib/auth-context";
+import toast from "react-hot-toast";
 
 export default function SettingsPage() {
-  const [, setWorkspaceList] = useState<Workspace[]>([]);
+  const { refreshWorkspaces, switchWorkspace } = useAuth();
+  const [workspaceList, setWorkspaceList] = useState<Workspace[]>([]);
   const [workspace, setWorkspace] = useState<
     (Workspace & { members: WorkspaceMember[] }) | null
   >(null);
@@ -43,6 +47,15 @@ export default function SettingsPage() {
   // Copy slug
   const [copied, setCopied] = useState(false);
 
+  // Create workspace
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  // Delete workspace
+  const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const contentRef = useFadeIn<HTMLDivElement>();
 
   async function fetchWorkspace() {
@@ -63,6 +76,54 @@ export default function SettingsPage() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCreateWorkspace(e: FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    try {
+      const created = await workspacesApi.create(createName);
+      setWorkspaceList((prev) => [...prev, created]);
+      setCreateName("");
+      setCreateOpen(false);
+      toast.success("Workspace created");
+      await refreshWorkspaces();
+      switchWorkspace(created.id);
+      const ws = await workspacesApi.get(created.id);
+      setWorkspace(ws);
+      setEditName(ws.name);
+      setEditRetention(String(ws.retentionDays));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to create workspace");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleDeleteWorkspace() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await workspacesApi.delete(deleteTarget.id);
+      const remaining = workspaceList.filter((w) => w.id !== deleteTarget.id);
+      setWorkspaceList(remaining);
+      toast.success("Workspace deleted");
+      await refreshWorkspaces();
+      if (remaining.length > 0) {
+        switchWorkspace(remaining[0].id);
+        const ws = await workspacesApi.get(remaining[0].id);
+        setWorkspace(ws);
+        setEditName(ws.name);
+        setEditRetention(String(ws.retentionDays));
+      } else {
+        setWorkspace(null);
+      }
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to delete workspace");
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
     }
   }
 
@@ -181,12 +242,71 @@ export default function SettingsPage() {
       ref={contentRef}
       className="px-4 sm:px-6 py-6 mx-auto max-w-3xl w-full"
     >
-      <div className="mb-6">
-        <h1 className="text-base font-semibold text-text-primary">Settings</h1>
-        <p className="text-xs text-text-tertiary mt-0.5">
-          Manage your workspace configuration
-        </p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-base font-semibold text-text-primary">Settings</h1>
+          <p className="text-xs text-text-tertiary mt-0.5">
+            Manage your workspace configuration
+          </p>
+        </div>
+        <Button size="sm" variant="secondary" onClick={() => setCreateOpen(true)}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M7 2v10M2 7h10" />
+          </svg>
+          New Workspace
+        </Button>
       </div>
+
+      {/* Create workspace form */}
+      {createOpen && (
+        <div className="mb-5 p-4 rounded-xl bg-bg-secondary border border-border-primary">
+          <form onSubmit={(e) => void handleCreateWorkspace(e)} className="space-y-3">
+            <Input
+              label="Workspace Name"
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              placeholder="e.g. My Project"
+              required
+            />
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="secondary" size="sm" onClick={() => setCreateOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" loading={creating}>
+                Create
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Workspace list (if multiple) */}
+      {workspaceList.length > 1 && (
+        <div className="mb-5">
+          <p className="text-xs text-text-tertiary font-medium mb-2">Your Workspaces</p>
+          <div className="flex flex-wrap gap-2">
+            {workspaceList.map((ws) => (
+              <button
+                key={ws.id}
+                onClick={async () => {
+                  switchWorkspace(ws.id);
+                  const full = await workspacesApi.get(ws.id);
+                  setWorkspace(full);
+                  setEditName(full.name);
+                  setEditRetention(String(full.retentionDays));
+                }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
+                  workspace?.id === ws.id
+                    ? "bg-bg-accent text-text-inverse border-transparent"
+                    : "bg-bg-secondary text-text-primary border-border-primary hover:border-border-secondary"
+                }`}
+              >
+                {ws.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* Workspace Info */}
@@ -366,7 +486,44 @@ export default function SettingsPage() {
             })}
           </div>
         </Card>
+
+        {/* Danger Zone */}
+        {workspaceList.length > 1 && workspace && (
+          <Card>
+            <CardHeader
+              title="Danger Zone"
+              description="Irreversible actions for this workspace"
+            />
+            <div className="flex items-center justify-between p-3 rounded-lg border border-red-500/20 bg-red-500/5">
+              <div>
+                <p className="text-sm font-medium text-text-primary">Delete workspace</p>
+                <p className="text-xs text-text-tertiary mt-0.5">
+                  Permanently delete &ldquo;{workspace.name}&rdquo; and all its data
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setDeleteTarget(workspace)}
+                className="!text-red-400 !border-red-500/30 hover:!bg-red-500/10"
+              >
+                Delete
+              </Button>
+            </div>
+          </Card>
+        )}
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete workspace"
+        description={`This will permanently delete "${deleteTarget?.name}" and all endpoints, events, and settings. This cannot be undone.`}
+        confirmLabel="Delete Workspace"
+        variant="danger"
+        loading={deleting}
+        onConfirm={() => void handleDeleteWorkspace()}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
