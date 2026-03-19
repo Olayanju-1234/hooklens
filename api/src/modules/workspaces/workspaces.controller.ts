@@ -9,6 +9,8 @@ import {
   UseGuards,
   ParseUUIDPipe,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { WorkspacesService } from './workspaces.service.js';
@@ -28,6 +30,7 @@ export class WorkspacesController {
 
   constructor(
     private readonly workspacesService: WorkspacesService,
+    @Inject(forwardRef(() => AuditService))
     private readonly auditService: AuditService,
   ) {}
 

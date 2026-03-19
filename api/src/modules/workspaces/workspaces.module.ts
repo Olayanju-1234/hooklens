@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Workspace } from '../../entities/workspace.entity.js';
 import { WorkspaceMember } from '../../entities/workspace-member.entity.js';
@@ -13,7 +13,7 @@ import { AuditModule } from '../audit/audit.module.js';
   imports: [
     TypeOrmModule.forFeature([Workspace, WorkspaceMember, WorkspaceInvite]),
     EmailModule,
-    AuditModule,
+    forwardRef(() => AuditModule),
   ],
   controllers: [WorkspacesController],
   providers: [WorkspacesService, WorkspaceGuard],
