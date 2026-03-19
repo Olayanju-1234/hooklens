@@ -17,8 +17,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { EventTimeline } from "@/components/event-timeline";
 import { useFadeIn } from "@/hooks/use-gsap";
+
+interface DiffResult {
+  event1: { id: string; body: unknown; receivedAt: string };
+  event2: { id: string; body: unknown; receivedAt: string };
+  headersDiff: Record<string, { old: unknown; new: unknown; status: string }>;
+  bodyDiff: Record<string, { old: unknown; new: unknown; status: string }>;
+}
 
 export default function EventDetailPage() {
   const params = useParams();
@@ -28,6 +36,13 @@ export default function EventDetailPage() {
   const [error, setError] = useState("");
   const [replaying, setReplaying] = useState(false);
   const contentRef = useFadeIn<HTMLDivElement>();
+
+  // Diff state
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [diffEventId, setDiffEventId] = useState("");
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffResult, setDiffResult] = useState<DiffResult | null>(null);
+  const [diffError, setDiffError] = useState("");
 
   useEffect(() => {
     if (params.id) {
@@ -55,6 +70,21 @@ export default function EventDetailPage() {
       router.push(`/dashboard/events/${replayed.id}`);
     } finally {
       setReplaying(false);
+    }
+  }
+
+  async function handleDiff() {
+    if (!event || !diffEventId.trim()) return;
+    setDiffLoading(true);
+    setDiffError("");
+    setDiffResult(null);
+    try {
+      const result = await eventsApi.diff(event.id, diffEventId.trim());
+      setDiffResult(result);
+    } catch (err) {
+      setDiffError(err instanceof Error ? err.message : "Failed to compare events");
+    } finally {
+      setDiffLoading(false);
     }
   }
 
@@ -128,26 +158,38 @@ export default function EventDetailPage() {
               </Badge>
             )}
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={replaying}
-            onClick={handleReplay}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setDiffOpen(!diffOpen); setDiffResult(null); setDiffError(""); }}
             >
-              <path d="M1 7a6 6 0 0111.5-2.5M13 7a6 6 0 01-11.5 2.5" />
-              <path d="M12.5 1v3.5H9M1.5 13V9.5H5" />
-            </svg>
-            Replay
-          </Button>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M4 2v10M10 2v10M1 5h6M7 9h6" />
+              </svg>
+              Compare
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={replaying}
+              onClick={handleReplay}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              >
+                <path d="M1 7a6 6 0 0111.5-2.5M13 7a6 6 0 01-11.5 2.5" />
+                <path d="M12.5 1v3.5H9M1.5 13V9.5H5" />
+              </svg>
+              Replay
+            </Button>
+          </div>
         </div>
 
         {/* Meta grid */}
@@ -177,6 +219,35 @@ export default function EventDetailPage() {
             }
           />
         </div>
+
+        {/* Diff Panel */}
+        {diffOpen && (
+          <Card className="mb-3">
+            <CardHeader title="Compare Events" description="Diff this event against another by ID" />
+            <div className="flex items-end gap-2 mb-3">
+              <div className="flex-1">
+                <Input
+                  label="Other Event ID"
+                  value={diffEventId}
+                  onChange={(e) => setDiffEventId(e.target.value)}
+                  placeholder="Paste event ID to compare"
+                />
+              </div>
+              <Button size="sm" loading={diffLoading} onClick={() => void handleDiff()}>
+                Diff
+              </Button>
+            </div>
+            {diffError && (
+              <p className="text-sm text-text-error mb-2">{diffError}</p>
+            )}
+            {diffResult && (
+              <div className="space-y-3">
+                <DiffTable title="Headers" diff={diffResult.headersDiff} />
+                <DiffTable title="Body" diff={diffResult.bodyDiff} />
+              </div>
+            )}
+          </Card>
+        )}
 
         {/* Event Timeline */}
         {timelineSteps.length > 0 && (
@@ -287,6 +358,57 @@ function MetaItem({ label, value }: { label: string; value: React.ReactNode }) {
         {label}
       </p>
       {value}
+    </div>
+  );
+}
+
+function DiffTable({ title, diff }: { title: string; diff: Record<string, { old: unknown; new: unknown; status: string }> }) {
+  const entries = Object.entries(diff);
+  if (entries.length === 0) {
+    return (
+      <div className="text-xs text-text-tertiary">
+        No {title.toLowerCase()} differences
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="text-xs font-medium text-text-secondary mb-1.5">{title}</p>
+      <div className="border border-border-primary rounded-lg overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-bg-tertiary border-b border-border-primary">
+              <th className="text-left px-3 py-1.5 text-text-tertiary font-medium">Field</th>
+              <th className="text-left px-3 py-1.5 text-text-tertiary font-medium">Status</th>
+              <th className="text-left px-3 py-1.5 text-text-tertiary font-medium">This Event</th>
+              <th className="text-left px-3 py-1.5 text-text-tertiary font-medium">Other Event</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map(([field, { old: oldVal, new: newVal, status }]) => (
+              <tr key={field} className="border-b border-border-primary last:border-0">
+                <td className="px-3 py-1.5 font-mono text-text-primary">{field}</td>
+                <td className="px-3 py-1.5">
+                  <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                    status === "added" ? "bg-emerald-500/10 text-emerald-400" :
+                    status === "removed" ? "bg-red-500/10 text-red-400" :
+                    "bg-yellow-500/10 text-yellow-400"
+                  }`}>
+                    {status}
+                  </span>
+                </td>
+                <td className="px-3 py-1.5 font-mono text-text-secondary max-w-[200px] truncate">
+                  {oldVal !== null && oldVal !== undefined ? String(oldVal) : "\u2014"}
+                </td>
+                <td className="px-3 py-1.5 font-mono text-text-secondary max-w-[200px] truncate">
+                  {newVal !== null && newVal !== undefined ? String(newVal) : "\u2014"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
