@@ -24,7 +24,11 @@ export default function AuditLogPage() {
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await auditLogs.list(PAGE_SIZE, page * PAGE_SIZE);
+      const res = await auditLogs.list(
+        PAGE_SIZE,
+        page * PAGE_SIZE,
+        actionFilter || undefined,
+      );
       setLogs(res.items);
       setTotal(res.total);
     } catch {
@@ -32,15 +36,15 @@ export default function AuditLogPage() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, actionFilter]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [actionFilter]);
 
   useEffect(() => {
     void fetchLogs();
   }, [fetchLogs]);
-
-  const filtered = actionFilter
-    ? logs.filter((l) => l.action.toLowerCase().includes(actionFilter))
-    : logs;
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -89,7 +93,7 @@ export default function AuditLogPage() {
             />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : logs.length === 0 ? (
         <EmptyState
           title="No audit events"
           description={
@@ -119,7 +123,7 @@ export default function AuditLogPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((log) => (
+                {logs.map((log) => (
                   <tr
                     key={log.id}
                     className="border-b border-border-primary last:border-b-0 hover:bg-bg-hover transition-colors"

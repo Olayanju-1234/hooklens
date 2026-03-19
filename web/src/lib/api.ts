@@ -495,10 +495,11 @@ export interface AuditLogEntry {
 }
 
 export const auditLogs = {
-  list: (limit?: number, offset?: number) => {
+  list: (limit?: number, offset?: number, action?: string) => {
     const params = new URLSearchParams();
     if (limit) params.set("limit", String(limit));
     if (offset) params.set("offset", String(offset));
+    if (action) params.set("action", action);
     const query = params.toString();
     return request<{ items: AuditLogEntry[]; total: number }>(
       `/audit-logs${query ? `?${query}` : ""}`,

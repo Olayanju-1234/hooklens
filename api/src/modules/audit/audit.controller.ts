@@ -13,11 +13,13 @@ export class AuditController {
     @Headers('x-workspace-id') workspaceId: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('action') action?: string,
   ) {
     return this.auditService.list(
       workspaceId,
       limit ? parseInt(limit, 10) : 50,
       offset ? parseInt(offset, 10) : 0,
+      action,
     );
   }
 }

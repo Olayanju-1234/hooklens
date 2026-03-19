@@ -39,13 +39,21 @@ export class AuditService {
     workspaceId: string,
     limit: number = 50,
     offset: number = 0,
+    action?: string,
   ): Promise<{ items: AuditLog[]; total: number }> {
-    const [items, total] = await this.auditRepo.findAndCount({
-      where: { workspaceId },
-      order: { createdAt: 'DESC' },
-      take: limit,
-      skip: offset,
-    });
+    const qb = this.auditRepo
+      .createQueryBuilder('audit')
+      .where('audit.workspaceId = :workspaceId', { workspaceId });
+
+    if (action) {
+      qb.andWhere('LOWER(audit.action) LIKE :action', {
+        action: `%${action.toLowerCase()}%`,
+      });
+    }
+
+    qb.orderBy('audit.createdAt', 'DESC').skip(offset).take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
     return { items, total };
   }
 }
