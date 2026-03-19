@@ -12,6 +12,9 @@ import { JwtStrategy } from './strategies/jwt.strategy.js';
 import { GoogleStrategy } from './strategies/google.strategy.js';
 import { GithubStrategy } from './strategies/github.strategy.js';
 import { EmailModule } from '../email/email.module.js';
+import { ApiKeysModule } from '../api-keys/api-keys.module.js';
+import { ApiKeyGuard } from './guards/api-key.guard.js';
+import { CombinedAuthGuard } from './guards/auth.guard.js';
 
 @Module({
   imports: [
@@ -30,9 +33,17 @@ import { EmailModule } from '../email/email.module.js';
       }),
     }),
     EmailModule,
+    ApiKeysModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy, GithubStrategy],
-  exports: [JwtStrategy, PassportModule],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    GoogleStrategy,
+    GithubStrategy,
+    ApiKeyGuard,
+    CombinedAuthGuard,
+  ],
+  exports: [JwtStrategy, PassportModule, ApiKeyGuard, CombinedAuthGuard],
 })
 export class AuthModule {}

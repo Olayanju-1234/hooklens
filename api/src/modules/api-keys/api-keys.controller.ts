@@ -14,9 +14,10 @@ import { ApiKeysService } from './api-keys.service.js';
 import { CreateApiKeyDto } from './dto/api-key.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
+import { WorkspaceGuard } from '../workspaces/guards/workspace.guard.js';
 
 @Controller('api-keys')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), WorkspaceGuard)
 export class ApiKeysController {
   constructor(private readonly apiKeysService: ApiKeysService) {}
 

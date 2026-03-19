@@ -18,9 +18,10 @@ import {
   CreateAlertRuleDto,
   UpdateAlertRuleDto,
 } from './dto/alert.dto.js';
+import { WorkspaceGuard } from '../workspaces/guards/workspace.guard.js';
 
 @Controller()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), WorkspaceGuard)
 export class AlertingController {
   constructor(private readonly alertingService: AlertingService) {}
 
