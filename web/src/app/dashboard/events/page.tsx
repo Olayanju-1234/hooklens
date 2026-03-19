@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { events as eventsApi, WebhookEvent } from "@/lib/api";
+import { events as eventsApi, eventExport, WebhookEvent } from "@/lib/api";
 import {
   StatusBadge,
   MethodBadge,
@@ -26,6 +26,7 @@ export default function EventsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [showExport, setShowExport] = useState(false);
   const listRef = useStaggerIn<HTMLDivElement>();
 
   const fetchEvents = useCallback(
@@ -73,21 +74,57 @@ export default function EventsPage() {
               </button>
             ))}
           </div>
-          <Button variant="ghost" size="sm" onClick={() => fetchEvents()}>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            >
-              <path d="M1 7a6 6 0 0111.5-2.5M13 7a6 6 0 01-11.5 2.5" />
-              <path d="M12.5 1v3.5H9M1.5 13V9.5H5" />
-            </svg>
-            Refresh
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowExport(!showExport)}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M12 8.5v3a1 1 0 01-1 1H3a1 1 0 01-1-1v-3M7 1.5v8M4 4.5l3-3 3 3" />
+                </svg>
+                Export
+              </Button>
+              {showExport && (
+                <div className="absolute right-0 top-full mt-1 w-36 bg-bg-secondary border border-border-primary rounded-lg shadow-lg z-20 overflow-hidden">
+                  <a
+                    href={eventExport.csvUrl(statusFilter ? { forwardStatus: statusFilter } : undefined)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block px-3 py-2 text-xs text-text-primary hover:bg-bg-hover transition-colors"
+                    onClick={() => setShowExport(false)}
+                  >
+                    Export as CSV
+                  </a>
+                  <a
+                    href={eventExport.jsonUrl(statusFilter ? { forwardStatus: statusFilter } : undefined)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block px-3 py-2 text-xs text-text-primary hover:bg-bg-hover transition-colors"
+                    onClick={() => setShowExport(false)}
+                  >
+                    Export as JSON
+                  </a>
+                </div>
+              )}
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => fetchEvents()}>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              >
+                <path d="M1 7a6 6 0 0111.5-2.5M13 7a6 6 0 01-11.5 2.5" />
+                <path d="M12.5 1v3.5H9M1.5 13V9.5H5" />
+              </svg>
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {error ? (
