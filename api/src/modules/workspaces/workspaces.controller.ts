@@ -8,6 +8,7 @@ import {
   Param,
   UseGuards,
   ParseUUIDPipe,
+  Logger,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { WorkspacesService } from './workspaces.service.js';
@@ -18,11 +19,17 @@ import {
 } from './dto/workspace.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
+import { AuditService } from '../audit/audit.service.js';
 
 @Controller('workspaces')
 @UseGuards(AuthGuard('jwt'))
 export class WorkspacesController {
-  constructor(private readonly workspacesService: WorkspacesService) {}
+  private readonly logger = new Logger(WorkspacesController.name);
+
+  constructor(
+    private readonly workspacesService: WorkspacesService,
+    private readonly auditService: AuditService,
+  ) {}
 
   @Post()
   create(@CurrentUser() user: JwtPayload, @Body() dto: CreateWorkspaceDto) {
@@ -50,7 +57,21 @@ export class WorkspacesController {
     @Body() dto: UpdateWorkspaceDto,
   ) {
     await this.workspacesService.assertOwner(id, user.sub);
-    return this.workspacesService.update(id, dto);
+    const workspace = await this.workspacesService.update(id, dto);
+    this.auditService
+      .log({
+        workspaceId: id,
+        userId: user.sub,
+        action: 'workspace.update',
+        resource: 'workspace',
+        resourceId: id,
+      })
+      .catch((err: unknown) => {
+        this.logger.error(
+          `Audit log failed for workspace.update: ${(err as Error).message}`,
+        );
+      });
+    return workspace;
   }
 
   @Delete(':id')
@@ -59,7 +80,20 @@ export class WorkspacesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     await this.workspacesService.assertOwner(id, user.sub);
-    return this.workspacesService.remove(id);
+    await this.workspacesService.remove(id);
+    this.auditService
+      .log({
+        workspaceId: id,
+        userId: user.sub,
+        action: 'workspace.delete',
+        resource: 'workspace',
+        resourceId: id,
+      })
+      .catch((err: unknown) => {
+        this.logger.error(
+          `Audit log failed for workspace.delete: ${(err as Error).message}`,
+        );
+      });
   }
 
   @Post(':id/invite')
@@ -69,7 +103,22 @@ export class WorkspacesController {
     @Body() dto: InviteMemberDto,
   ) {
     await this.workspacesService.assertOwner(id, user.sub);
-    return this.workspacesService.invite(id, dto);
+    const result = await this.workspacesService.invite(id, dto);
+    this.auditService
+      .log({
+        workspaceId: id,
+        userId: user.sub,
+        action: 'workspace.invite',
+        resource: 'workspace',
+        resourceId: id,
+        metadata: { invitedEmail: dto.email },
+      })
+      .catch((err: unknown) => {
+        this.logger.error(
+          `Audit log failed for workspace.invite: ${(err as Error).message}`,
+        );
+      });
+    return result;
   }
 
   @Post('accept-invite/:token')
@@ -84,6 +133,20 @@ export class WorkspacesController {
     @Param('userId', ParseUUIDPipe) userId: string,
   ) {
     await this.workspacesService.assertOwner(id, user.sub);
-    return this.workspacesService.removeMember(id, userId);
+    await this.workspacesService.removeMember(id, userId);
+    this.auditService
+      .log({
+        workspaceId: id,
+        userId: user.sub,
+        action: 'workspace.removeMember',
+        resource: 'workspace',
+        resourceId: id,
+        metadata: { removedUserId: userId },
+      })
+      .catch((err: unknown) => {
+        this.logger.error(
+          `Audit log failed for workspace.removeMember: ${(err as Error).message}`,
+        );
+      });
   }
 }

@@ -7,11 +7,13 @@ import { WorkspacesController } from './workspaces.controller.js';
 import { WorkspacesService } from './workspaces.service.js';
 import { WorkspaceGuard } from './guards/workspace.guard.js';
 import { EmailModule } from '../email/email.module.js';
+import { AuditModule } from '../audit/audit.module.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Workspace, WorkspaceMember, WorkspaceInvite]),
     EmailModule,
+    AuditModule,
   ],
   controllers: [WorkspacesController],
   providers: [WorkspacesService, WorkspaceGuard],
