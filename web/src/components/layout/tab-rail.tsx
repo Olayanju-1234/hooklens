@@ -14,8 +14,11 @@ const tabs = [
   { label: "Endpoints", href: "/dashboard/endpoints" },
   { label: "Test", href: "/dashboard/test" },
   { label: "Analytics", href: "/dashboard/stats" },
+  { label: "Transforms", href: "/dashboard/transforms" },
   { label: "Alerts", href: "/dashboard/alerts" },
+  { label: "Dead Letter", href: "/dashboard/dead-letter" },
   { label: "Audit", href: "/dashboard/audit" },
+  { label: "API Keys", href: "/dashboard/api-keys" },
   { label: "Docs", href: "/dashboard/docs" },
 ];
 
