@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
+import Link from "next/link";
 import { endpoints as endpointsApi, Endpoint, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -223,6 +224,15 @@ export default function EndpointsPage() {
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  <Link
+                    href={`/dashboard/endpoints/${ep.id}/destinations`}
+                    className="p-2 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-hover"
+                    title="Forward destinations"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M6 3h8M6 8h8M6 13h8M2 3h.01M2 8h.01M2 13h.01" />
+                    </svg>
+                  </Link>
                   <button
                     onClick={() => void handleToggle(ep)}
                     className="p-2 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-hover cursor-pointer"
