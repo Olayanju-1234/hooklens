@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import {
   events as eventsApi,
   timeline as timelineApi,
@@ -159,6 +160,34 @@ export default function EventDetailPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(event.id);
+                toast.success("Event ID copied");
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <rect x="5" y="5" width="8" height="8" rx="1" />
+                <path d="M3 11V4a1 1 0 011-1h7" />
+              </svg>
+              ID
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const curl = `curl -X POST '${window.location.origin.replace("3001", "3000")}/in/${event.path.split("/in/")[1] || "SLUG"}' \\\n  -H 'Content-Type: application/json' \\\n  -d '${JSON.stringify(event.body)}'`;
+                navigator.clipboard.writeText(curl);
+                toast.success("curl command copied");
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M4 6l3 3-3 3M8 12h5" />
+              </svg>
+              curl
+            </Button>
             <Button
               variant="ghost"
               size="sm"
