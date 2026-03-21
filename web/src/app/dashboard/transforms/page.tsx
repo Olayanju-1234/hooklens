@@ -41,6 +41,12 @@ export default function TransformsPage() {
   const [deleteTarget, setDeleteTarget] = useState<TransformRule | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Test preview
+  const [testRule, setTestRule] = useState<TransformRule | null>(null);
+  const [testBody, setTestBody] = useState('{\n  "data": {\n    "card": {\n      "bin": "408408"\n    }\n  }\n}');
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+
   useEffect(() => {
     endpoints
       .list()
@@ -110,6 +116,24 @@ export default function TransformsPage() {
       toast.success(updated.isActive ? "Rule enabled" : "Rule disabled");
     } catch {
       toast.error("Failed to update rule");
+    }
+  }
+
+  async function handleTest() {
+    if (!testRule || !selectedEndpoint) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const body = JSON.parse(testBody);
+      const result = await transforms.test(selectedEndpoint, {
+        operations: testRule.operations,
+        body,
+      });
+      setTestResult(JSON.stringify(result, null, 2));
+    } catch (err) {
+      setTestResult(`Error: ${err instanceof Error ? err.message : "Invalid JSON"}`);
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -271,6 +295,9 @@ export default function TransformsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
+                <Button size="sm" variant="ghost" onClick={() => { setTestRule(testRule?.id === rule.id ? null : rule); setTestResult(null); }}>
+                  Test
+                </Button>
                 <Button size="sm" variant="ghost" onClick={() => void handleToggle(rule)}>
                   {rule.isActive ? "Disable" : "Enable"}
                 </Button>
@@ -285,6 +312,37 @@ export default function TransformsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Test Preview Panel */}
+      {testRule && (
+        <div className="mt-4 p-4 rounded-xl bg-bg-secondary border border-border-primary">
+          <h3 className="text-sm font-medium text-text-primary mb-2">Test &ldquo;{testRule.name}&rdquo;</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-text-tertiary mb-1">Input Body (JSON)</label>
+              <textarea
+                value={testBody}
+                onChange={(e) => setTestBody(e.target.value)}
+                className="w-full h-40 px-3 py-2 text-xs font-mono rounded-lg bg-bg-tertiary border border-border-primary text-text-primary focus:outline-none focus:ring-1 focus:ring-bg-accent resize-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-tertiary mb-1">Output</label>
+              <pre className="w-full h-40 px-3 py-2 text-xs font-mono rounded-lg bg-bg-tertiary border border-border-primary text-text-secondary overflow-auto">
+                {testResult ?? "Click 'Run Test' to see output"}
+              </pre>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-3">
+            <Button size="sm" loading={testing} onClick={() => void handleTest()}>
+              Run Test
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setTestRule(null)}>
+              Close
+            </Button>
+          </div>
         </div>
       )}
 
