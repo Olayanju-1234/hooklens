@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import { useWebSocket } from "@/hooks/use-websocket";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
+import { endpoints as endpointsApi, deadLetter as deadLetterApi } from "@/lib/api";
 import gsap from "gsap";
 
 const tabs = [
@@ -29,6 +30,31 @@ export function TabRail() {
   const { connected } = useWebSocket();
   const indicatorRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<(HTMLAnchorElement | null)[]>([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [deadLetterCount, setDeadLetterCount] = useState(0);
+  const deadLetterRef = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchCount() {
+      try {
+        const eps = await endpointsApi.list();
+        const counts = await Promise.all(
+          eps.slice(0, 5).map((ep) => deadLetterApi.list(ep.id).then((items) => items.length).catch(() => 0))
+        );
+        const total = counts.reduce((a, b) => a + b, 0);
+        if (!cancelled && total !== deadLetterRef.current) {
+          deadLetterRef.current = total;
+          setDeadLetterCount(total);
+        }
+      } catch {
+        // non-critical
+      }
+    }
+    void fetchCount();
+    const interval = setInterval(() => void fetchCount(), 60000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   const activeIndex = tabs.findIndex(
     (t) =>
@@ -51,6 +77,21 @@ export function TabRail() {
 
   return (
     <header className="relative flex items-center h-12 px-4 sm:px-6 bg-bg-secondary border-b border-border-primary shrink-0 z-30">
+      {/* Mobile hamburger */}
+      <button
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        className="sm:hidden p-1.5 mr-2 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors cursor-pointer"
+        aria-label="Menu"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          {mobileMenuOpen ? (
+            <path d="M4 4l8 8M12 4l-8 8" />
+          ) : (
+            <path d="M2 4h12M2 8h12M2 12h12" />
+          )}
+        </svg>
+      </button>
+
       {/* Logo */}
       <Link
         href="/dashboard"
@@ -72,8 +113,8 @@ export function TabRail() {
         </span>
       </Link>
 
-      {/* Tabs */}
-      <nav className="relative flex items-center gap-0 sm:gap-0.5 h-full overflow-x-auto no-scrollbar">
+      {/* Tabs (desktop) */}
+      <nav className="relative hidden sm:flex items-center gap-0 sm:gap-0.5 h-full overflow-x-auto no-scrollbar">
         {/* Sliding underline indicator */}
         <div
           ref={indicatorRef}
@@ -98,6 +139,11 @@ export function TabRail() {
                 }`}
             >
               {tab.label}
+              {tab.label === "Dead Letter" && deadLetterCount > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-red-500 text-white leading-none">
+                  {deadLetterCount}
+                </span>
+              )}
               {tab.label === "Live" && (
                 <span className="relative flex h-1.5 w-1.5 ml-1.5">
                   {connected && (
@@ -218,6 +264,45 @@ export function TabRail() {
           </svg>
         </button>
       </div>
+
+      {/* Mobile dropdown menu */}
+      {mobileMenuOpen && (
+        <div className="absolute top-12 left-0 right-0 bg-bg-secondary border-b border-border-primary shadow-lg z-40 sm:hidden">
+          <nav className="flex flex-col py-1">
+            {tabs.map((tab) => {
+              const active =
+                pathname === tab.href ||
+                (tab.href !== "/dashboard" && pathname.startsWith(tab.href));
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-[13px] font-medium transition-colors ${
+                    active
+                      ? "text-text-accent bg-bg-hover"
+                      : "text-text-secondary hover:text-text-primary hover:bg-bg-hover"
+                  }`}
+                >
+                  {tab.label}
+                  {tab.label === "Dead Letter" && deadLetterCount > 0 && (
+                    <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-red-500 text-white leading-none">
+                      {deadLetterCount}
+                    </span>
+                  )}
+                  {tab.label === "Live" && (
+                    <span
+                      className={`inline-flex rounded-full h-1.5 w-1.5 ${
+                        connected ? "bg-emerald-500" : "bg-red-500"
+                      }`}
+                    />
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
