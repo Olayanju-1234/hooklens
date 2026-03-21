@@ -26,6 +26,8 @@ export default function EventsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [showExport, setShowExport] = useState(false);
   const listRef = useStaggerIn<HTMLDivElement>();
 
@@ -36,6 +38,7 @@ export default function EventsPage() {
       try {
         const params: Record<string, string> = {};
         if (statusFilter) params.forwardStatus = statusFilter;
+        if (search) params.search = search;
         if (cursor) params.cursor = cursor;
         const res = await eventsApi.list(params);
         setItems((prev) => (cursor ? [...prev, ...res.items] : res.items));
@@ -46,7 +49,7 @@ export default function EventsPage() {
         setLoading(false);
       }
     },
-    [statusFilter],
+    [statusFilter, search],
   );
 
   useEffect(() => {
@@ -75,6 +78,29 @@ export default function EventsPage() {
             ))}
           </div>
           <div className="flex items-center gap-1.5">
+            <form
+              onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); }}
+              className="relative"
+            >
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search events..."
+                className="w-40 sm:w-48 px-3 py-1.5 text-xs rounded-lg bg-bg-tertiary border border-border-primary text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-bg-accent"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => { setSearch(""); setSearchInput(""); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary cursor-pointer"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M3 3l6 6M9 3l-6 6" />
+                  </svg>
+                </button>
+              )}
+            </form>
             <div className="relative">
               <Button
                 variant="ghost"
