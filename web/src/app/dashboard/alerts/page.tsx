@@ -862,34 +862,77 @@ export default function AlertsPage() {
                 const rule = rules.find((r) => r.id === entry.alertRuleId);
                 const channel = channels.find((c) => c.id === entry.channelId);
                 return (
-                  <div
+                  <HistoryEntry
                     key={entry.id}
-                    className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-3 rounded-xl
-                      bg-bg-secondary border border-border-primary"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm text-text-primary">
-                        {rule?.name || "Unknown rule"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      {channel && (
-                        <div className="flex items-center gap-1.5 text-text-tertiary">
-                          <ChannelTypeIcon type={channel.type} />
-                          <span className="text-xs">{channel.name}</span>
-                        </div>
-                      )}
-                      <span className="text-[11px] text-text-tertiary font-mono tabular-nums">
-                        {new Date(entry.sentAt).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
+                    entry={entry}
+                    ruleName={rule?.name}
+                    channel={channel}
+                  />
                 );
               })}
             </div>
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function HistoryEntry({
+  entry,
+  ruleName,
+  channel,
+}: {
+  entry: AlertHistoryEntry;
+  ruleName?: string;
+  channel?: AlertChannel;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="rounded-xl bg-bg-secondary border border-border-primary">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-3 cursor-pointer text-left"
+      >
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <span className="text-sm text-text-primary">
+            {ruleName || "Unknown rule"}
+          </span>
+          {entry.payload && (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              className={`text-text-tertiary transition-transform ${expanded ? "rotate-90" : ""}`}
+            >
+              <path d="M4 2l4 4-4 4" />
+            </svg>
+          )}
+        </div>
+        <div className="flex items-center gap-2.5 shrink-0">
+          {channel && (
+            <div className="flex items-center gap-1.5 text-text-tertiary">
+              <ChannelTypeIcon type={channel.type} />
+              <span className="text-xs">{channel.name}</span>
+            </div>
+          )}
+          <span className="text-[11px] text-text-tertiary font-mono tabular-nums">
+            {new Date(entry.sentAt).toLocaleString()}
+          </span>
+        </div>
+      </button>
+      {expanded && entry.payload && (
+        <div className="px-4 pb-3">
+          <pre className="text-xs font-mono text-text-secondary bg-bg-tertiary rounded-lg p-3 overflow-x-auto max-h-48">
+            {JSON.stringify(entry.payload, null, 2)}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }
