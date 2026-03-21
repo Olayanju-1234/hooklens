@@ -16,6 +16,8 @@ interface EndpointForm {
   provider: string;
   forwardUrl: string;
   webhookSecret: string;
+  retryMaxAttempts: string;
+  retryBackoffMs: string;
 }
 
 const emptyForm: EndpointForm = {
@@ -23,6 +25,8 @@ const emptyForm: EndpointForm = {
   provider: "custom",
   forwardUrl: "",
   webhookSecret: "",
+  retryMaxAttempts: "3",
+  retryBackoffMs: "1000",
 };
 
 const providerOptions = [
@@ -79,6 +83,8 @@ export default function EndpointsPage() {
       provider: ep.provider,
       forwardUrl: ep.forwardUrl || "",
       webhookSecret: "",
+      retryMaxAttempts: String((ep as Endpoint & { retryMaxAttempts?: number }).retryMaxAttempts ?? 3),
+      retryBackoffMs: String((ep as Endpoint & { retryBackoffMs?: number }).retryBackoffMs ?? 1000),
     });
     setModalMode("edit");
     setEditingId(ep.id);
@@ -97,14 +103,22 @@ export default function EndpointsPage() {
           provider: form.provider,
           forwardUrl: form.forwardUrl || undefined,
           webhookSecret: form.webhookSecret || undefined,
-        });
+          retryMaxAttempts: parseInt(form.retryMaxAttempts) || 3,
+          retryBackoffMs: parseInt(form.retryBackoffMs) || 1000,
+        } as Parameters<typeof endpointsApi.create>[0]);
         setItems((prev) => [created, ...prev]);
       } else if (editingId) {
-        const updated = await endpointsApi.update(editingId, {
+        const updateData: Record<string, unknown> = {
           name: form.name,
           provider: form.provider,
           forwardUrl: form.forwardUrl || null,
-        });
+          retryMaxAttempts: parseInt(form.retryMaxAttempts) || 3,
+          retryBackoffMs: parseInt(form.retryBackoffMs) || 1000,
+        };
+        if (form.webhookSecret) {
+          updateData.webhookSecret = form.webhookSecret;
+        }
+        const updated = await endpointsApi.update(editingId, updateData as Partial<Endpoint>);
         setItems((prev) =>
           prev.map((ep) => (ep.id === editingId ? updated : ep)),
         );
@@ -360,17 +374,37 @@ export default function EndpointsPage() {
                 }
                 placeholder="https://your-api.com/webhooks"
               />
-              {modalMode === "create" && (
+              <Input
+                label={modalMode === "edit" ? "Webhook Secret (leave blank to keep)" : "Webhook Secret"}
+                type="password"
+                value={form.webhookSecret}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, webhookSecret: e.target.value }))
+                }
+                placeholder={modalMode === "edit" ? "Enter new secret to rotate" : "Provider's webhook signing secret"}
+              />
+              <div className="grid grid-cols-2 gap-3">
                 <Input
-                  label="Webhook Secret"
-                  type="password"
-                  value={form.webhookSecret}
+                  label="Max Retries"
+                  type="number"
+                  value={form.retryMaxAttempts}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, webhookSecret: e.target.value }))
+                    setForm((f) => ({ ...f, retryMaxAttempts: e.target.value }))
                   }
-                  placeholder="Provider's webhook signing secret"
+                  min="0"
+                  max="10"
                 />
-              )}
+                <Input
+                  label="Backoff (ms)"
+                  type="number"
+                  value={form.retryBackoffMs}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, retryBackoffMs: e.target.value }))
+                  }
+                  min="100"
+                  max="60000"
+                />
+              </div>
               <div className="flex items-center gap-2 pt-2">
                 <Button
                   type="button"
