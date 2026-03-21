@@ -150,6 +150,8 @@ export const events = {
       >;
       bodyDiff: Record<string, { old: unknown; new: unknown; status: string }>;
     }>(`/events/${id1}/diff/${id2}`),
+  delete: (id: string) =>
+    request<{ deleted: true }>(`/events/${id}`, { method: "DELETE" }),
 };
 
 // Stats

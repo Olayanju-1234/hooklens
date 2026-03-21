@@ -20,6 +20,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EventTimeline } from "@/components/event-timeline";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useFadeIn } from "@/hooks/use-gsap";
 
 interface DiffResult {
@@ -36,6 +37,8 @@ export default function EventDetailPage() {
   const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>([]);
   const [error, setError] = useState("");
   const [replaying, setReplaying] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const contentRef = useFadeIn<HTMLDivElement>();
 
   // Diff state
@@ -62,6 +65,20 @@ export default function EventDetailPage() {
         });
     }
   }, [params.id]);
+
+  async function handleDelete() {
+    if (!event) return;
+    setDeleting(true);
+    try {
+      await eventsApi.delete(event.id);
+      toast.success("Event deleted");
+      router.push("/dashboard/events");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete event");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function handleReplay() {
     if (!event) return;
@@ -217,6 +234,17 @@ export default function EventDetailPage() {
                 <path d="M12.5 1v3.5H9M1.5 13V9.5H5" />
               </svg>
               Replay
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDeleteOpen(true)}
+              className="text-text-error hover:text-text-error"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M3 5h10M5 5V3a1 1 0 011-1h4a1 1 0 011 1v2M13 5v8a1 1 0 01-1 1H4a1 1 0 01-1-1V5" />
+              </svg>
+              Delete
             </Button>
           </div>
         </div>
@@ -376,6 +404,17 @@ export default function EventDetailPage() {
           </Card>
         )}
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete event"
+        description="Are you sure you want to delete this event? This cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        loading={deleting}
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setDeleteOpen(false)}
+      />
     </>
   );
 }
