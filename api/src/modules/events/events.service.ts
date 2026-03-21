@@ -37,7 +37,7 @@ export class EventsService {
     private readonly forwardQueue: Queue<ForwardJobData>,
   ) {}
 
-  async findAll(userId: string, query: EventsQueryDto) {
+  async findAll(userId: string, query: EventsQueryDto, workspaceId?: string) {
     const limit = query.limit ?? 20;
     const qb = this.eventRepo
       .createQueryBuilder('e')
@@ -60,6 +60,10 @@ export class EventsService {
       .where('e.userId = :userId', { userId })
       .orderBy('e.receivedAt', 'DESC')
       .take(limit + 1); // fetch one extra for cursor
+
+    if (workspaceId) {
+      qb.andWhere('e.workspaceId = :workspaceId', { workspaceId });
+    }
 
     if (query.endpointId) {
       qb.andWhere('e.endpointId = :endpointId', {
@@ -261,6 +265,13 @@ export class EventsService {
 
     this.logger.log(`Replayed event ${original.id} → ${saved.id}`);
     return saved;
+  }
+
+  async delete(id: string, userId: string): Promise<{ deleted: true }> {
+    const event = await this.findOne(id, userId);
+    await this.eventRepo.remove(event);
+    this.logger.log(`Deleted event ${id}`);
+    return { deleted: true };
   }
 
   private computeDiff(

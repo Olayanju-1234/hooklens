@@ -2,9 +2,11 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Param,
   Query,
   Res,
+  Headers,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
@@ -21,54 +23,28 @@ export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
   @Get()
-  findAll(@CurrentUser() user: JwtPayload, @Query() query: EventsQueryDto) {
-    return this.eventsService.findAll(user.sub, query);
-  }
-
-  @Get(':id')
-  findOne(
+  findAll(
     @CurrentUser() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
+    @Query() query: EventsQueryDto,
   ) {
-    return this.eventsService.findOne(id, user.sub);
+    return this.eventsService.findAll(user.sub, query, workspaceId);
   }
 
-  @Get(':id/timeline')
-  getTimeline(
-    @CurrentUser() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.eventsService.getTimeline(id, user.sub);
-  }
-
-  @Get(':id/diff/:otherId')
-  diff(
-    @CurrentUser() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Param('otherId', ParseUUIDPipe) otherId: string,
-  ) {
-    return this.eventsService.diff(id, otherId, user.sub);
-  }
-
-  @Post(':id/replay')
-  replay(
-    @CurrentUser() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.eventsService.replay(id, user.sub);
-  }
-
+  // Static routes MUST come before parameterized :id routes
   @Get('export/:format')
   async exportEvents(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('format') format: string,
     @Query() query: EventsQueryDto,
     @Res() res: Response,
   ) {
-    const { items } = await this.eventsService.findAll(user.sub, {
-      ...query,
-      limit: 1000,
-    });
+    const { items } = await this.eventsService.findAll(
+      user.sub,
+      { ...query, limit: 1000 },
+      workspaceId,
+    );
 
     if (format === 'csv') {
       const headers = [
@@ -107,5 +83,46 @@ export class EventsController {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', 'attachment; filename=events.json');
     return res.json(items);
+  }
+
+  @Get(':id')
+  findOne(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.eventsService.findOne(id, user.sub);
+  }
+
+  @Get(':id/timeline')
+  getTimeline(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.eventsService.getTimeline(id, user.sub);
+  }
+
+  @Get(':id/diff/:otherId')
+  diff(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('otherId', ParseUUIDPipe) otherId: string,
+  ) {
+    return this.eventsService.diff(id, otherId, user.sub);
+  }
+
+  @Post(':id/replay')
+  replay(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.eventsService.replay(id, user.sub);
+  }
+
+  @Delete(':id')
+  delete(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.eventsService.delete(id, user.sub);
   }
 }
