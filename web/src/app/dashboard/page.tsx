@@ -151,37 +151,74 @@ export default function DashboardPage() {
         </div>
 
         {liveEvents.length === 0 ? (
-          <EmptyState
-            icon={
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 18 18"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              >
-                <circle cx="9" cy="9" r="2.5" />
-                <path d="M5.5 4a7 7 0 010 10M12.5 4a7 7 0 000 10" />
-              </svg>
-            }
-            title="Waiting for webhooks"
-            description="Send a webhook to your ingress URL and it will appear here in real time"
-            action={
-              ingressSlug ? (
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={sendTestEvent}
-                  loading={sending}
-                  className="mt-4"
+          <div className="space-y-6">
+            {/* Getting Started */}
+            {ingressSlug && (
+              <div className="p-5 rounded-xl bg-bg-secondary border border-border-primary">
+                <h2 className="text-sm font-semibold text-text-primary mb-3">Getting Started</h2>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-bg-accent text-text-inverse text-xs font-bold shrink-0">1</span>
+                    <div>
+                      <p className="text-sm text-text-primary font-medium">Copy your ingress URL</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <code className="text-xs font-mono text-text-accent bg-bg-tertiary px-2 py-1 rounded break-all">
+                          {BASE_URL}/in/{ingressSlug}
+                        </code>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(`${BASE_URL}/in/${ingressSlug}`)}
+                          className="text-text-tertiary hover:text-text-primary cursor-pointer shrink-0"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                            <rect x="5" y="5" width="8" height="8" rx="1" />
+                            <path d="M3 11V4a1 1 0 011-1h7" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-bg-accent text-text-inverse text-xs font-bold shrink-0">2</span>
+                    <div>
+                      <p className="text-sm text-text-primary font-medium">Set it as your webhook URL</p>
+                      <p className="text-xs text-text-tertiary mt-0.5">Paste it in Paystack, Flutterwave, Mono, or any provider&apos;s webhook settings</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-bg-accent text-text-inverse text-xs font-bold shrink-0">3</span>
+                    <div>
+                      <p className="text-sm text-text-primary font-medium">Watch events arrive in real time</p>
+                      <p className="text-xs text-text-tertiary mt-0.5">Or send a test event now to see it work</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <Button size="sm" onClick={sendTestEvent} loading={sending}>
+                    Send test event
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <EmptyState
+              icon={
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 18 18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
                 >
-                  Send test event
-                </Button>
-              ) : undefined
-            }
-          />
+                  <circle cx="9" cy="9" r="2.5" />
+                  <path d="M5.5 4a7 7 0 010 10M12.5 4a7 7 0 000 10" />
+                </svg>
+              }
+              title="Waiting for webhooks"
+              description="Send a webhook to your ingress URL and it will appear here in real time"
+            />
+          </div>
         ) : (
           <div className="space-y-1">
             {liveEvents.map((event, i) => (
