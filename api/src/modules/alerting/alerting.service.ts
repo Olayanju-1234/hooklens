@@ -352,7 +352,7 @@ export class AlertingService {
     return this.historyRepo
       .createQueryBuilder('h')
       .innerJoinAndSelect('h.alertRule', 'alertRule')
-      .innerJoinAndSelect('h.channel', 'channel')
+      .leftJoinAndSelect('h.channel', 'channel')
       .where('alertRule.workspaceId = :workspaceId', { workspaceId })
       .orderBy('h.sentAt', 'DESC')
       .limit(limit)
