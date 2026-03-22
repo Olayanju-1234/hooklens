@@ -5,6 +5,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import configuration from './config/configuration.js';
+import { envValidationSchema } from './config/env.validation.js';
 import { User } from './entities/user.entity.js';
 import { Endpoint } from './entities/endpoint.entity.js';
 import { WebhookEvent } from './entities/webhook-event.entity.js';
@@ -44,6 +45,8 @@ import { DeadLetterModule } from './modules/dead-letter/dead-letter.module.js';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
+      validationSchema: envValidationSchema,
+      validationOptions: { abortEarly: true },
     }),
     // Global rate limiting: 60 requests per minute per IP
     ThrottlerModule.forRoot([
