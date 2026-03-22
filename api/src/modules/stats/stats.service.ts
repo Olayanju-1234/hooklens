@@ -19,7 +19,7 @@ export class StatsService {
     private readonly eventRepo: Repository<WebhookEvent>,
   ) {}
 
-  async getStats(userId: string, period: '24h' | '7d' | '30d' | 'all' = '24h') {
+  async getStats(userId: string, period: '24h' | '7d' | '30d' | 'all' = '24h', workspaceId?: string) {
     const periodMap: Record<string, number | null> = {
       '24h': 1,
       '7d': 7,
@@ -34,6 +34,7 @@ export class StatsService {
       const qb = this.eventRepo
         .createQueryBuilder(alias)
         .where(`${alias}.userId = :userId`, { userId });
+      if (workspaceId) qb.andWhere(`${alias}.workspaceId = :workspaceId`, { workspaceId });
       if (since) qb.andWhere(`${alias}.receivedAt >= :since`, { since });
       return qb;
     };
@@ -96,6 +97,7 @@ export class StatsService {
   async getLatencyPercentiles(
     userId: string,
     period: '24h' | '7d' | '30d' | 'all' = '7d',
+    workspaceId?: string,
   ) {
     const periodMap: Record<string, number | null> = {
       '24h': 1,
@@ -118,6 +120,9 @@ export class StatsService {
       .where('e.userId = :userId', { userId })
       .andWhere('e.forwardLatency IS NOT NULL');
 
+    if (workspaceId) {
+      percentilesQb.andWhere('e.workspaceId = :workspaceId', { workspaceId });
+    }
     if (since) {
       percentilesQb.andWhere('e.receivedAt >= :since', { since });
     }
@@ -138,6 +143,9 @@ export class StatsService {
       .groupBy('bucket')
       .orderBy('bucket', 'ASC');
 
+    if (workspaceId) {
+      timeSeriesQb.andWhere('e.workspaceId = :workspaceId', { workspaceId });
+    }
     if (since) {
       timeSeriesQb.andWhere('e.receivedAt >= :since', { since });
     }

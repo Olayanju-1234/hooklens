@@ -58,8 +58,11 @@ export class EndpointsController {
   }
 
   @Get()
-  findAll(@CurrentUser() user: JwtPayload) {
-    return this.endpointsService.findAllByUser(user.sub);
+  findAll(
+    @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
+  ) {
+    return this.endpointsService.findAllByUser(user.sub, workspaceId);
   }
 
   @Get(':id')

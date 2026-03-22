@@ -36,9 +36,14 @@ export class EndpointsService {
     return saved;
   }
 
-  async findAllByUser(userId: string): Promise<Endpoint[]> {
+  async findAllByUser(
+    userId: string,
+    workspaceId?: string,
+  ): Promise<Endpoint[]> {
+    const where: Record<string, string> = { userId };
+    if (workspaceId) where.workspaceId = workspaceId;
     return this.endpointRepo.find({
-      where: { userId },
+      where,
       order: { createdAt: 'DESC' },
     });
   }
