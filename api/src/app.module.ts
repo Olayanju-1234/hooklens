@@ -37,6 +37,7 @@ import { RetentionModule } from './modules/retention/retention.module.js';
 import { EmailModule } from './modules/email/email.module.js';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
+import { DeadLetterModule } from './modules/dead-letter/dead-letter.module.js';
 
 @Module({
   imports: [
@@ -127,6 +128,7 @@ import { AuditModule } from './modules/audit/audit.module.js';
     EmailModule,
     ApiKeysModule,
     AuditModule,
+    DeadLetterModule,
   ],
   providers: [
     {
