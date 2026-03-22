@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useAuth } from "@/lib/auth-context";
-import { events as eventsApi } from "@/lib/api";
+import { events as eventsApi, endpoints as endpointsApi, Endpoint } from "@/lib/api";
 import {
   StatusBadge,
   MethodBadge,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Onboarding } from "@/components/onboarding";
 import Link from "next/link";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
@@ -65,6 +66,33 @@ export default function DashboardPage() {
   const { liveEvents, clearEvents, addEvents, removeEvent } = useWebSocket();
   const { ingressSlug } = useAuth();
   const [sending, setSending] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [checkingEndpoints, setCheckingEndpoints] = useState(true);
+
+  useEffect(() => {
+    const dismissed = localStorage.getItem("hookdash_onboarding_dismissed");
+    if (dismissed === "true") {
+      setCheckingEndpoints(false);
+      return;
+    }
+    endpointsApi
+      .list()
+      .then((list) => {
+        if (list.length === 0) {
+          setShowOnboarding(true);
+        }
+      })
+      .catch(() => {
+        // Failed to fetch — skip onboarding check
+      })
+      .finally(() => setCheckingEndpoints(false));
+  }, []);
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function handleOnboardingComplete(_endpoint: Endpoint) {
+    setShowOnboarding(false);
+    localStorage.setItem("hookdash_onboarding_dismissed", "true");
+  }
 
   async function sendTestEvent() {
     if (!ingressSlug) return;
@@ -122,6 +150,18 @@ export default function DashboardPage() {
     } finally {
       setSending(false);
     }
+  }
+
+  if (checkingEndpoints) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="w-5 h-5 border-2 border-border-secondary border-t-text-accent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (showOnboarding) {
+    return <Onboarding onComplete={handleOnboardingComplete} />;
   }
 
   return (
