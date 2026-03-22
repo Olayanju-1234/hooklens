@@ -13,6 +13,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { WorkspacesService } from './workspaces.service.js';
 import {
   CreateWorkspaceDto,
@@ -23,6 +24,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
 import { AuditService } from '../audit/audit.service.js';
 
+@ApiTags('Workspaces')
+@ApiBearerAuth()
 @Controller('workspaces')
 @UseGuards(AuthGuard('jwt'))
 export class WorkspacesController {
@@ -35,16 +38,23 @@ export class WorkspacesController {
   ) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create a new workspace' })
+  @ApiResponse({ status: 201, description: 'Workspace created successfully' })
   create(@CurrentUser() user: JwtPayload, @Body() dto: CreateWorkspaceDto) {
     return this.workspacesService.create(user.sub, dto);
   }
 
   @Get()
+  @ApiOperation({ summary: 'List all workspaces for the current user' })
+  @ApiResponse({ status: 200, description: 'Returns list of workspaces' })
   findAll(@CurrentUser() user: JwtPayload) {
     return this.workspacesService.findAllForUser(user.sub);
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get a workspace by ID' })
+  @ApiResponse({ status: 200, description: 'Returns the workspace' })
+  @ApiParam({ name: 'id', type: String })
   async findOne(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
@@ -54,6 +64,9 @@ export class WorkspacesController {
   }
 
   @Patch(':id')
+  @ApiOperation({ summary: 'Update a workspace' })
+  @ApiResponse({ status: 200, description: 'Workspace updated successfully' })
+  @ApiParam({ name: 'id', type: String })
   async update(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
@@ -78,6 +91,9 @@ export class WorkspacesController {
   }
 
   @Delete(':id')
+  @ApiOperation({ summary: 'Delete a workspace' })
+  @ApiResponse({ status: 200, description: 'Workspace deleted successfully' })
+  @ApiParam({ name: 'id', type: String })
   async remove(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
@@ -100,6 +116,9 @@ export class WorkspacesController {
   }
 
   @Post(':id/invite')
+  @ApiOperation({ summary: 'Invite a member to the workspace' })
+  @ApiResponse({ status: 201, description: 'Invitation sent successfully' })
+  @ApiParam({ name: 'id', type: String })
   async invite(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
@@ -125,11 +144,17 @@ export class WorkspacesController {
   }
 
   @Post('accept-invite/:token')
+  @ApiOperation({ summary: 'Accept a workspace invitation' })
+  @ApiResponse({ status: 201, description: 'Invitation accepted successfully' })
+  @ApiParam({ name: 'token', type: String })
   acceptInvite(@CurrentUser() user: JwtPayload, @Param('token') token: string) {
     return this.workspacesService.acceptInvite(token, user.sub);
   }
 
   @Get(':id/invites')
+  @ApiOperation({ summary: 'List pending invitations for a workspace' })
+  @ApiResponse({ status: 200, description: 'Returns list of pending invitations' })
+  @ApiParam({ name: 'id', type: String })
   async listInvites(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
@@ -139,6 +164,10 @@ export class WorkspacesController {
   }
 
   @Delete(':id/invites/:inviteId')
+  @ApiOperation({ summary: 'Revoke a pending workspace invitation' })
+  @ApiResponse({ status: 200, description: 'Invitation revoked successfully' })
+  @ApiParam({ name: 'id', type: String })
+  @ApiParam({ name: 'inviteId', type: String })
   async revokeInvite(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
@@ -149,6 +178,10 @@ export class WorkspacesController {
   }
 
   @Delete(':id/members/:userId')
+  @ApiOperation({ summary: 'Remove a member from the workspace' })
+  @ApiResponse({ status: 200, description: 'Member removed successfully' })
+  @ApiParam({ name: 'id', type: String })
+  @ApiParam({ name: 'userId', type: String })
   async removeMember(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,

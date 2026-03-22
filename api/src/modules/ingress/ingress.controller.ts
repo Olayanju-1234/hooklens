@@ -1,11 +1,13 @@
 import { Controller, Post, Param, Req, Res, Logger } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { IngressService } from './ingress.service.js';
 
 // Slug must match usr_ followed by exactly 12 hex chars
 const SLUG_PATTERN = /^usr_[a-f0-9]{12}$/;
 
+@ApiTags('Ingress')
 @Controller('in')
 @SkipThrottle()
 export class IngressController {
@@ -14,6 +16,9 @@ export class IngressController {
   constructor(private readonly ingressService: IngressService) {}
 
   @Post(':slug')
+  @ApiOperation({ summary: 'Receive an incoming webhook event' })
+  @ApiResponse({ status: 200, description: 'Webhook received and acknowledged' })
+  @ApiParam({ name: 'slug', type: String })
   async receive(
     @Param('slug') slug: string,
     @Req() req: Request,

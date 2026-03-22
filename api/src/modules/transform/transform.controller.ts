@@ -10,6 +10,7 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { TransformService } from './transform.service.js';
 import {
   CreateTransformRuleDto,
@@ -24,12 +25,17 @@ interface TestTransformBody {
   body: Record<string, unknown>;
 }
 
+@ApiTags('Transforms')
+@ApiBearerAuth()
 @Controller('endpoints/:endpointId/transforms')
 @UseGuards(AuthGuard('jwt'))
 export class TransformController {
   constructor(private readonly transformService: TransformService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create a new transform rule for an endpoint' })
+  @ApiResponse({ status: 201, description: 'Transform rule created successfully' })
+  @ApiParam({ name: 'endpointId', type: String })
   create(
     @CurrentUser() _user: JwtPayload,
     @Param('endpointId', ParseUUIDPipe) endpointId: string,
@@ -39,6 +45,9 @@ export class TransformController {
   }
 
   @Get()
+  @ApiOperation({ summary: 'List all transform rules for an endpoint' })
+  @ApiResponse({ status: 200, description: 'Returns list of transform rules' })
+  @ApiParam({ name: 'endpointId', type: String })
   findAll(
     @CurrentUser() _user: JwtPayload,
     @Param('endpointId', ParseUUIDPipe) endpointId: string,
@@ -47,6 +56,10 @@ export class TransformController {
   }
 
   @Patch(':ruleId')
+  @ApiOperation({ summary: 'Update a transform rule' })
+  @ApiResponse({ status: 200, description: 'Transform rule updated successfully' })
+  @ApiParam({ name: 'endpointId', type: String })
+  @ApiParam({ name: 'ruleId', type: String })
   update(
     @CurrentUser() _user: JwtPayload,
     @Param('ruleId', ParseUUIDPipe) ruleId: string,
@@ -56,6 +69,10 @@ export class TransformController {
   }
 
   @Delete(':ruleId')
+  @ApiOperation({ summary: 'Delete a transform rule' })
+  @ApiResponse({ status: 200, description: 'Transform rule deleted successfully' })
+  @ApiParam({ name: 'endpointId', type: String })
+  @ApiParam({ name: 'ruleId', type: String })
   remove(
     @CurrentUser() _user: JwtPayload,
     @Param('ruleId', ParseUUIDPipe) ruleId: string,
@@ -64,6 +81,9 @@ export class TransformController {
   }
 
   @Post('test')
+  @ApiOperation({ summary: 'Test transform operations against a payload' })
+  @ApiResponse({ status: 201, description: 'Returns the transformed payload' })
+  @ApiParam({ name: 'endpointId', type: String })
   testTransform(
     @CurrentUser() _user: JwtPayload,
     @Body() payload: TestTransformBody,

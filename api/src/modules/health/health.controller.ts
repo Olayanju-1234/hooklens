@@ -4,7 +4,9 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
+@ApiTags('Health')
 @Controller('health')
 @SkipThrottle()
 export class HealthController {
@@ -34,6 +36,8 @@ export class HealthController {
   }
 
   @Get()
+  @ApiOperation({ summary: 'Check API and dependency health status' })
+  @ApiResponse({ status: 200, description: 'Returns health status of database and Redis' })
   async check() {
     const [dbHealthy, redisHealthy] = await Promise.all([
       this.checkDatabase(),

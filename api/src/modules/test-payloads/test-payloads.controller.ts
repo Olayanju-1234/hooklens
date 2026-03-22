@@ -13,11 +13,14 @@ import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { User } from '../../entities/user.entity.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
 import { TestPayloadsService } from './test-payloads.service.js';
 
+@ApiTags('Test Payloads')
+@ApiBearerAuth()
 @Controller('test-payloads')
 @UseGuards(AuthGuard('jwt'))
 export class TestPayloadsController {
@@ -31,11 +34,16 @@ export class TestPayloadsController {
   ) {}
 
   @Get()
+  @ApiOperation({ summary: 'List available test payload providers' })
+  @ApiResponse({ status: 200, description: 'Returns list of providers' })
   getProviders() {
     return this.testPayloadsService.getProviders();
   }
 
   @Get(':provider')
+  @ApiOperation({ summary: 'List event types for a provider' })
+  @ApiResponse({ status: 200, description: 'Returns list of event types' })
+  @ApiParam({ name: 'provider', type: String })
   getEventTypes(
     @CurrentUser() _user: JwtPayload,
     @Param('provider') provider: string,
@@ -44,6 +52,10 @@ export class TestPayloadsController {
   }
 
   @Get(':provider/:eventType')
+  @ApiOperation({ summary: 'Get a specific test payload' })
+  @ApiResponse({ status: 200, description: 'Returns the test payload' })
+  @ApiParam({ name: 'provider', type: String })
+  @ApiParam({ name: 'eventType', type: String })
   getPayload(
     @CurrentUser() _user: JwtPayload,
     @Param('provider') provider: string,
@@ -53,6 +65,10 @@ export class TestPayloadsController {
   }
 
   @Post(':provider/:eventType/send')
+  @ApiOperation({ summary: 'Send a test payload to the ingress endpoint' })
+  @ApiResponse({ status: 201, description: 'Test payload sent successfully' })
+  @ApiParam({ name: 'provider', type: String })
+  @ApiParam({ name: 'eventType', type: String })
   async sendTestPayload(
     @CurrentUser() jwtUser: JwtPayload,
     @Param('provider') provider: string,

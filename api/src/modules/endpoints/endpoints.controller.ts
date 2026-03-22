@@ -12,6 +12,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { EndpointsService } from './endpoints.service.js';
 import { CreateEndpointDto, UpdateEndpointDto } from './dto/endpoint.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
@@ -19,6 +20,8 @@ import type { JwtPayload } from '../../common/decorators/current-user.decorator.
 import { AuditService } from '../audit/audit.service.js';
 import { WorkspaceGuard } from '../workspaces/guards/workspace.guard.js';
 
+@ApiTags('Endpoints')
+@ApiBearerAuth()
 @Controller('endpoints')
 @UseGuards(AuthGuard('jwt'), WorkspaceGuard)
 export class EndpointsController {
@@ -30,6 +33,8 @@ export class EndpointsController {
   ) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create a new webhook endpoint' })
+  @ApiResponse({ status: 201, description: 'Endpoint created successfully' })
   async create(
     @CurrentUser() user: JwtPayload,
     @Headers('x-workspace-id') workspaceId: string,
@@ -58,6 +63,8 @@ export class EndpointsController {
   }
 
   @Get()
+  @ApiOperation({ summary: 'List all endpoints in the workspace' })
+  @ApiResponse({ status: 200, description: 'Returns list of endpoints' })
   findAll(
     @CurrentUser() user: JwtPayload,
     @Headers('x-workspace-id') workspaceId: string,
@@ -66,6 +73,9 @@ export class EndpointsController {
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get a single endpoint by ID' })
+  @ApiResponse({ status: 200, description: 'Returns the endpoint' })
+  @ApiParam({ name: 'id', type: String })
   findOne(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
@@ -74,6 +84,9 @@ export class EndpointsController {
   }
 
   @Patch(':id')
+  @ApiOperation({ summary: 'Update an endpoint' })
+  @ApiResponse({ status: 200, description: 'Endpoint updated successfully' })
+  @ApiParam({ name: 'id', type: String })
   async update(
     @CurrentUser() user: JwtPayload,
     @Headers('x-workspace-id') workspaceId: string,
@@ -98,6 +111,9 @@ export class EndpointsController {
   }
 
   @Delete(':id')
+  @ApiOperation({ summary: 'Delete an endpoint' })
+  @ApiResponse({ status: 200, description: 'Endpoint deleted successfully' })
+  @ApiParam({ name: 'id', type: String })
   async remove(
     @CurrentUser() user: JwtPayload,
     @Headers('x-workspace-id') workspaceId: string,
