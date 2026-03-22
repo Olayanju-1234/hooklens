@@ -21,6 +21,7 @@ import {
   ResetPasswordDto,
   VerifyEmailDto,
   ChangePasswordDto,
+  UpdateAvatarDto,
 } from './dto/auth.dto.js';
 import { EmailService } from '../email/email.service.js';
 
@@ -197,8 +198,30 @@ export class AuthService {
       ingressSlug: user.ingressSlug,
       emailVerified: user.emailVerified,
       oauthProvider: user.oauthProvider,
+      avatarUrl: user.avatarUrl,
       createdAt: user.createdAt,
     };
+  }
+
+  async updateAvatar(
+    userId: string,
+    dto: UpdateAvatarDto,
+  ): Promise<{ avatarUrl: string }> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    await this.userRepo.update(userId, { avatarUrl: dto.avatarUrl });
+    this.logger.log(`Avatar updated for user ${userId}`);
+    return { avatarUrl: dto.avatarUrl };
+  }
+
+  async removeAvatar(userId: string): Promise<{ success: boolean }> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    await this.userRepo.update(userId, { avatarUrl: null });
+    this.logger.log(`Avatar removed for user ${userId}`);
+    return { success: true };
   }
 
   async changePassword(

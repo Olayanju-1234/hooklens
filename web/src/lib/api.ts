@@ -84,6 +84,15 @@ export const auth = {
       method: "POST",
       body: { currentPassword, newPassword },
     }),
+  updateAvatar: (avatarUrl: string) =>
+    request<{ avatarUrl: string }>("/auth/avatar", {
+      method: "PATCH",
+      body: { avatarUrl },
+    }),
+  removeAvatar: () =>
+    request<{ success: boolean }>("/auth/avatar", {
+      method: "DELETE",
+    }),
 };
 
 export interface UserProfile {
@@ -92,6 +101,7 @@ export interface UserProfile {
   ingressSlug: string;
   emailVerified: boolean;
   oauthProvider: string | null;
+  avatarUrl: string | null;
   createdAt: string;
 }
 

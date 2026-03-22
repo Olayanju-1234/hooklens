@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsString, IsUrl, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SignupDto {
@@ -54,4 +54,13 @@ export class ChangePasswordDto {
   @IsString()
   @MinLength(8)
   newPassword!: string;
+}
+
+export class UpdateAvatarDto {
+  @ApiProperty({
+    description: 'URL of the avatar image',
+    example: 'https://gravatar.com/avatar/abc123',
+  })
+  @IsUrl()
+  avatarUrl!: string;
 }

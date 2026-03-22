@@ -42,6 +42,9 @@ export class User {
   @Column({ type: 'varchar', length: 20, nullable: true })
   oauthProvider!: string | null;
 
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  avatarUrl!: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

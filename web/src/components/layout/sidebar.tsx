@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { auth as authApi, UserProfile } from "@/lib/api";
 import { useState, useRef, useEffect } from "react";
 import gsap from "gsap";
 
@@ -85,8 +86,13 @@ export function Sidebar() {
   const pathname = usePathname();
   const { logout, ingressSlug } = useAuth();
   const [expanded, setExpanded] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const railRef = useRef<HTMLElement>(null);
   const indicatorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    authApi.me().then(setProfile).catch(() => {});
+  }, []);
 
   // Animate the active indicator position
   useEffect(() => {
@@ -184,6 +190,27 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-border-primary p-2 space-y-1">
+        {/* User avatar + email */}
+        {profile && (
+          <div className="flex items-center gap-2 px-2 py-1.5">
+            {profile.avatarUrl ? (
+              <img
+                src={profile.avatarUrl}
+                alt="Avatar"
+                className="w-8 h-8 rounded-full object-cover shrink-0"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-bg-accent flex items-center justify-center text-text-inverse text-xs font-semibold shrink-0">
+                {profile.email.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            {expanded && (
+              <span className="text-[11px] text-text-secondary truncate">
+                {profile.email}
+              </span>
+            )}
+          </div>
+        )}
         {/* Ingress slug — only visible expanded */}
         {ingressSlug && expanded && (
           <div className="px-2 py-1.5 rounded-lg bg-bg-tertiary mx-0.5">

@@ -1,6 +1,8 @@
 import {
   Controller,
   Post,
+  Patch,
+  Delete,
   Body,
   Get,
   Res,
@@ -20,6 +22,7 @@ import {
   ResetPasswordDto,
   VerifyEmailDto,
   ChangePasswordDto,
+  UpdateAvatarDto,
 } from './dto/auth.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
@@ -91,6 +94,27 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
   ) {
     return this.authService.changePassword(user.sub, dto);
+  }
+
+  @Patch('avatar')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update avatar URL for the authenticated user' })
+  @ApiResponse({ status: 200, description: 'Avatar updated successfully' })
+  updateAvatar(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateAvatarDto,
+  ) {
+    return this.authService.updateAvatar(user.sub, dto);
+  }
+
+  @Delete('avatar')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove avatar for the authenticated user' })
+  @ApiResponse({ status: 200, description: 'Avatar removed successfully' })
+  removeAvatar(@CurrentUser() user: JwtPayload) {
+    return this.authService.removeAvatar(user.sub);
   }
 
   @Get('google')

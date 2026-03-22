@@ -63,6 +63,10 @@ export default function SettingsPage() {
   // Remove member
   const [removingId, setRemovingId] = useState<string | null>(null);
 
+  // Avatar
+  const [avatarInput, setAvatarInput] = useState("");
+  const [avatarSaving, setAvatarSaving] = useState(false);
+
   // Create workspace
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -125,6 +129,35 @@ export default function SettingsPage() {
       toast.error(err instanceof ApiError ? err.message : "Failed to change password");
     } finally {
       setPwSubmitting(false);
+    }
+  }
+
+  async function handleUpdateAvatar(e: FormEvent) {
+    e.preventDefault();
+    if (!avatarInput.trim()) return;
+    setAvatarSaving(true);
+    try {
+      const res = await authApi.updateAvatar(avatarInput.trim());
+      setProfile((prev) => (prev ? { ...prev, avatarUrl: res.avatarUrl } : prev));
+      setAvatarInput("");
+      toast.success("Avatar updated");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to update avatar");
+    } finally {
+      setAvatarSaving(false);
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    setAvatarSaving(true);
+    try {
+      await authApi.removeAvatar();
+      setProfile((prev) => (prev ? { ...prev, avatarUrl: null } : prev));
+      toast.success("Avatar removed");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to remove avatar");
+    } finally {
+      setAvatarSaving(false);
     }
   }
 
@@ -352,6 +385,48 @@ export default function SettingsPage() {
               description="Your account details"
             />
             <div className="space-y-4">
+              {/* Avatar */}
+              <div className="flex items-start gap-4">
+                {profile.avatarUrl ? (
+                  <img
+                    src={profile.avatarUrl}
+                    alt="Avatar"
+                    className="w-20 h-20 rounded-full object-cover border border-border-primary shrink-0"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-bg-accent flex items-center justify-center text-text-inverse text-xl font-semibold shrink-0">
+                    {profile.email.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0 space-y-2">
+                  <form onSubmit={(e) => void handleUpdateAvatar(e)} className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Input
+                        label="Avatar URL"
+                        type="url"
+                        value={avatarInput}
+                        onChange={(e) => setAvatarInput(e.target.value)}
+                        placeholder="https://gravatar.com/avatar/..."
+                      />
+                    </div>
+                    <Button type="submit" size="sm" loading={avatarSaving} disabled={!avatarInput.trim()}>
+                      Set
+                    </Button>
+                  </form>
+                  {profile.avatarUrl && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void handleRemoveAvatar()}
+                      loading={avatarSaving}
+                    >
+                      Remove Avatar
+                    </Button>
+                  )}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-text-tertiary font-medium mb-1">Email</p>
