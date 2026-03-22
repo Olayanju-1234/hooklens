@@ -44,6 +44,10 @@ export class AlertRule {
   workspace!: Workspace;
 
   @ManyToMany(() => AlertChannel)
-  @JoinTable({ name: 'alert_rule_channels' })
+  @JoinTable({
+    name: 'alert_rule_channels',
+    joinColumn: { name: 'alertRuleId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'channelId', referencedColumnName: 'id' },
+  })
   channels!: AlertChannel[];
 }
