@@ -731,6 +731,98 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── SDK ───────────────────────────────────────────── */}
+      <section className="border-t border-border-primary">
+        <div className="max-w-6xl mx-auto px-6 sm:px-10 py-24">
+          <Reveal>
+            <div className="text-center mb-12">
+              <div className="text-[11px] text-text-accent font-mono uppercase tracking-wider mb-3">Developer SDK</div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-text-primary tracking-tight">
+                Integrate in minutes
+              </h2>
+              <p className="mt-3 text-sm text-text-secondary max-w-lg mx-auto leading-relaxed">
+                Use the official Node.js SDK to manage webhooks programmatically,
+                verify signatures, and mirror live traffic to Hookdash.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-6">
+              {/* API Client */}
+              <div className="rounded-xl border border-border-primary bg-bg-secondary p-6">
+                <div className="text-xs font-mono text-text-accent mb-3">API Client</div>
+                <pre className="text-[13px] text-text-primary font-mono leading-relaxed overflow-x-auto whitespace-pre">
+{`import { Hookdash } from 'hookdash-sdk'
+
+const hd = new Hookdash({
+  apiKey: 'hd_live_...',
+})
+
+// List recent events
+const events = await hd.events.list({
+  provider: 'paystack',
+  limit: 20,
+})
+
+// Replay a failed webhook
+await hd.events.replay(events.data[0].id)`}
+                </pre>
+              </div>
+
+              {/* Signature Verification */}
+              <div className="rounded-xl border border-border-primary bg-bg-secondary p-6">
+                <div className="text-xs font-mono text-text-accent mb-3">Verify Signatures</div>
+                <pre className="text-[13px] text-text-primary font-mono leading-relaxed overflow-x-auto whitespace-pre">
+{`import { verify } from 'hookdash-sdk/verify'
+
+app.post('/webhook', (req, res) => {
+  const sig = req.headers[
+    'x-paystack-signature'
+  ]
+
+  if (!verify.paystack(
+    JSON.stringify(req.body),
+    sig, process.env.SECRET
+  )) {
+    return res.status(401).end()
+  }
+
+  // Valid — process event
+})`}
+                </pre>
+              </div>
+
+              {/* Middleware */}
+              <div className="rounded-xl border border-border-primary bg-bg-secondary p-6">
+                <div className="text-xs font-mono text-text-accent mb-3">Express Middleware</div>
+                <pre className="text-[13px] text-text-primary font-mono leading-relaxed overflow-x-auto whitespace-pre">
+{`import { capture } from 'hookdash-sdk/middleware'
+
+// Mirror webhooks to Hookdash
+// Zero latency — async fire & forget
+app.use('/webhooks', capture({
+  slug: 'usr_a1b2c3d4e5f6',
+}))
+
+app.post('/webhooks/paystack',
+  (req, res) => {
+    // Normal handler runs as usual
+    processPayment(req.body)
+    res.sendStatus(200)
+  }
+)`}
+                </pre>
+              </div>
+            </div>
+
+            <div className="mt-8 text-center">
+              <code className="inline-block px-4 py-2 rounded-lg bg-bg-tertiary border border-border-primary text-sm font-mono text-text-primary">
+                npm install hookdash-sdk
+              </code>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       {/* ── CTA ──────────────────────────────────────────── */}
       <section className="border-t border-border-primary">
         <div className="max-w-4xl mx-auto px-6 sm:px-10 py-28 text-center">
