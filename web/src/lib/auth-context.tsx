@@ -140,7 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const switchWorkspace = useCallback((workspaceId: string) => {
     Cookies.set("workspaceId", workspaceId, { expires: 30 });
-    setState((prev) => ({ ...prev, currentWorkspaceId: workspaceId }));
+    window.location.reload();
   }, []);
 
   return (
