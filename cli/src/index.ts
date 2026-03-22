@@ -5,6 +5,10 @@ import { loginCommand } from './commands/login.js';
 import { listenCommand } from './commands/listen.js';
 import { configCommand } from './commands/config.js';
 import { logoutCommand } from './commands/logout.js';
+import { eventsCommand } from './commands/events.js';
+import { replayCommand } from './commands/replay.js';
+import { endpointsCommand } from './commands/endpoints.js';
+import { whoamiCommand } from './commands/whoami.js';
 
 const program = new Command();
 
@@ -43,6 +47,38 @@ program
   .description('Clear stored credentials')
   .action(() => {
     logoutCommand();
+  });
+
+program
+  .command('events')
+  .description('List recent webhook events')
+  .option('-l, --limit <number>', 'Number of events to show', '20')
+  .option('--provider <string>', 'Filter by provider')
+  .option('--status <string>', 'Filter by forward status')
+  .option('--type <string>', 'Filter by event type')
+  .action(async (options) => {
+    await eventsCommand(options);
+  });
+
+program
+  .command('replay <event-id>')
+  .description('Replay a webhook event')
+  .action(async (eventId) => {
+    await replayCommand(eventId);
+  });
+
+program
+  .command('endpoints')
+  .description('List webhook endpoints')
+  .action(async () => {
+    await endpointsCommand();
+  });
+
+program
+  .command('whoami')
+  .description('Show current authenticated user')
+  .action(async () => {
+    await whoamiCommand();
   });
 
 program.parse();
