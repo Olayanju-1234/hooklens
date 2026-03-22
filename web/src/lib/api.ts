@@ -77,7 +77,23 @@ export const auth = {
       method: "POST",
       body: { token },
     }),
+  me: () =>
+    request<UserProfile>("/auth/me"),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ success: boolean }>("/auth/change-password", {
+      method: "POST",
+      body: { currentPassword, newPassword },
+    }),
 };
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  ingressSlug: string;
+  emailVerified: boolean;
+  oauthProvider: string | null;
+  createdAt: string;
+}
 
 // Endpoints
 export interface Endpoint {
@@ -210,7 +226,22 @@ export const workspaces = {
     request<void>(`/workspaces/${workspaceId}/members/${userId}`, {
       method: "DELETE",
     }),
+  listInvites: (workspaceId: string) =>
+    request<WorkspaceInvite[]>(`/workspaces/${workspaceId}/invites`),
+  revokeInvite: (workspaceId: string, inviteId: string) =>
+    request<void>(`/workspaces/${workspaceId}/invites/${inviteId}`, {
+      method: "DELETE",
+    }),
 };
+
+export interface WorkspaceInvite {
+  id: string;
+  workspaceId: string;
+  email: string;
+  role: string;
+  expiresAt: string;
+  createdAt: string;
+}
 
 // Forward Destinations
 export interface ForwardDestination {
