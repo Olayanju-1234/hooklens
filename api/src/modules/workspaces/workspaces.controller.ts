@@ -129,6 +129,25 @@ export class WorkspacesController {
     return this.workspacesService.acceptInvite(token, user.sub);
   }
 
+  @Get(':id/invites')
+  async listInvites(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.workspacesService.assertOwner(id, user.sub);
+    return this.workspacesService.listInvites(id);
+  }
+
+  @Delete(':id/invites/:inviteId')
+  async revokeInvite(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('inviteId', ParseUUIDPipe) inviteId: string,
+  ) {
+    await this.workspacesService.assertOwner(id, user.sub);
+    await this.workspacesService.revokeInvite(id, inviteId);
+  }
+
   @Delete(':id/members/:userId')
   async removeMember(
     @CurrentUser() user: JwtPayload,

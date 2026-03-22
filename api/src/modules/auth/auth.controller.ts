@@ -18,7 +18,10 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   VerifyEmailDto,
+  ChangePasswordDto,
 } from './dto/auth.dto.js';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('auth')
 export class AuthController {
@@ -54,6 +57,22 @@ export class AuthController {
   @Post('verify-email')
   verifyEmail(@Body() dto: VerifyEmailDto) {
     return this.authService.verifyEmail(dto);
+  }
+
+  @Get('me')
+  @UseGuards(AuthGuard('jwt'))
+  getProfile(@CurrentUser() user: JwtPayload) {
+    return this.authService.getProfile(user.sub);
+  }
+
+  @Post('change-password')
+  @UseGuards(AuthGuard('jwt'))
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  changePassword(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(user.sub, dto);
   }
 
   @Get('google')

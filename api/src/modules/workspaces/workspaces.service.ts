@@ -211,6 +211,24 @@ export class WorkspacesService {
     this.logger.log(`Member ${userId} removed from workspace ${workspaceId}`);
   }
 
+  async listInvites(workspaceId: string): Promise<WorkspaceInvite[]> {
+    return this.inviteRepo.find({
+      where: { workspaceId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async revokeInvite(workspaceId: string, inviteId: string): Promise<void> {
+    const invite = await this.inviteRepo.findOne({
+      where: { id: inviteId, workspaceId },
+    });
+    if (!invite) {
+      throw new NotFoundException('Invite not found');
+    }
+    await this.inviteRepo.remove(invite);
+    this.logger.log(`Invite ${inviteId} revoked in workspace ${workspaceId}`);
+  }
+
   async assertMembership(workspaceId: string, userId: string): Promise<void> {
     const membership = await this.memberRepo.findOne({
       where: { workspaceId, userId },

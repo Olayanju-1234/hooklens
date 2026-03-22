@@ -20,6 +20,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   VerifyEmailDto,
+  ChangePasswordDto,
 } from './dto/auth.dto.js';
 import { EmailService } from '../email/email.service.js';
 
@@ -184,6 +185,49 @@ export class AuthService {
     });
 
     this.logger.log(`Email verified for user ${user.id}`);
+    return { success: true };
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    return {
+      id: user.id,
+      email: user.email,
+      ingressSlug: user.ingressSlug,
+      emailVerified: user.emailVerified,
+      oauthProvider: user.oauthProvider,
+      createdAt: user.createdAt,
+    };
+  }
+
+  async changePassword(
+    userId: string,
+    dto: ChangePasswordDto,
+  ): Promise<{ success: boolean }> {
+    const user = await this.userRepo
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.id = :id', { id: userId })
+      .getOne();
+
+    if (!user) throw new NotFoundException('User not found');
+
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'This account uses OAuth login. Password cannot be changed.',
+      );
+    }
+
+    const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const newHash = await bcrypt.hash(dto.newPassword, 12);
+    await this.userRepo.update(userId, { passwordHash: newHash });
+
+    this.logger.log(`Password changed for user ${userId}`);
     return { success: true };
   }
 
