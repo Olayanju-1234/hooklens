@@ -5,6 +5,7 @@ import { endpoints, deadLetter, Endpoint, DeadLetterEntry } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty-state";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import toast from "react-hot-toast";
 
@@ -91,7 +92,7 @@ export default function DeadLetterPage() {
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-16 rounded-xl bg-bg-secondary animate-pulse" />
+            <CardSkeleton key={i} />
           ))}
         </div>
       ) : entries.length === 0 ? (

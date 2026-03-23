@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import toast from "react-hot-toast";
 
@@ -164,7 +165,7 @@ export default function ApiKeysPage() {
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-16 rounded-xl bg-bg-secondary animate-pulse" />
+            <CardSkeleton key={i} />
           ))}
         </div>
       ) : keys.length === 0 ? (

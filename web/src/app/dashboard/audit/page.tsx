@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { auditLogs, AuditLogEntry } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { ListSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 
 const PAGE_SIZE = 25;
@@ -85,14 +86,7 @@ export default function AuditLogPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-12 rounded-lg bg-bg-secondary animate-pulse"
-            />
-          ))}
-        </div>
+        <ListSkeleton rows={8} />
       ) : logs.length === 0 ? (
         <EmptyState
           title="No audit events"
