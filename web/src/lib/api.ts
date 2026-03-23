@@ -93,7 +93,18 @@ export const auth = {
     request<{ success: boolean }>("/auth/avatar", {
       method: "DELETE",
     }),
+  updateNotifications: (prefs: Partial<NotificationPreferences>) =>
+    request<NotificationPreferences>("/auth/notifications", {
+      method: "PATCH",
+      body: prefs,
+    }),
 };
+
+export interface NotificationPreferences {
+  emailOnFailedForward: boolean;
+  emailOnSignatureFailure: boolean;
+  emailOnNewMember: boolean;
+}
 
 export interface UserProfile {
   id: string;
@@ -102,6 +113,7 @@ export interface UserProfile {
   emailVerified: boolean;
   oauthProvider: string | null;
   avatarUrl: string | null;
+  notificationPreferences: NotificationPreferences;
   createdAt: string;
 }
 

@@ -23,6 +23,7 @@ import {
   VerifyEmailDto,
   ChangePasswordDto,
   UpdateAvatarDto,
+  UpdateNotificationPreferencesDto,
 } from './dto/auth.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
@@ -106,6 +107,18 @@ export class AuthController {
     @Body() dto: UpdateAvatarDto,
   ) {
     return this.authService.updateAvatar(user.sub, dto);
+  }
+
+  @Patch('notifications')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update notification preferences' })
+  @ApiResponse({ status: 200, description: 'Notification preferences updated' })
+  updateNotifications(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateNotificationPreferencesDto,
+  ) {
+    return this.authService.updateNotificationPreferences(user.sub, dto);
   }
 
   @Delete('avatar')

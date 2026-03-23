@@ -1,5 +1,12 @@
-import { IsEmail, IsString, IsUrl, MinLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsEmail,
+  IsString,
+  IsUrl,
+  IsBoolean,
+  IsOptional,
+  MinLength,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SignupDto {
   @ApiProperty({ description: 'User email address', example: 'user@example.com' })
@@ -63,4 +70,30 @@ export class UpdateAvatarDto {
   })
   @IsUrl()
   avatarUrl!: string;
+}
+
+export class UpdateNotificationPreferencesDto {
+  @ApiPropertyOptional({
+    description: 'Email when a webhook forward fails',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  emailOnFailedForward?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Email when a webhook signature check fails',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  emailOnSignatureFailure?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Email when a new member joins the workspace',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  emailOnNewMember?: boolean;
 }

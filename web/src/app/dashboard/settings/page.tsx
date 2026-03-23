@@ -8,6 +8,7 @@ import {
   WorkspaceMember,
   WorkspaceInvite,
   UserProfile,
+  NotificationPreferences,
   ApiError,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -520,6 +521,56 @@ export default function SettingsPage() {
                   )}
                 </div>
               )}
+            </div>
+          </Card>
+        )}
+
+        {/* Notifications */}
+        {profile && (
+          <Card>
+            <CardHeader
+              title="Notifications"
+              description="Control when you receive email alerts"
+            />
+            <div className="space-y-3">
+              {([
+                { key: "emailOnFailedForward" as const, label: "Failed webhook forwards", desc: "Get notified when a webhook forward fails after all retries" },
+                { key: "emailOnSignatureFailure" as const, label: "Signature verification failures", desc: "Get notified when a webhook fails signature verification" },
+                { key: "emailOnNewMember" as const, label: "New workspace members", desc: "Get notified when someone joins your workspace" },
+              ]).map((item) => (
+                <label
+                  key={item.key}
+                  className="flex items-center justify-between gap-4 px-3 py-2.5 rounded-lg hover:bg-bg-hover transition-colors cursor-pointer"
+                >
+                  <div>
+                    <p className="text-sm text-text-primary font-medium">{item.label}</p>
+                    <p className="text-xs text-text-tertiary">{item.desc}</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={profile.notificationPreferences?.[item.key] ?? false}
+                    onChange={(e) => {
+                      const newVal = e.target.checked;
+                      setProfile((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              notificationPreferences: {
+                                ...prev.notificationPreferences,
+                                [item.key]: newVal,
+                              },
+                            }
+                          : prev,
+                      );
+                      authApi
+                        .updateNotifications({ [item.key]: newVal })
+                        .then(() => toast.success("Preference saved"))
+                        .catch(() => toast.error("Failed to update preference"));
+                    }}
+                    className="w-4 h-4 rounded accent-[var(--color-bg-accent)] cursor-pointer"
+                  />
+                </label>
+              ))}
             </div>
           </Card>
         )}

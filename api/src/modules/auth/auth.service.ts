@@ -22,6 +22,7 @@ import {
   VerifyEmailDto,
   ChangePasswordDto,
   UpdateAvatarDto,
+  UpdateNotificationPreferencesDto,
 } from './dto/auth.dto.js';
 import { EmailService } from '../email/email.service.js';
 
@@ -199,6 +200,11 @@ export class AuthService {
       emailVerified: user.emailVerified,
       oauthProvider: user.oauthProvider,
       avatarUrl: user.avatarUrl,
+      notificationPreferences: user.notificationPreferences ?? {
+        emailOnFailedForward: true,
+        emailOnSignatureFailure: true,
+        emailOnNewMember: false,
+      },
       createdAt: user.createdAt,
     };
   }
@@ -222,6 +228,25 @@ export class AuthService {
     await this.userRepo.update(userId, { avatarUrl: null });
     this.logger.log(`Avatar removed for user ${userId}`);
     return { success: true };
+  }
+
+  async updateNotificationPreferences(
+    userId: string,
+    dto: UpdateNotificationPreferencesDto,
+  ) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const current = user.notificationPreferences ?? {
+      emailOnFailedForward: true,
+      emailOnSignatureFailure: true,
+      emailOnNewMember: false,
+    };
+
+    const merged = { ...current, ...dto };
+    await this.userRepo.update(userId, { notificationPreferences: merged });
+    this.logger.log(`Notification preferences updated for user ${userId}`);
+    return merged;
   }
 
   async changePassword(

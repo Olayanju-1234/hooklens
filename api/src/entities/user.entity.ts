@@ -45,6 +45,13 @@ export class User {
   @Column({ type: 'varchar', length: 500, nullable: true })
   avatarUrl!: string | null;
 
+  @Column({ type: 'jsonb', nullable: true, default: null })
+  notificationPreferences!: {
+    emailOnFailedForward: boolean;
+    emailOnSignatureFailure: boolean;
+    emailOnNewMember: boolean;
+  } | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 
