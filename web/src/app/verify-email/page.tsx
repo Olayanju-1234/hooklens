@@ -63,14 +63,40 @@ function VerifyEmailContent() {
   return (
     <div data-theme="dark" className="min-h-screen flex items-center justify-center bg-aurora px-4 relative overflow-hidden">
       <div className="absolute inset-0 bg-grid bg-grid-fade opacity-[0.06]" />
-      <div className="w-full max-w-sm text-center relative z-10">
-        <Suspense
-          fallback={
-            <p className="text-text-secondary">Verifying your email...</p>
-          }
-        >
-          <VerifyResult token={token} />
-        </Suspense>
+      <div className="absolute inset-0 bg-aurora-layer" />
+      <div className="grain" />
+
+      <div className="w-full max-w-[400px] relative z-10 animate-form-enter">
+        {/* Logo */}
+        <div className="flex items-center justify-center gap-2.5 mb-10">
+          <div
+            className="w-9 h-9 rounded-xl bg-bg-accent flex items-center justify-center shadow-lg"
+            style={{ boxShadow: "var(--glow)" }}
+          >
+            <svg width="18" height="18" viewBox="0 0 14 14" fill="none">
+              <path
+                d="M2 7h3l2-4 2 8 2-4h3"
+                stroke="var(--text-inverse)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+          <span className="text-lg font-semibold text-text-primary tracking-tight">
+            Hookdash
+          </span>
+        </div>
+
+        <div className="glass-card rounded-2xl p-7 text-center">
+          <Suspense
+            fallback={
+              <p className="text-text-secondary">Verifying your email...</p>
+            }
+          >
+            <VerifyResult token={token} />
+          </Suspense>
+        </div>
       </div>
     </div>
   );

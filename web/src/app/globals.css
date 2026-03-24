@@ -36,6 +36,8 @@
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
 
   --glow: 0 0 20px rgba(13, 147, 115, 0.12);
+  --glow-accent: rgba(13, 147, 115, 0.25);
+  --glow-error: rgba(180, 35, 24, 0.25);
 }
 
 [data-theme="dark"] {
@@ -72,6 +74,8 @@
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
 
   --glow: 0 0 24px rgba(46, 196, 162, 0.15);
+  --glow-accent: rgba(46, 196, 162, 0.3);
+  --glow-error: rgba(245, 163, 160, 0.3);
 }
 
 @theme inline {
@@ -136,7 +140,7 @@ a, button, input, select, textarea,
 [role="button"] {
   transition-property: color, background-color, border-color, box-shadow, opacity, transform;
   transition-duration: 150ms;
-  transition-timing-function: ease-out;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Webhook entry animation */
@@ -187,6 +191,20 @@ a, button, input, select, textarea,
     radial-gradient(ellipse 80% 50% at 60% 90%, rgba(46, 196, 162, 0.04) 0%, transparent 50%);
 }
 
+/* Secondary aurora layer with offset timing for depth */
+.bg-aurora-layer {
+  background-image:
+    radial-gradient(ellipse 45% 55% at 70% 60%, rgba(46, 196, 162, 0.04) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 45% at 25% 20%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
+  animation: aurora-drift 20s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  0% { opacity: 0.6; transform: scale(1) translate(0, 0); }
+  50% { opacity: 1; transform: scale(1.05) translate(10px, -10px); }
+  100% { opacity: 0.6; transform: scale(1) translate(-5px, 5px); }
+}
+
 /* Grid background for auth pages */
 .bg-grid {
   background-image:
@@ -209,4 +227,387 @@ a, button, input, select, textarea,
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   pointer-events: none;
   z-index: 9999;
+}
+
+/* Grain texture — lighter version for auth pages */
+.grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Glassmorphism card for auth forms */
+.glass-card {
+  background: rgba(25, 25, 24, 0.8);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-primary);
+  position: relative;
+}
+
+.glass-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(46, 196, 162, 0.15) 0%,
+    rgba(46, 196, 162, 0.03) 40%,
+    transparent 60%,
+    rgba(46, 196, 162, 0.08) 100%
+  );
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Subtle border glow animation on glass card */
+@keyframes border-glow {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.glass-card::before {
+  animation: border-glow 4s ease-in-out infinite;
+}
+
+/* Error slide-in animation */
+@keyframes error-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-error-in {
+  animation: error-slide-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Input shake animation for error state */
+@keyframes input-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+
+.animate-shake {
+  animation: input-shake 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Auth form entrance animation (CSS-only, replaces GSAP) */
+@keyframes form-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-form-enter {
+  animation: form-enter 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Success panel scale-in */
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* OAuth button brand hover states */
+.oauth-google:hover {
+  border-color: rgba(234, 67, 53, 0.4) !important;
+  box-shadow: 0 0 16px rgba(234, 67, 53, 0.1);
+}
+
+.oauth-github:hover {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.06);
+  background: rgba(36, 36, 33, 1) !important;
+}
+
+/* Styled dashed divider */
+.divider-dashed {
+  border-top: 1px dashed var(--border-secondary);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Landing page — design-engineer quality utilities
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Animated aurora mesh behind hero ──────────────────────── */
+.bg-aurora-animated {
+  position: relative;
+}
+.bg-aurora-animated::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 70% 20%, rgba(46, 196, 162, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 80% at 20% 70%, rgba(59, 130, 246, 0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(139, 92, 246, 0.04) 0%, transparent 50%);
+  background-size: 200% 200%;
+  animation: mesh 12s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes mesh {
+  0%, 100% { background-position: 0% 50%; }
+  25% { background-position: 50% 0%; }
+  50% { background-position: 100% 50%; }
+  75% { background-position: 50% 100%; }
+}
+
+/* ─── Gradient text ─────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #2ec4a2, #7dd3fc, #2ec4a2);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 4s ease-in-out infinite;
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* ─── Glow effect for accent elements ───────────────────────── */
+.glow-accent-hover {
+  transition: box-shadow 0.3s ease;
+}
+.glow-accent-hover:hover {
+  box-shadow: 0 0 24px rgba(46, 196, 162, 0.25), 0 0 48px rgba(46, 196, 162, 0.1);
+}
+
+/* ─── Shimmer border animation ──────────────────────────────── */
+.shimmer-border {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 30%,
+    rgba(46, 196, 162, 0.4) 50%,
+    transparent 70%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.shimmer-border:hover::before {
+  opacity: 1;
+  animation: shimmer 1.5s linear infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ─── Card hover lift ───────────────────────────────────────── */
+.hover-lift {
+  transition: transform 0.25s cubic-bezier(0.33, 1, 0.68, 1),
+              box-shadow 0.25s cubic-bezier(0.33, 1, 0.68, 1),
+              border-color 0.25s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* ─── Section gradient divider ──────────────────────────────── */
+.divider-glow {
+  border-top: none;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(46, 196, 162, 0.12) 20%,
+    rgba(46, 196, 162, 0.2) 50%,
+    rgba(46, 196, 162, 0.12) 80%,
+    transparent 100%
+  );
+}
+
+.divider-fade {
+  border-top: none;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--border-primary) 15%,
+    var(--border-secondary) 50%,
+    var(--border-primary) 85%,
+    transparent 100%
+  );
+}
+
+/* ─── Syntax highlighting for code blocks ───────────────────── */
+.syntax-keyword { color: #2ec4a2; }
+.syntax-string { color: #f5d78a; }
+.syntax-comment { color: #4a4a45; font-style: italic; }
+.syntax-function { color: #7dd3fc; }
+.syntax-variable { color: #ececea; }
+.syntax-number { color: #c4b5fd; }
+.syntax-operator { color: #6b6a65; }
+.syntax-property { color: #9c9b96; }
+.syntax-method { color: #7dd3fc; }
+.syntax-import { color: #c4b5fd; }
+
+/* ─── Terminal chrome (code block wrapper) ──────────────────── */
+.terminal-chrome {
+  border-radius: 12px;
+  border: 1px solid #1e1e1c;
+  background: #0c0c0b;
+  overflow: hidden;
+}
+
+.terminal-chrome .terminal-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1e1e1c;
+  background: #0e0e0d;
+}
+
+.terminal-chrome .terminal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.terminal-chrome .terminal-tab {
+  margin-left: 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: #6b6a65;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #191918;
+  border: 1px solid #1e1e1c;
+}
+
+.terminal-chrome .terminal-body {
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-x: auto;
+}
+
+.terminal-chrome .line-number {
+  display: inline-block;
+  width: 28px;
+  text-align: right;
+  margin-right: 16px;
+  color: #2a2a27;
+  user-select: none;
+  font-size: 11px;
+}
+
+/* ─── Pulsing dot (for MIT badge, status indicators) ────────── */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2ec4a2;
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+/* ─── Feature card with semantic border accent ──────────────── */
+.feature-card {
+  position: relative;
+  transition: transform 0.25s cubic-bezier(0.33, 1, 0.68, 1),
+              box-shadow 0.25s cubic-bezier(0.33, 1, 0.68, 1),
+              border-color 0.25s ease,
+              background 0.3s ease;
+}
+
+.feature-card::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 0;
+  border-radius: 1px;
+  background: var(--feature-color, #2ec4a2);
+  transition: height 0.3s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.feature-card:hover::after {
+  height: 60%;
+}
+
+.feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  border-color: var(--border-secondary);
+  background: linear-gradient(135deg, rgba(46, 196, 162, 0.03) 0%, transparent 60%);
+}
+
+/* ─── Provider card hover glow ──────────────────────────────── */
+.provider-card {
+  transition: transform 0.25s cubic-bezier(0.33, 1, 0.68, 1),
+              box-shadow 0.25s cubic-bezier(0.33, 1, 0.68, 1),
+              border-color 0.25s ease;
+}
+.provider-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-secondary);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
 }
