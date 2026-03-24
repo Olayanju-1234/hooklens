@@ -28,13 +28,10 @@ function VerifyResult({ token }: { token: string }) {
   if (success) {
     return (
       <div className="space-y-4">
-        <div className="px-3.5 py-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm border border-emerald-500/20">
+        <div className="px-3.5 py-2.5 rounded-lg bg-[#2ec4a2]/5 text-[#2ec4a2] text-sm border border-[#2ec4a2]/10">
           Email verified successfully!
         </div>
-        <Link
-          href="/dashboard"
-          className="block text-text-accent font-medium hover:underline"
-        >
+        <Link href="/dashboard" className="block text-[#2ec4a2] font-medium hover:underline">
           Go to dashboard
         </Link>
       </div>
@@ -43,13 +40,10 @@ function VerifyResult({ token }: { token: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="px-3.5 py-2.5 rounded-lg bg-bg-error text-text-error text-sm border border-red-200/20">
+      <div className="px-3.5 py-2.5 rounded-lg bg-red-500/5 text-red-400 text-sm border border-red-500/10">
         Invalid or expired verification link.
       </div>
-      <Link
-        href="/login"
-        className="block text-text-accent font-medium hover:underline"
-      >
+      <Link href="/login" className="block text-[#2ec4a2] font-medium hover:underline">
         Back to login
       </Link>
     </div>
@@ -61,39 +55,21 @@ function VerifyEmailContent() {
   const token = searchParams.get("token") ?? "";
 
   return (
-    <div data-theme="dark" className="min-h-screen flex items-center justify-center bg-aurora px-4 relative overflow-hidden">
-      <div className="absolute inset-0 bg-grid bg-grid-fade opacity-[0.06]" />
-      <div className="absolute inset-0 bg-aurora-layer" />
-      <div className="grain" />
+    <div data-theme="dark" className="min-h-screen flex items-center justify-center bg-[#0a0a09] px-4 relative overflow-hidden">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-[#2ec4a2]/[0.03] blur-[120px] pointer-events-none" />
 
-      <div className="w-full max-w-[400px] relative z-10 animate-form-enter">
-        {/* Logo */}
+      <div className="w-full max-w-[400px] relative z-10 animate-[fadeSlideIn_0.5s_ease-out]">
         <div className="flex items-center justify-center gap-2.5 mb-10">
-          <div
-            className="w-9 h-9 rounded-xl bg-bg-accent flex items-center justify-center shadow-lg"
-            style={{ boxShadow: "var(--glow)" }}
-          >
-            <svg width="18" height="18" viewBox="0 0 14 14" fill="none">
-              <path
-                d="M2 7h3l2-4 2 8 2-4h3"
-                stroke="var(--text-inverse)"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+          <div className="w-8 h-8 rounded-lg bg-[#2ec4a2] flex items-center justify-center">
+            <svg width="15" height="15" viewBox="0 0 14 14" fill="none">
+              <path d="M2 7h3l2-4 2 8 2-4h3" stroke="#0a0a09" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <span className="text-lg font-semibold text-text-primary tracking-tight">
-            Hookdash
-          </span>
+          <span className="text-lg font-semibold text-[#ececea] tracking-tight">Hookdash</span>
         </div>
 
-        <div className="glass-card rounded-2xl p-7 text-center">
-          <Suspense
-            fallback={
-              <p className="text-text-secondary">Verifying your email...</p>
-            }
-          >
+        <div className="rounded-2xl border border-[#1a1a18] bg-[#0c0c0b] p-7 text-center">
+          <Suspense fallback={<p className="text-[#6b6a65]">Verifying your email...</p>}>
             <VerifyResult token={token} />
           </Suspense>
         </div>

@@ -20,59 +20,39 @@ function InviteContent() {
       await workspaces.acceptInvite(token);
       router.push("/dashboard");
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Failed to accept invite",
-      );
+      setError(err instanceof ApiError ? err.message : "Failed to accept invite");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div data-theme="dark" className="min-h-screen flex items-center justify-center bg-aurora px-4 relative overflow-hidden">
-      <div className="absolute inset-0 bg-grid bg-grid-fade opacity-[0.06]" />
-      <div className="absolute inset-0 bg-aurora-layer" />
-      <div className="grain" />
+    <div data-theme="dark" className="min-h-screen flex items-center justify-center bg-[#0a0a09] px-4 relative overflow-hidden">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-[#2ec4a2]/[0.03] blur-[120px] pointer-events-none" />
 
-      <div className="w-full max-w-[400px] relative z-10 animate-form-enter">
-        {/* Logo */}
+      <div className="w-full max-w-[400px] relative z-10 animate-[fadeSlideIn_0.5s_ease-out]">
         <div className="flex items-center justify-center gap-2.5 mb-10">
-          <div
-            className="w-9 h-9 rounded-xl bg-bg-accent flex items-center justify-center shadow-lg"
-            style={{ boxShadow: "var(--glow)" }}
-          >
-            <svg width="18" height="18" viewBox="0 0 14 14" fill="none">
-              <path
-                d="M2 7h3l2-4 2 8 2-4h3"
-                stroke="var(--text-inverse)"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+          <div className="w-8 h-8 rounded-lg bg-[#2ec4a2] flex items-center justify-center">
+            <svg width="15" height="15" viewBox="0 0 14 14" fill="none">
+              <path d="M2 7h3l2-4 2 8 2-4h3" stroke="#0a0a09" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <span className="text-lg font-semibold text-text-primary tracking-tight">
-            Hookdash
-          </span>
+          <span className="text-lg font-semibold text-[#ececea] tracking-tight">Hookdash</span>
         </div>
 
-        <div className="glass-card rounded-2xl p-7 text-center">
-          <h1 className="text-2xl font-bold text-text-primary tracking-tight mb-2">
-            Workspace Invitation
-          </h1>
-          <p className="text-sm text-text-secondary mb-8">
+        <div className="rounded-2xl border border-[#1a1a18] bg-[#0c0c0b] p-7 text-center">
+          <h1 className="text-2xl font-bold text-[#ececea] tracking-tight mb-2">Workspace Invitation</h1>
+          <p className="text-sm text-[#6b6a65] mb-8">
             You&apos;ve been invited to join a workspace on Hookdash.
           </p>
 
           {error && (
-            <div className="mb-5 px-3.5 py-2.5 rounded-lg bg-bg-error text-text-error text-sm border border-red-200/20 animate-error-in">
+            <div className="mb-5 px-3.5 py-2.5 rounded-lg bg-red-500/5 text-red-400 text-sm border border-red-500/10 animate-[fadeSlideIn_0.2s_ease-out]">
               {error}
             </div>
           )}
 
-          <Button onClick={handleAccept} loading={loading} className="w-full">
-            Accept Invitation
-          </Button>
+          <Button onClick={handleAccept} loading={loading} className="w-full">Accept Invitation</Button>
         </div>
       </div>
     </div>
