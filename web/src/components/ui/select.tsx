@@ -25,10 +25,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             className={`w-full px-3 py-2.5 pr-9 text-sm rounded-lg appearance-none
               bg-bg-secondary text-text-primary
               border border-border-primary
-              focus:outline-none focus:border-border-focus focus:shadow-[0_0_0_3px_var(--glow-accent)]
+              transition-colors duration-150
+              focus:outline-none focus:border-border-focus
               disabled:opacity-50 disabled:cursor-not-allowed
               ${className}`}
-            style={{ transitionProperty: "border-color, box-shadow, background-color", transitionDuration: "200ms", transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
             {...props}
           >
             {options.map((opt) => (

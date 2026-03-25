@@ -31,7 +31,7 @@ export default function DashboardLayout({
 
   return (
     <WebSocketProvider>
-      <div className="flex flex-col h-screen overflow-hidden bg-bg-primary noise">
+      <div className="flex flex-col h-screen overflow-hidden bg-bg-primary">
         <TabRail />
         <main className="flex-1 overflow-y-auto">
           <ErrorBoundary>{children}</ErrorBoundary>

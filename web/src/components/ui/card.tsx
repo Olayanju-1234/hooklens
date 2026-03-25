@@ -2,18 +2,15 @@ interface CardProps {
   children: React.ReactNode;
   className?: string;
   padding?: boolean;
-  glow?: boolean;
 }
 
-export function Card({ children, className = "", padding = true, glow = false }: CardProps) {
+export function Card({ children, className = "", padding = true }: CardProps) {
   return (
     <div
-      className={`bg-bg-secondary border border-border-primary rounded-2xl
-        transition-colors duration-200
+      className={`bg-bg-secondary border border-border-primary rounded-xl
+        transition-colors duration-150
         hover:border-border-secondary
-        ${glow ? "shadow-[0_0_24px_var(--glow-accent)]" : ""}
         ${padding ? "p-5" : ""} ${className}`}
-      style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
     >
       {children}
     </div>
@@ -52,7 +49,7 @@ export function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="px-4 py-4 bg-bg-secondary border border-border-primary rounded-2xl transition-colors duration-200 hover:border-border-secondary">
+    <div className="px-4 py-4 bg-bg-secondary border border-border-primary rounded-xl transition-colors duration-200 hover:border-border-secondary">
       <p className="text-[10px] uppercase tracking-widest text-text-tertiary font-medium">
         {label}
       </p>
