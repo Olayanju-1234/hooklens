@@ -19,6 +19,8 @@ export class SignatureService {
           return secret === signature;
         case 'mono':
           return this.verifyHmac('sha512', secret, rawBody, signature);
+        case 'bags':
+          return this.verifyHmac('sha256', secret, rawBody, signature);
         default:
           return true;
       }
@@ -38,6 +40,7 @@ export class SignatureService {
       paystack: 'x-paystack-signature',
       flutterwave: 'verif-hash',
       mono: 'mono-webhook-secret',
+      bags: 'x-bags-signature',
     };
     const key = headerMap[provider];
     if (!key) return null;

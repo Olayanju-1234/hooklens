@@ -52,5 +52,9 @@ export default () => {
         process.env.GITHUB_CALLBACK_URL ||
         'https://hookdash-api.onrender.com/api/auth/github/callback',
     },
+    bags: {
+      apiKey: process.env.BAGS_API_KEY || '',
+      enabled: process.env.BAGS_RESTREAM_ENABLED === 'true',
+    },
   };
 };

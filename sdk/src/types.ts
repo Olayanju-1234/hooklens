@@ -14,7 +14,7 @@ export interface HookdashConfig {
 export interface Endpoint {
   id: string;
   name: string;
-  provider: 'paystack' | 'flutterwave' | 'mono' | 'custom';
+  provider: 'paystack' | 'flutterwave' | 'mono' | 'bags' | 'custom';
   isActive: boolean;
   forwardUrl: string | null;
   retryMaxAttempts: number;
@@ -66,7 +66,7 @@ export interface Workspace {
 
 export interface CreateEndpointParams {
   name: string;
-  provider?: 'paystack' | 'flutterwave' | 'mono' | 'custom';
+  provider?: 'paystack' | 'flutterwave' | 'mono' | 'bags' | 'custom';
   webhookSecret?: string;
   forwardUrl?: string;
   retryMaxAttempts?: number;
@@ -127,4 +127,4 @@ export interface CreateApiKeyResponse extends ApiKey {
   rawKey: string;
 }
 
-export type WebhookProvider = 'paystack' | 'flutterwave' | 'mono';
+export type WebhookProvider = 'paystack' | 'flutterwave' | 'mono' | 'bags';

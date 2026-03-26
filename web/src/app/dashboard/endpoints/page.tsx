@@ -33,6 +33,7 @@ const providerOptions = [
   { value: "paystack", label: "Paystack" },
   { value: "flutterwave", label: "Flutterwave" },
   { value: "mono", label: "Mono" },
+  { value: "bags", label: "Bags (Solana)" },
   { value: "custom", label: "Custom" },
 ];
 
@@ -431,6 +432,7 @@ function ProviderTag({ provider }: { provider: string }) {
     paystack: "text-emerald-600 bg-emerald-500/10",
     flutterwave: "text-orange-600 bg-orange-500/10",
     mono: "text-blue-600 bg-blue-500/10",
+    bags: "text-purple-600 bg-purple-500/10",
     custom: "text-text-tertiary bg-bg-tertiary",
   };
 

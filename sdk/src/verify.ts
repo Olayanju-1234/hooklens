@@ -46,6 +46,14 @@ export const verify = {
   },
 
   /**
+   * Verify a Bags webhook signature.
+   * Bags events forwarded by Hookdash use HMAC-SHA256 in the `x-bags-signature` header.
+   */
+  bags(rawBody: string, signature: string, secret: string): boolean {
+    return hmacVerify('sha256', rawBody, signature, secret);
+  },
+
+  /**
    * Generic HMAC verification for custom providers.
    */
   hmac(
@@ -84,6 +92,11 @@ export const verify = {
     const monoSig = get('mono-webhook-secret');
     if (monoSig) {
       return { provider: 'mono', valid: verify.mono(rawBody, monoSig, secret) };
+    }
+
+    const bagsSig = get('x-bags-signature');
+    if (bagsSig) {
+      return { provider: 'bags', valid: verify.bags(rawBody, bagsSig, secret) };
     }
 
     return { provider: 'unknown', valid: false };

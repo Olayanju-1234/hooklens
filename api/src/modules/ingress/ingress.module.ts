@@ -21,5 +21,6 @@ import { AlertingModule } from '../alerting/alerting.module.js';
   ],
   controllers: [IngressController],
   providers: [IngressService],
+  exports: [IngressService],
 })
 export class IngressModule {}

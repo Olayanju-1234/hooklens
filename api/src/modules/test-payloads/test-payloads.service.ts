@@ -540,6 +540,68 @@ const MONO_TEMPLATES: PayloadTemplate[] = [
   },
 ];
 
+const BAGS_TEMPLATES: PayloadTemplate[] = [
+  {
+    eventType: 'launchpad_launch.BAGS',
+    description: 'New token launched on Bags',
+    build: () => ({
+      topic: 'launchpad_launch',
+      subject: 'BAGS',
+      channel: 'launchpad_launch.BAGS',
+      data: {
+        mint: `${randomHex(32)}`,
+        name: `TestToken${randomInt(100, 999)}`,
+        symbol: `TT${randomInt(10, 99)}`,
+        uri: `https://arweave.net/${randomHex(43)}`,
+        creator: `${randomHex(32)}`,
+        initialBuy: randomInt(100000, 10000000),
+        signature: `${randomHex(64)}`,
+        timestamp: Math.floor(Date.now() / 1000),
+      },
+      receivedAt: timestamp(),
+    }),
+  },
+  {
+    eventType: 'launchpad_launch.BAGS.swap',
+    description: 'Token swap on Bags',
+    build: () => ({
+      topic: 'launchpad_launch',
+      subject: 'BAGS',
+      channel: 'launchpad_launch.BAGS',
+      data: {
+        mint: `${randomHex(32)}`,
+        type: 'swap',
+        side: Math.random() > 0.5 ? 'buy' : 'sell',
+        amount: randomInt(10000, 50000000),
+        price: (Math.random() * 0.01).toFixed(8),
+        maker: `${randomHex(32)}`,
+        signature: `${randomHex(64)}`,
+        timestamp: Math.floor(Date.now() / 1000),
+      },
+      receivedAt: timestamp(),
+    }),
+  },
+  {
+    eventType: 'launchpad_launch.BAGS.claim',
+    description: 'Fee claim event on Bags',
+    build: () => ({
+      topic: 'launchpad_launch',
+      subject: 'BAGS',
+      channel: 'launchpad_launch.BAGS',
+      data: {
+        mint: `${randomHex(32)}`,
+        type: 'claim',
+        wallet: `${randomHex(32)}`,
+        amount: `${randomInt(1000000, 100000000)}`,
+        isCreator: Math.random() > 0.5,
+        signature: `${randomHex(64)}`,
+        timestamp: Math.floor(Date.now() / 1000),
+      },
+      receivedAt: timestamp(),
+    }),
+  },
+];
+
 const PROVIDER_MAP: Record<
   string,
   { displayName: string; templates: PayloadTemplate[] }
@@ -547,6 +609,7 @@ const PROVIDER_MAP: Record<
   paystack: { displayName: 'Paystack', templates: PAYSTACK_TEMPLATES },
   flutterwave: { displayName: 'Flutterwave', templates: FLUTTERWAVE_TEMPLATES },
   mono: { displayName: 'Mono', templates: MONO_TEMPLATES },
+  bags: { displayName: 'Bags (Solana)', templates: BAGS_TEMPLATES },
 };
 
 @Injectable()

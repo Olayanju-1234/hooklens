@@ -39,6 +39,7 @@ import { EmailModule } from './modules/email/email.module.js';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
 import { DeadLetterModule } from './modules/dead-letter/dead-letter.module.js';
+import { BagsModule } from './modules/bags/bags.module.js';
 
 @Module({
   imports: [
@@ -132,6 +133,7 @@ import { DeadLetterModule } from './modules/dead-letter/dead-letter.module.js';
     ApiKeysModule,
     AuditModule,
     DeadLetterModule,
+    BagsModule,
   ],
   providers: [
     {

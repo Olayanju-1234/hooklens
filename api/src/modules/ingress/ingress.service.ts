@@ -260,6 +260,11 @@ export class IngressService {
         return (body.event as string) ?? (body['event.type'] as string) ?? null;
       case 'mono':
         return (body.event as string) ?? null;
+      case 'bags': {
+        const topic = body.topic as string | undefined;
+        const subject = body.subject as string | undefined;
+        return topic ? `${topic}${subject ? `.${subject}` : ''}` : null;
+      }
       default:
         return (body.event as string) ?? (body.type as string) ?? null;
     }
@@ -281,6 +286,10 @@ export class IngressService {
       }
       case 'mono':
         return (body.id as string) ?? null;
+      case 'bags': {
+        const data = body.data as Record<string, unknown> | undefined;
+        return (data?.mint as string) ?? (data?.signature as string) ?? null;
+      }
       default:
         return (body.id as string) ?? (body.idempotency_key as string) ?? null;
     }
