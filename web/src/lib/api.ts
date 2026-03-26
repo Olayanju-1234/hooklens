@@ -587,6 +587,28 @@ export const apiKeys = {
     request<void>(`/api-keys/${id}`, { method: "DELETE" }),
 };
 
+// Bags
+export interface BagsStatus {
+  connected: boolean;
+  uptime: number;
+  totalEventsReceived: number;
+  eventsForwarded: number;
+  eventsFiltered: number;
+  launchesDetected: number;
+  recentTokens: { mint: string; name: string; symbol: string; creator: string; timestamp: string }[];
+}
+
+export interface BagsEventStats {
+  total: number;
+  last24h: number;
+  byEventType: Record<string, number>;
+}
+
+export const bags = {
+  status: () => request<BagsStatus>("/bags/status"),
+  eventStats: () => request<BagsEventStats>("/bags/events/stats"),
+};
+
 // Event Export
 export const eventExport = {
   csvUrl: (params?: Record<string, string>) => {

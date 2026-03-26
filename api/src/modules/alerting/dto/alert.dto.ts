@@ -88,10 +88,27 @@ export class CreateAlertRuleDto {
   @ApiProperty({
     description: 'Type of alert trigger',
     example: 'forward_failure',
-    enum: ['forward_failure', 'signature_failure', 'no_events'],
+    enum: [
+      'forward_failure',
+      'signature_failure',
+      'no_events',
+      'bags_fee_claim',
+      'bags_token_launch',
+    ],
   })
-  @IsIn(['forward_failure', 'signature_failure', 'no_events'])
-  type!: 'forward_failure' | 'signature_failure' | 'no_events';
+  @IsIn([
+    'forward_failure',
+    'signature_failure',
+    'no_events',
+    'bags_fee_claim',
+    'bags_token_launch',
+  ])
+  type!:
+    | 'forward_failure'
+    | 'signature_failure'
+    | 'no_events'
+    | 'bags_fee_claim'
+    | 'bags_token_launch';
 
   @ApiProperty({
     description: 'Rule-specific configuration',
@@ -121,11 +138,28 @@ export class UpdateAlertRuleDto {
   @ApiPropertyOptional({
     description: 'Updated alert trigger type',
     example: 'signature_failure',
-    enum: ['forward_failure', 'signature_failure', 'no_events'],
+    enum: [
+      'forward_failure',
+      'signature_failure',
+      'no_events',
+      'bags_fee_claim',
+      'bags_token_launch',
+    ],
   })
   @IsOptional()
-  @IsIn(['forward_failure', 'signature_failure', 'no_events'])
-  type?: 'forward_failure' | 'signature_failure' | 'no_events';
+  @IsIn([
+    'forward_failure',
+    'signature_failure',
+    'no_events',
+    'bags_fee_claim',
+    'bags_token_launch',
+  ])
+  type?:
+    | 'forward_failure'
+    | 'signature_failure'
+    | 'no_events'
+    | 'bags_fee_claim'
+    | 'bags_token_launch';
 
   @ApiPropertyOptional({
     description: 'Updated rule configuration',

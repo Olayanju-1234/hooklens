@@ -298,6 +298,79 @@ export class AlertingService {
     }
   }
 
+  // ─── Bags Alerts ─────────────────────────────────────────
+
+  async evaluateBagsFeeClaim(
+    workspaceId: string,
+    wallet: string,
+    claimableSol: number,
+    positionCount: number,
+  ): Promise<void> {
+    const rules = await this.ruleRepo.find({
+      where: { workspaceId, type: 'bags_fee_claim', isActive: true },
+      relations: ['channels'],
+    });
+    if (rules.length === 0) return;
+
+    for (const rule of rules) {
+      const minSol =
+        (rule.config['minClaimableSol'] as number | undefined) ?? 0;
+      if (claimableSol < minSol) continue;
+
+      const message =
+        `💰 [Hookdash × Bags] Fee claim available!\n` +
+        `Wallet: ${wallet.slice(0, 8)}...${wallet.slice(-4)}\n` +
+        `Claimable: ${claimableSol.toFixed(4)} SOL across ${positionCount} position${positionCount === 1 ? '' : 's'}\n` +
+        `Claim at: https://bags.fm`;
+
+      const notifications = rule.channels
+        .filter((ch) => ch.isActive)
+        .map(async (channel) => {
+          await this.sendNotification(channel, message);
+          await this.recordHistory(rule.id, channel.id, {
+            type: 'bags_fee_claim',
+            wallet,
+            claimableSol,
+            positionCount,
+            message,
+          });
+        });
+      await Promise.all(notifications);
+    }
+  }
+
+  async evaluateBagsTokenLaunch(
+    workspaceId: string,
+    token: { mint: string; name: string; symbol: string; creator: string },
+  ): Promise<void> {
+    const rules = await this.ruleRepo.find({
+      where: { workspaceId, type: 'bags_token_launch', isActive: true },
+      relations: ['channels'],
+    });
+    if (rules.length === 0) return;
+
+    const message =
+      `🚀 [Hookdash × Bags] New token launched!\n` +
+      `Name: ${token.name} ($${token.symbol})\n` +
+      `Mint: ${token.mint.slice(0, 8)}...${token.mint.slice(-4)}\n` +
+      `Creator: ${token.creator.slice(0, 8)}...${token.creator.slice(-4)}\n` +
+      `View: https://bags.fm/${token.mint}`;
+
+    const notifications = rules.flatMap((rule) =>
+      rule.channels
+        .filter((ch) => ch.isActive)
+        .map(async (channel) => {
+          await this.sendNotification(channel, message);
+          await this.recordHistory(rule.id, channel.id, {
+            type: 'bags_token_launch',
+            ...token,
+            message,
+          });
+        }),
+    );
+    await Promise.all(notifications);
+  }
+
   // ─── Notification Dispatch ─────────────────────────────
 
   async sendNotification(

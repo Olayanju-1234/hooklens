@@ -14,7 +14,9 @@ import { AlertChannel } from './alert-channel.entity.js';
 export type AlertRuleType =
   | 'forward_failure'
   | 'signature_failure'
-  | 'no_events';
+  | 'no_events'
+  | 'bags_fee_claim'
+  | 'bags_token_launch';
 
 @Entity('alert_rules')
 export class AlertRule {

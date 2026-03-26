@@ -17,6 +17,7 @@ const primaryTabs = [
 ];
 
 const secondaryTabs = [
+  { label: "Bags", href: "/dashboard/bags" },
   { label: "Test", href: "/dashboard/test" },
   { label: "Transforms", href: "/dashboard/transforms" },
   { label: "Alerts", href: "/dashboard/alerts" },
