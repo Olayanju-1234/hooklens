@@ -24,19 +24,19 @@ interface ChannelForm {
   type: ChannelType;
   name: string;
   webhookUrl: string;
-  emailAddress: string;
+  email: string;
 }
 
 const emptyChannelForm: ChannelForm = {
   type: "slack",
   name: "",
   webhookUrl: "",
-  emailAddress: "",
+  email: "",
 };
 
 interface RuleForm {
   name: string;
-  type: "forward_failure" | "signature_failure" | "no_events";
+  type: "forward_failure" | "signature_failure" | "no_events" | "bags_fee_claim" | "bags_token_launch";
   channelIds: string[];
   thresholdMinutes: string;
 }
@@ -58,6 +58,8 @@ const ruleTypeOptions = [
   { value: "forward_failure", label: "Forward Failure" },
   { value: "signature_failure", label: "Signature Failure" },
   { value: "no_events", label: "No Events" },
+  { value: "bags_fee_claim", label: "Bags Fee Claim" },
+  { value: "bags_token_launch", label: "Bags Token Launch" },
 ];
 
 function ChannelTypeIcon({ type }: { type: string }) {
@@ -179,7 +181,7 @@ export default function AlertsPage() {
       type: ch.type,
       name: ch.name,
       webhookUrl: ch.config.webhookUrl || "",
-      emailAddress: ch.config.emailAddress || "",
+      email: ch.config.email || "",
     });
     setEditingChannelId(ch.id);
     setChannelError("");
@@ -193,7 +195,7 @@ export default function AlertsPage() {
     try {
       const config: Record<string, string> =
         channelForm.type === "email"
-          ? { emailAddress: channelForm.emailAddress }
+          ? { email: channelForm.email }
           : { webhookUrl: channelForm.webhookUrl };
 
       if (editingChannelId) {
@@ -420,11 +422,11 @@ export default function AlertsPage() {
                   <Input
                     label="Email Address"
                     type="email"
-                    value={channelForm.emailAddress}
+                    value={channelForm.email}
                     onChange={(e) =>
                       setChannelForm((f) => ({
                         ...f,
-                        emailAddress: e.target.value,
+                        email: e.target.value,
                       }))
                     }
                     placeholder="alerts@yourteam.com"
