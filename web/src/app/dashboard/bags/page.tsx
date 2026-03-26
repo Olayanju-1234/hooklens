@@ -5,16 +5,6 @@ import { bags as bagsApi, BagsStatus, BagsEventStats } from "@/lib/api";
 import { Card, CardHeader, StatCard } from "@/components/ui/card";
 import { useFadeIn } from "@/hooks/use-gsap";
 
-function formatUptime(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
 export default function BagsPage() {
   const [status, setStatus] = useState<BagsStatus | null>(null);
   const [eventStats, setEventStats] = useState<BagsEventStats | null>(null);
@@ -45,6 +35,8 @@ export default function BagsPage() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
+  const st = status?.stats;
+
   return (
     <div ref={contentRef} className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full">
       {/* Header */}
@@ -71,13 +63,8 @@ export default function BagsPage() {
               <span className={`relative inline-flex rounded-full h-2 w-2 ${status.connected ? "bg-emerald-500" : "bg-red-500"}`} />
             </span>
             <span className={`text-xs font-medium ${status.connected ? "text-emerald-500" : "text-red-500"}`}>
-              {status.connected ? "Connected" : "Disconnected"}
+              {status.connected ? "Connected" : status.enabled ? "Disconnected" : "Disabled"}
             </span>
-            {status.connected && status.uptime > 0 && (
-              <span className="text-[10px] text-text-tertiary">
-                ({formatUptime(status.uptime)})
-              </span>
-            )}
           </div>
         )}
       </div>
@@ -93,19 +80,19 @@ export default function BagsPage() {
         <div className="flex items-center justify-center h-64">
           <div className="w-5 h-5 border-2 border-border-secondary border-t-text-accent rounded-full animate-spin" />
         </div>
-      ) : status ? (
+      ) : status && st ? (
         <>
           {/* Stats row */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-            <StatCard label="Events Received" value={status.totalEventsReceived.toLocaleString()} />
-            <StatCard label="Forwarded" value={status.eventsForwarded.toLocaleString()} />
-            <StatCard label="Filtered" value={status.eventsFiltered.toLocaleString()} />
-            <StatCard label="Launches Detected" value={status.launchesDetected.toLocaleString()} />
+            <StatCard label="Events Received" value={st.totalEventsReceived.toLocaleString()} />
+            <StatCard label="Forwarded" value={st.totalEventsForwarded.toLocaleString()} />
+            <StatCard label="Filtered" value={st.totalEventsFiltered.toLocaleString()} />
+            <StatCard label="Launches Detected" value={st.launchesDetected.toLocaleString()} />
             <StatCard
               label="Forward Rate"
               value={
-                status.totalEventsReceived > 0
-                  ? `${((status.eventsForwarded / status.totalEventsReceived) * 100).toFixed(1)}%`
+                st.totalEventsReceived > 0
+                  ? `${((st.totalEventsForwarded / st.totalEventsReceived) * 100).toFixed(1)}%`
                   : "—"
               }
             />
@@ -117,10 +104,10 @@ export default function BagsPage() {
               <div className="p-5 pb-0">
                 <CardHeader
                   title="Recent Token Launches"
-                  description={`${status.recentTokens.length} most recent tokens detected`}
+                  description={`${st.recentTokens.length} most recent tokens detected`}
                 />
               </div>
-              {status.recentTokens.length === 0 ? (
+              {st.recentTokens.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-xs text-text-tertiary">
                   No token launches detected yet
                 </div>
@@ -137,7 +124,7 @@ export default function BagsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {status.recentTokens.map((t, i) => (
+                      {st.recentTokens.map((t, i) => (
                         <tr key={t.mint + i} className="border-b border-border-primary last:border-0 hover:bg-bg-hover transition-colors">
                           <td className="px-5 py-3 text-[13px] text-text-primary font-medium">{t.name}</td>
                           <td className="px-5 py-3">
@@ -152,7 +139,7 @@ export default function BagsPage() {
                             {t.creator.slice(0, 8)}...{t.creator.slice(-4)}
                           </td>
                           <td className="px-5 py-3 text-[12px] text-text-tertiary text-right whitespace-nowrap">
-                            {new Date(t.timestamp).toLocaleTimeString()}
+                            {new Date(t.receivedAt).toLocaleTimeString()}
                           </td>
                         </tr>
                       ))}
@@ -174,31 +161,29 @@ export default function BagsPage() {
                     </span>
                   }
                 />
-                {Object.keys(eventStats.byEventType).length === 0 ? (
+                {eventStats.byEventType.length === 0 ? (
                   <div className="flex items-center justify-center h-24 text-xs text-text-tertiary">
                     No events recorded yet
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {Object.entries(eventStats.byEventType)
-                      .sort(([, a], [, b]) => b - a)
-                      .map(([type, count]) => {
-                        const pct = eventStats.total > 0 ? (count / eventStats.total) * 100 : 0;
-                        return (
-                          <div key={type}>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-[12px] font-mono text-text-secondary">{type}</span>
-                              <span className="text-[12px] font-mono text-text-tertiary tabular-nums">{count}</span>
-                            </div>
-                            <div className="h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-purple-500 transition-all duration-500"
-                                style={{ width: `${Math.max(pct, 2)}%` }}
-                              />
-                            </div>
+                    {eventStats.byEventType.map(({ eventType, count }) => {
+                      const pct = eventStats.total > 0 ? (count / eventStats.total) * 100 : 0;
+                      return (
+                        <div key={eventType}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[12px] font-mono text-text-secondary">{eventType}</span>
+                            <span className="text-[12px] font-mono text-text-tertiary tabular-nums">{count}</span>
                           </div>
-                        );
-                      })}
+                          <div className="h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-purple-500 transition-all duration-500"
+                              style={{ width: `${Math.max(pct, 2)}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </Card>
@@ -228,6 +213,12 @@ export default function BagsPage() {
                   <span className="text-[12px] text-text-tertiary">Signature</span>
                   <span className="text-[12px] font-mono text-text-secondary">HMAC-SHA256</span>
                 </div>
+                {status && !status.connected && status.reconnectAttempts > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] text-text-tertiary">Reconnect Attempts</span>
+                    <span className="text-[12px] font-mono text-amber-500">{status.reconnectAttempts}</span>
+                  </div>
+                )}
               </div>
             </Card>
           </div>

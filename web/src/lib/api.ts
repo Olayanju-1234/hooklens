@@ -589,19 +589,22 @@ export const apiKeys = {
 
 // Bags
 export interface BagsStatus {
+  enabled: boolean;
   connected: boolean;
-  uptime: number;
-  totalEventsReceived: number;
-  eventsForwarded: number;
-  eventsFiltered: number;
-  launchesDetected: number;
-  recentTokens: { mint: string; name: string; symbol: string; creator: string; timestamp: string }[];
+  reconnectAttempts: number;
+  stats: {
+    totalEventsReceived: number;
+    totalEventsForwarded: number;
+    totalEventsFiltered: number;
+    launchesDetected: number;
+    recentTokens: { mint: string; name: string; symbol: string; creator: string; receivedAt: string }[];
+  };
 }
 
 export interface BagsEventStats {
   total: number;
   last24h: number;
-  byEventType: Record<string, number>;
+  byEventType: { eventType: string; count: number }[];
 }
 
 export const bags = {
