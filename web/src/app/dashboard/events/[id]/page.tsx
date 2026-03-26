@@ -467,10 +467,10 @@ function DiffTable({ title, diff }: { title: string; diff: Record<string, { old:
                   </span>
                 </td>
                 <td className="px-3 py-1.5 font-mono text-text-secondary max-w-[200px] truncate">
-                  {oldVal !== null && oldVal !== undefined ? String(oldVal) : "\u2014"}
+                  {oldVal !== null && oldVal !== undefined ? (typeof oldVal === "object" ? JSON.stringify(oldVal) : String(oldVal)) : "\u2014"}
                 </td>
                 <td className="px-3 py-1.5 font-mono text-text-secondary max-w-[200px] truncate">
-                  {newVal !== null && newVal !== undefined ? String(newVal) : "\u2014"}
+                  {newVal !== null && newVal !== undefined ? (typeof newVal === "object" ? JSON.stringify(newVal) : String(newVal)) : "\u2014"}
                 </td>
               </tr>
             ))}
