@@ -10,7 +10,13 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { TransformService } from './transform.service.js';
 import {
   CreateTransformRuleDto,
@@ -34,7 +40,10 @@ export class TransformController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new transform rule for an endpoint' })
-  @ApiResponse({ status: 201, description: 'Transform rule created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Transform rule created successfully',
+  })
   @ApiParam({ name: 'endpointId', type: String })
   create(
     @CurrentUser() _user: JwtPayload,
@@ -57,7 +66,10 @@ export class TransformController {
 
   @Patch(':ruleId')
   @ApiOperation({ summary: 'Update a transform rule' })
-  @ApiResponse({ status: 200, description: 'Transform rule updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Transform rule updated successfully',
+  })
   @ApiParam({ name: 'endpointId', type: String })
   @ApiParam({ name: 'ruleId', type: String })
   update(
@@ -70,7 +82,10 @@ export class TransformController {
 
   @Delete(':ruleId')
   @ApiOperation({ summary: 'Delete a transform rule' })
-  @ApiResponse({ status: 200, description: 'Transform rule deleted successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Transform rule deleted successfully',
+  })
   @ApiParam({ name: 'endpointId', type: String })
   @ApiParam({ name: 'ruleId', type: String })
   remove(

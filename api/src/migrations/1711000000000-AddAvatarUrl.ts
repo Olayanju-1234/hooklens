@@ -8,8 +8,6 @@ export class AddAvatarUrl1711000000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE "users" DROP COLUMN "avatarUrl"`,
-    );
+    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "avatarUrl"`);
   }
 }

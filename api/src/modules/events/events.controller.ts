@@ -12,7 +12,13 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response } from 'express';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { EventsService } from './events.service.js';
 import { EventsQueryDto } from './dto/events-query.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
@@ -117,7 +123,10 @@ export class EventsController {
 
   @Get(':id/diff/:otherId')
   @ApiOperation({ summary: 'Compare two events and return their diff' })
-  @ApiResponse({ status: 200, description: 'Returns the diff between two events' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns the diff between two events',
+  })
   @ApiParam({ name: 'id', type: String })
   @ApiParam({ name: 'otherId', type: String })
   diff(

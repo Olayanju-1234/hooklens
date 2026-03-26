@@ -10,7 +10,13 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { ApiKeysService } from './api-keys.service.js';
 import { CreateApiKeyDto } from './dto/api-key.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';

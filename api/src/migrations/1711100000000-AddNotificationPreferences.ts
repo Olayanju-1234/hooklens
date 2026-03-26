@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddNotificationPreferences1711100000000
-  implements MigrationInterface
-{
+export class AddNotificationPreferences1711100000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
       `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "notificationPreferences" jsonb DEFAULT NULL`,

@@ -13,7 +13,13 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { WorkspacesService } from './workspaces.service.js';
 import {
   CreateWorkspaceDto,
@@ -153,7 +159,10 @@ export class WorkspacesController {
 
   @Get(':id/invites')
   @ApiOperation({ summary: 'List pending invitations for a workspace' })
-  @ApiResponse({ status: 200, description: 'Returns list of pending invitations' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns list of pending invitations',
+  })
   @ApiParam({ name: 'id', type: String })
   async listInvites(
     @CurrentUser() user: JwtPayload,

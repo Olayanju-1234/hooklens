@@ -6,7 +6,10 @@ import { AuditController } from './audit.controller.js';
 import { WorkspacesModule } from '../workspaces/workspaces.module.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([AuditLog]), forwardRef(() => WorkspacesModule)],
+  imports: [
+    TypeOrmModule.forFeature([AuditLog]),
+    forwardRef(() => WorkspacesModule),
+  ],
   controllers: [AuditController],
   providers: [AuditService],
   exports: [AuditService],

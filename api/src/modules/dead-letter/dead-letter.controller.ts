@@ -8,7 +8,13 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { DeadLetterService } from './dead-letter.service.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
@@ -22,7 +28,10 @@ export class DeadLetterController {
 
   @Get()
   @ApiOperation({ summary: 'List dead letter entries for an endpoint' })
-  @ApiResponse({ status: 200, description: 'Returns list of dead letter entries' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns list of dead letter entries',
+  })
   @ApiParam({ name: 'endpointId', type: String })
   list(
     @CurrentUser() user: JwtPayload,
@@ -33,7 +42,10 @@ export class DeadLetterController {
 
   @Post(':id/retry')
   @ApiOperation({ summary: 'Retry a dead letter entry' })
-  @ApiResponse({ status: 201, description: 'Dead letter entry retried successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Dead letter entry retried successfully',
+  })
   @ApiParam({ name: 'endpointId', type: String })
   @ApiParam({ name: 'id', type: String })
   retry(
@@ -46,7 +58,10 @@ export class DeadLetterController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Discard a dead letter entry' })
-  @ApiResponse({ status: 200, description: 'Dead letter entry discarded successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Dead letter entry discarded successfully',
+  })
   @ApiParam({ name: 'endpointId', type: String })
   @ApiParam({ name: 'id', type: String })
   discard(

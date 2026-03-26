@@ -11,7 +11,13 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { AlertingService } from './alerting.service.js';
 import {
   CreateAlertChannelDto,
@@ -32,7 +38,10 @@ export class AlertingController {
 
   @Post('alert-channels')
   @ApiOperation({ summary: 'Create a new alert channel' })
-  @ApiResponse({ status: 201, description: 'Alert channel created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Alert channel created successfully',
+  })
   createChannel(
     @Headers('x-workspace-id') workspaceId: string,
     @Body() dto: CreateAlertChannelDto,
@@ -49,7 +58,10 @@ export class AlertingController {
 
   @Patch('alert-channels/:id')
   @ApiOperation({ summary: 'Update an alert channel' })
-  @ApiResponse({ status: 200, description: 'Alert channel updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Alert channel updated successfully',
+  })
   @ApiParam({ name: 'id', type: String })
   updateChannel(
     @Param('id', ParseUUIDPipe) id: string,
@@ -60,7 +72,10 @@ export class AlertingController {
 
   @Delete('alert-channels/:id')
   @ApiOperation({ summary: 'Delete an alert channel' })
-  @ApiResponse({ status: 200, description: 'Alert channel deleted successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Alert channel deleted successfully',
+  })
   @ApiParam({ name: 'id', type: String })
   deleteChannel(@Param('id', ParseUUIDPipe) id: string) {
     return this.alertingService.deleteChannel(id);
@@ -68,7 +83,10 @@ export class AlertingController {
 
   @Post('alert-channels/:id/test')
   @ApiOperation({ summary: 'Send a test notification to an alert channel' })
-  @ApiResponse({ status: 201, description: 'Test notification sent successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Test notification sent successfully',
+  })
   @ApiParam({ name: 'id', type: String })
   testChannel(@Param('id', ParseUUIDPipe) id: string) {
     return this.alertingService.testChannel(id);

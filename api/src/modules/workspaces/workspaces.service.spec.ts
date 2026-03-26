@@ -66,12 +66,10 @@ describe('WorkspacesService', () => {
       mockWorkspaceRepo.create.mockImplementation(
         (data: Partial<Workspace>) => data,
       );
-      mockWorkspaceRepo.save.mockImplementation(
-        (ws: Partial<Workspace>) => ({
-          ...ws,
-          id: 'ws-uuid',
-        }),
-      );
+      mockWorkspaceRepo.save.mockImplementation((ws: Partial<Workspace>) => ({
+        ...ws,
+        id: 'ws-uuid',
+      }));
       mockMemberRepo.create.mockImplementation(
         (data: Partial<WorkspaceMember>) => data,
       );
@@ -137,9 +135,7 @@ describe('WorkspacesService', () => {
     it('should update name and retentionDays', async () => {
       const workspace = { id: 'ws-1', name: 'Old Name', retentionDays: 30 };
       mockWorkspaceRepo.findOne.mockResolvedValue(workspace);
-      mockWorkspaceRepo.save.mockImplementation(
-        (ws: Partial<Workspace>) => ws,
-      );
+      mockWorkspaceRepo.save.mockImplementation((ws: Partial<Workspace>) => ws);
 
       const result = await service.update('ws-1', {
         name: 'New Name',
@@ -153,9 +149,9 @@ describe('WorkspacesService', () => {
     it('should throw NotFoundException when workspace not found', async () => {
       mockWorkspaceRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.update('ws-999', { name: 'Nope' }),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update('ws-999', { name: 'Nope' })).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -173,9 +169,7 @@ describe('WorkspacesService', () => {
     it('should throw NotFoundException when workspace not found', async () => {
       mockWorkspaceRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.remove('ws-999')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.remove('ws-999')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -242,12 +236,10 @@ describe('WorkspacesService', () => {
       mockMemberRepo.create.mockImplementation(
         (data: Partial<WorkspaceMember>) => data,
       );
-      mockMemberRepo.save.mockImplementation(
-        (m: Partial<WorkspaceMember>) => ({
-          ...m,
-          id: 'mem-uuid',
-        }),
-      );
+      mockMemberRepo.save.mockImplementation((m: Partial<WorkspaceMember>) => ({
+        ...m,
+        id: 'mem-uuid',
+      }));
       mockInviteRepo.remove.mockResolvedValue(invite);
 
       const result = await service.acceptInvite('valid-token', 'user-2');
@@ -294,9 +286,9 @@ describe('WorkspacesService', () => {
       });
       mockInviteRepo.remove.mockResolvedValue(invite);
 
-      await expect(
-        service.acceptInvite('token-abc', 'user-2'),
-      ).rejects.toThrow(ConflictException);
+      await expect(service.acceptInvite('token-abc', 'user-2')).rejects.toThrow(
+        ConflictException,
+      );
     });
   });
 
@@ -326,9 +318,9 @@ describe('WorkspacesService', () => {
       mockMemberRepo.findOne.mockResolvedValue(membership);
       mockMemberRepo.count.mockResolvedValue(1);
 
-      await expect(
-        service.removeMember('ws-1', 'user-1'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.removeMember('ws-1', 'user-1')).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should allow removing owner when other owners exist', async () => {
@@ -350,9 +342,9 @@ describe('WorkspacesService', () => {
     it('should throw NotFoundException when member not found', async () => {
       mockMemberRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.removeMember('ws-1', 'user-999'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.removeMember('ws-1', 'user-999')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -395,17 +387,17 @@ describe('WorkspacesService', () => {
         role: 'member',
       });
 
-      await expect(
-        service.assertOwner('ws-1', 'user-1'),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.assertOwner('ws-1', 'user-1')).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('should throw ForbiddenException for non-member', async () => {
       mockMemberRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.assertOwner('ws-1', 'user-999'),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.assertOwner('ws-1', 'user-999')).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 });

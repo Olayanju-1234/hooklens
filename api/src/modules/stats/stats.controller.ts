@@ -1,6 +1,11 @@
 import { Controller, Get, Query, Headers, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { StatsService } from './stats.service.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
@@ -14,7 +19,10 @@ export class StatsController {
 
   @Get()
   @ApiOperation({ summary: 'Get webhook event statistics' })
-  @ApiResponse({ status: 200, description: 'Returns event statistics for the given period' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns event statistics for the given period',
+  })
   getStats(
     @CurrentUser() user: JwtPayload,
     @Headers('x-workspace-id') workspaceId: string | undefined,
@@ -31,6 +39,10 @@ export class StatsController {
     @Headers('x-workspace-id') workspaceId: string | undefined,
     @Query('period') period?: '24h' | '7d' | '30d' | 'all',
   ) {
-    return this.statsService.getLatencyPercentiles(user.sub, period ?? '7d', workspaceId);
+    return this.statsService.getLatencyPercentiles(
+      user.sub,
+      period ?? '7d',
+      workspaceId,
+    );
   }
 }

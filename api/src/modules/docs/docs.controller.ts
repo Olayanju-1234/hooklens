@@ -11,7 +11,10 @@ export class DocsController {
 
   @Get('providers')
   @ApiOperation({ summary: 'List all supported webhook providers' })
-  @ApiResponse({ status: 200, description: 'Returns list of supported providers' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns list of supported providers',
+  })
   getProviders() {
     return this.docsService.getProviders();
   }

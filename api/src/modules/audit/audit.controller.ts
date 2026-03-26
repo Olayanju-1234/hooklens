@@ -1,6 +1,11 @@
 import { Controller, Get, Headers, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { AuditService } from './audit.service.js';
 import { WorkspaceGuard } from '../workspaces/guards/workspace.guard.js';
 
@@ -13,7 +18,10 @@ export class AuditController {
 
   @Get()
   @ApiOperation({ summary: 'List audit log entries for the workspace' })
-  @ApiResponse({ status: 200, description: 'Returns paginated audit log entries' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns paginated audit log entries',
+  })
   list(
     @Headers('x-workspace-id') workspaceId: string,
     @Query('limit') limit?: string,

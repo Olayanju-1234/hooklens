@@ -131,9 +131,9 @@ describe('DeadLetterService', () => {
     it('should throw NotFoundException when endpoint not found', async () => {
       mockEndpointRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.retry('ep-999', 'dl-1', 'user-1'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.retry('ep-999', 'dl-1', 'user-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should throw NotFoundException when dead letter not found', async () => {
@@ -143,9 +143,9 @@ describe('DeadLetterService', () => {
       });
       mockDeadLetterRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.retry('ep-1', 'dl-999', 'user-1'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.retry('ep-1', 'dl-999', 'user-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -166,9 +166,9 @@ describe('DeadLetterService', () => {
     it('should throw NotFoundException when endpoint not found', async () => {
       mockEndpointRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.discard('ep-999', 'dl-1', 'user-1'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.discard('ep-999', 'dl-1', 'user-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should throw NotFoundException when dead letter not found', async () => {
@@ -178,9 +178,9 @@ describe('DeadLetterService', () => {
       });
       mockDeadLetterRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.discard('ep-1', 'dl-999', 'user-1'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.discard('ep-1', 'dl-999', 'user-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

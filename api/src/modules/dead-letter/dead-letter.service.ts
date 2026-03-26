@@ -34,11 +34,7 @@ export class DeadLetterService {
     });
   }
 
-  async retry(
-    endpointId: string,
-    id: string,
-    userId: string,
-  ): Promise<void> {
+  async retry(endpointId: string, id: string, userId: string): Promise<void> {
     const endpoint = await this.endpointRepo.findOne({
       where: { id: endpointId, userId },
     });
@@ -62,11 +58,7 @@ export class DeadLetterService {
     );
   }
 
-  async discard(
-    endpointId: string,
-    id: string,
-    userId: string,
-  ): Promise<void> {
+  async discard(endpointId: string, id: string, userId: string): Promise<void> {
     const endpoint = await this.endpointRepo.findOne({
       where: { id: endpointId, userId },
     });

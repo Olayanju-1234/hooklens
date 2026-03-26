@@ -12,7 +12,13 @@ import {
   Logger,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { EndpointsService } from './endpoints.service.js';
 import { CreateEndpointDto, UpdateEndpointDto } from './dto/endpoint.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';

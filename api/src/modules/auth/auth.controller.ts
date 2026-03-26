@@ -13,7 +13,12 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response, Request } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { AuthService } from './auth.service.js';
 import {
   SignupDto,
@@ -47,7 +52,10 @@ export class AuthController {
   @Post('login')
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @ApiOperation({ summary: 'Log in with email and password' })
-  @ApiResponse({ status: 201, description: 'Login successful, returns access token' })
+  @ApiResponse({
+    status: 201,
+    description: 'Login successful, returns access token',
+  })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
@@ -102,10 +110,7 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update avatar URL for the authenticated user' })
   @ApiResponse({ status: 200, description: 'Avatar updated successfully' })
-  updateAvatar(
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: UpdateAvatarDto,
-  ) {
+  updateAvatar(@CurrentUser() user: JwtPayload, @Body() dto: UpdateAvatarDto) {
     return this.authService.updateAvatar(user.sub, dto);
   }
 
@@ -133,7 +138,10 @@ export class AuthController {
   @Get('google')
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Initiate Google OAuth login' })
-  @ApiResponse({ status: 200, description: 'Redirects to Google OAuth consent screen' })
+  @ApiResponse({
+    status: 200,
+    description: 'Redirects to Google OAuth consent screen',
+  })
   googleLogin() {
     // Passport redirects to Google
   }
@@ -141,7 +149,10 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Google OAuth callback' })
-  @ApiResponse({ status: 200, description: 'Redirects to app with access token' })
+  @ApiResponse({
+    status: 200,
+    description: 'Redirects to app with access token',
+  })
   async googleCallback(@Req() req: Request, @Res() res: Response) {
     const user = req.user as { email: string };
     const result = await this.authService.findOrCreateOAuthUser({
@@ -160,7 +171,10 @@ export class AuthController {
   @Get('github')
   @UseGuards(AuthGuard('github'))
   @ApiOperation({ summary: 'Initiate GitHub OAuth login' })
-  @ApiResponse({ status: 200, description: 'Redirects to GitHub OAuth consent screen' })
+  @ApiResponse({
+    status: 200,
+    description: 'Redirects to GitHub OAuth consent screen',
+  })
   githubLogin() {
     // Passport redirects to GitHub
   }
@@ -168,7 +182,10 @@ export class AuthController {
   @Get('github/callback')
   @UseGuards(AuthGuard('github'))
   @ApiOperation({ summary: 'GitHub OAuth callback' })
-  @ApiResponse({ status: 200, description: 'Redirects to app with access token' })
+  @ApiResponse({
+    status: 200,
+    description: 'Redirects to app with access token',
+  })
   async githubCallback(@Req() req: Request, @Res() res: Response) {
     const user = req.user as { email: string };
     const result = await this.authService.findOrCreateOAuthUser({

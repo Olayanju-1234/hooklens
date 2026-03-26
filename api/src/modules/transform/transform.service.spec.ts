@@ -35,12 +35,10 @@ describe('TransformService', () => {
       mockRuleRepo.create.mockImplementation(
         (data: Partial<TransformRule>) => data,
       );
-      mockRuleRepo.save.mockImplementation(
-        (rule: Partial<TransformRule>) => ({
-          ...rule,
-          id: 'rule-uuid',
-        }),
-      );
+      mockRuleRepo.save.mockImplementation((rule: Partial<TransformRule>) => ({
+        ...rule,
+        id: 'rule-uuid',
+      }));
 
       const result = await service.create('ep-1', {
         name: 'Normalize payload',
@@ -57,12 +55,10 @@ describe('TransformService', () => {
       mockRuleRepo.create.mockImplementation(
         (data: Partial<TransformRule>) => data,
       );
-      mockRuleRepo.save.mockImplementation(
-        (rule: Partial<TransformRule>) => ({
-          ...rule,
-          id: 'rule-uuid',
-        }),
-      );
+      mockRuleRepo.save.mockImplementation((rule: Partial<TransformRule>) => ({
+        ...rule,
+        id: 'rule-uuid',
+      }));
 
       const result = await service.create('ep-1', {
         name: 'High priority rule',
@@ -102,9 +98,7 @@ describe('TransformService', () => {
         priority: 0,
       };
       mockRuleRepo.findOne.mockResolvedValue(rule);
-      mockRuleRepo.save.mockImplementation(
-        (r: Partial<TransformRule>) => r,
-      );
+      mockRuleRepo.save.mockImplementation((r: Partial<TransformRule>) => r);
 
       const result = await service.update('r-1', {
         name: 'Updated Name',
@@ -118,9 +112,9 @@ describe('TransformService', () => {
     it('should throw NotFoundException when rule not found', async () => {
       mockRuleRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.update('r-999', { name: 'Nope' }),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update('r-999', { name: 'Nope' })).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -138,9 +132,7 @@ describe('TransformService', () => {
     it('should throw NotFoundException when rule not found', async () => {
       mockRuleRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.remove('r-999')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.remove('r-999')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -158,9 +150,7 @@ describe('TransformService', () => {
       mockRuleRepo.find.mockResolvedValue([
         {
           id: 'r-1',
-          operations: [
-            { type: 'rename', path: 'amount', newPath: 'total' },
-          ],
+          operations: [{ type: 'rename', path: 'amount', newPath: 'total' }],
         },
       ]);
 
@@ -196,9 +186,7 @@ describe('TransformService', () => {
       mockRuleRepo.find.mockResolvedValue([
         {
           id: 'r-1',
-          operations: [
-            { type: 'set', path: 'source', value: 'webhook' },
-          ],
+          operations: [{ type: 'set', path: 'source', value: 'webhook' }],
         },
       ]);
 
@@ -212,9 +200,7 @@ describe('TransformService', () => {
       mockRuleRepo.find.mockResolvedValue([
         {
           id: 'r-1',
-          operations: [
-            { type: 'copy', path: 'data.id', newPath: 'refId' },
-          ],
+          operations: [{ type: 'copy', path: 'data.id', newPath: 'refId' }],
         },
       ]);
 
@@ -231,16 +217,12 @@ describe('TransformService', () => {
         {
           id: 'r-1',
           priority: 0,
-          operations: [
-            { type: 'rename', path: 'amount', newPath: 'total' },
-          ],
+          operations: [{ type: 'rename', path: 'amount', newPath: 'total' }],
         },
         {
           id: 'r-2',
           priority: 1,
-          operations: [
-            { type: 'set', path: 'processed', value: true },
-          ],
+          operations: [{ type: 'set', path: 'processed', value: true }],
         },
       ]);
 

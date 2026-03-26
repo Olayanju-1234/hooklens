@@ -17,7 +17,10 @@ export class IngressController {
 
   @Post(':slug')
   @ApiOperation({ summary: 'Receive an incoming webhook event' })
-  @ApiResponse({ status: 200, description: 'Webhook received and acknowledged' })
+  @ApiResponse({
+    status: 200,
+    description: 'Webhook received and acknowledged',
+  })
   @ApiParam({ name: 'slug', type: String })
   async receive(
     @Param('slug') slug: string,

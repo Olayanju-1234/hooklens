@@ -23,15 +23,14 @@ export const envValidationSchema = Joi.object({
   REDIS_PORT: Joi.number().default(6379),
 
   // ── JWT (required in production) ───────────────────────────────────
-  JWT_SECRET: Joi.string()
-    .when('NODE_ENV', {
-      is: 'production',
-      then: Joi.string().min(32).required().messages({
-        'string.min': 'JWT_SECRET must be at least 32 characters in production',
-        'any.required': 'JWT_SECRET is required in production',
-      }),
-      otherwise: Joi.string().default('dev-jwt-secret'),
+  JWT_SECRET: Joi.string().when('NODE_ENV', {
+    is: 'production',
+    then: Joi.string().min(32).required().messages({
+      'string.min': 'JWT_SECRET must be at least 32 characters in production',
+      'any.required': 'JWT_SECRET is required in production',
     }),
+    otherwise: Joi.string().default('dev-jwt-secret'),
+  }),
   JWT_EXPIRY: Joi.string().default('7d'),
 
   // ── Email ──────────────────────────────────────────────────────────

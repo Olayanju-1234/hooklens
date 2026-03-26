@@ -37,7 +37,10 @@ export class HealthController {
 
   @Get()
   @ApiOperation({ summary: 'Check API and dependency health status' })
-  @ApiResponse({ status: 200, description: 'Returns health status of database and Redis' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns health status of database and Redis',
+  })
   async check() {
     const [dbHealthy, redisHealthy] = await Promise.all([
       this.checkDatabase(),
@@ -73,9 +76,7 @@ export class HealthController {
       await this.redis.ping();
       return true;
     } catch (err) {
-      this.logger.error(
-        `Redis health check failed: ${(err as Error).message}`,
-      );
+      this.logger.error(`Redis health check failed: ${(err as Error).message}`);
       return false;
     }
   }
