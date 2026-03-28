@@ -14,26 +14,36 @@ const primaryTabs = [
   { label: "Events", href: "/dashboard/events" },
   { label: "Endpoints", href: "/dashboard/endpoints" },
   { label: "Analytics", href: "/dashboard/stats" },
-];
-
-const secondaryTabs = [
   { label: "Bags", href: "/dashboard/bags" },
-  { label: "Test", href: "/dashboard/test" },
-  { label: "Transforms", href: "/dashboard/transforms" },
-  { label: "Alerts", href: "/dashboard/alerts" },
-  { label: "Dead Letter", href: "/dashboard/dead-letter" },
-  { label: "Audit", href: "/dashboard/audit" },
-  { label: "API Keys", href: "/dashboard/api-keys" },
-  { label: "Docs", href: "/dashboard/docs" },
 ];
 
-const allTabs = [...primaryTabs, ...secondaryTabs];
+const secondaryGroups = [
+  {
+    label: "Tools",
+    items: [
+      { label: "Test", href: "/dashboard/test" },
+      { label: "Transforms", href: "/dashboard/transforms" },
+      { label: "Alerts", href: "/dashboard/alerts" },
+      { label: "Dead Letter", href: "/dashboard/dead-letter" },
+    ],
+  },
+  {
+    label: "Config",
+    items: [
+      { label: "Audit", href: "/dashboard/audit" },
+      { label: "API Keys", href: "/dashboard/api-keys" },
+      { label: "Docs", href: "/dashboard/docs" },
+    ],
+  },
+];
+
+const allSecondaryTabs = secondaryGroups.flatMap((g) => g.items);
 
 export function TabRail() {
   const pathname = usePathname();
   const { logout, ingressSlug, currentWorkspaceId, workspaceList, switchWorkspace } = useAuth();
   const { theme, toggle } = useTheme();
-  const { connected } = useWebSocket();
+  const { connected, liveEvents } = useWebSocket();
   const indicatorRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<(HTMLAnchorElement | null)[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -73,7 +83,7 @@ export function TabRail() {
     (t) => pathname === t.href || (t.href !== "/dashboard" && pathname.startsWith(t.href)),
   );
 
-  const isSecondaryActive = secondaryTabs.some(
+  const isSecondaryActive = allSecondaryTabs.some(
     (t) => pathname === t.href || pathname.startsWith(t.href),
   );
 
@@ -81,7 +91,6 @@ export function TabRail() {
     if (!indicatorRef.current || activeIndex === -1) return;
     const activeTab = tabsRef.current[activeIndex];
     if (!activeTab) return;
-
     gsap.to(indicatorRef.current, {
       x: activeTab.offsetLeft,
       width: activeTab.offsetWidth,
@@ -91,7 +100,6 @@ export function TabRail() {
     });
   }, [activeIndex, pathname]);
 
-  // Hide indicator when secondary tab is active
   useEffect(() => {
     if (!indicatorRef.current) return;
     if (isSecondaryActive || activeIndex === -1) {
@@ -99,7 +107,6 @@ export function TabRail() {
     }
   }, [isSecondaryActive, activeIndex]);
 
-  // Close dropdowns on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
@@ -109,6 +116,8 @@ export function TabRail() {
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, []);
+
+  const liveCount = liveEvents.length;
 
   return (
     <header className="relative flex items-center h-12 px-4 sm:px-5 bg-bg-primary border-b border-border-primary shrink-0 z-30">
@@ -124,7 +133,7 @@ export function TabRail() {
       </button>
 
       {/* Logo */}
-      <Link href="/dashboard" className="flex items-center gap-2 mr-6 shrink-0">
+      <Link href="/dashboard" className="flex items-center gap-2 mr-5 shrink-0">
         <div className="w-6 h-6 rounded-md bg-bg-accent flex items-center justify-center">
           <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
             <path d="M2 7h3l2-4 2 8 2-4h3" stroke="var(--text-inverse)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -135,7 +144,9 @@ export function TabRail() {
 
       {/* Primary tabs */}
       <nav className="relative hidden sm:flex items-center h-full">
-        <div ref={indicatorRef} className="absolute bottom-0 left-0 h-[2px] bg-bg-accent rounded-full" style={{ width: 0, opacity: 0 }} />
+        {/* Animated bottom indicator */}
+        <div ref={indicatorRef} className="absolute bottom-0 left-0 h-[2px] bg-bg-accent rounded-full pointer-events-none" style={{ width: 0, opacity: 0 }} />
+
         {primaryTabs.map((tab, i) => {
           const active = i === activeIndex;
           return (
@@ -143,60 +154,79 @@ export function TabRail() {
               key={tab.href}
               href={tab.href}
               ref={(el) => { tabsRef.current[i] = el; }}
-              className={`relative flex items-center h-full px-3 text-[13px] font-medium transition-colors ${
+              className={`relative flex items-center gap-1.5 h-full px-3 text-[13px] font-medium transition-colors ${
                 active ? "text-text-primary" : "text-text-tertiary hover:text-text-secondary"
               }`}
             >
               {tab.label}
+
+              {/* Live tab — connection dot + session event count */}
               {tab.label === "Live" && (
-                <span className="relative flex h-1.5 w-1.5 ml-1.5">
-                  {connected && <span className="animate-pulse-ring absolute inline-flex h-full w-full rounded-full bg-emerald-500" />}
-                  <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
+                <span className="flex items-center gap-1">
+                  <span className="relative flex h-1.5 w-1.5">
+                    {connected && <span className="animate-pulse-ring absolute inline-flex h-full w-full rounded-full bg-emerald-500" />}
+                    <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
+                  </span>
+                  {liveCount > 0 && (
+                    <span className="text-[10px] font-mono tabular-nums text-text-tertiary">{liveCount}</span>
+                  )}
                 </span>
+              )}
+
+              {/* Bags tab — purple dot */}
+              {tab.label === "Bags" && (
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-500 opacity-70" />
               )}
             </Link>
           );
         })}
 
-        {/* More dropdown for secondary tabs */}
+        {/* More dropdown */}
         <div className="relative" data-more-menu>
           <button
             onClick={(e) => { e.stopPropagation(); setMoreOpen(!moreOpen); }}
-            className={`flex items-center h-full px-3 text-[13px] font-medium transition-colors cursor-pointer ${
+            className={`flex items-center gap-1 h-full px-3 text-[13px] font-medium transition-colors cursor-pointer ${
               isSecondaryActive ? "text-text-primary" : "text-text-tertiary hover:text-text-secondary"
             }`}
           >
             More
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="ml-1">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className={`transition-transform duration-200 ${moreOpen ? "rotate-180" : ""}`}>
               <path d="M3 5l3 3 3-3" />
             </svg>
             {deadLetterCount > 0 && (
-              <span className="ml-1 w-1.5 h-1.5 rounded-full bg-red-500" />
+              <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-red-500" />
             )}
           </button>
 
           {moreOpen && (
-            <div className="absolute top-full left-0 mt-1 w-44 py-1 rounded-lg bg-bg-elevated border border-border-primary shadow-lg">
-              {secondaryTabs.map((tab) => {
-                const active = pathname === tab.href || pathname.startsWith(tab.href);
-                return (
-                  <Link
-                    key={tab.href}
-                    href={tab.href}
-                    onClick={() => setMoreOpen(false)}
-                    className={`flex items-center justify-between px-3 py-2 text-[13px] transition-colors ${
-                      active ? "text-text-primary bg-bg-hover" : "text-text-secondary hover:text-text-primary hover:bg-bg-hover"
-                    }`}
-                  >
-                    {tab.label}
-                    {tab.label === "Dead Letter" && deadLetterCount > 0 && (
-                      <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-red-500 text-white leading-none">
-                        {deadLetterCount}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
+            <div className="absolute top-full left-0 mt-1.5 w-52 py-1 rounded-xl bg-bg-elevated border border-border-primary shadow-xl overflow-hidden">
+              {secondaryGroups.map((group, gi) => (
+                <div key={group.label}>
+                  {gi > 0 && <div className="my-1 border-t border-border-primary" />}
+                  <p className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-widest text-text-tertiary font-semibold">{group.label}</p>
+                  {group.items.map((tab) => {
+                    const active = pathname === tab.href || pathname.startsWith(tab.href);
+                    const isDL = tab.label === "Dead Letter";
+                    return (
+                      <Link
+                        key={tab.href}
+                        href={tab.href}
+                        onClick={() => setMoreOpen(false)}
+                        className={`flex items-center justify-between px-3 py-2 text-[13px] transition-colors ${
+                          active ? "text-text-primary bg-bg-hover" : "text-text-secondary hover:text-text-primary hover:bg-bg-hover"
+                        }`}
+                      >
+                        {tab.label}
+                        {isDL && deadLetterCount > 0 && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-mono font-semibold rounded bg-red-500/10 text-red-400 leading-none tabular-nums">
+                            {deadLetterCount}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -217,7 +247,7 @@ export function TabRail() {
           </select>
         )}
 
-        {/* Ingress slug — compact */}
+        {/* Ingress slug */}
         {ingressSlug && (
           <button
             onClick={() => navigator.clipboard.writeText(`${window.location.origin.replace("3001", "3000")}/in/${ingressSlug}`)}
@@ -266,7 +296,7 @@ export function TabRail() {
           </button>
 
           {userMenuOpen && (
-            <div className="absolute top-full right-0 mt-1 w-52 py-1 rounded-lg bg-bg-elevated border border-border-primary shadow-lg">
+            <div className="absolute top-full right-0 mt-1.5 w-52 py-1 rounded-xl bg-bg-elevated border border-border-primary shadow-xl">
               {profile && (
                 <div className="px-3 py-2 border-b border-border-primary">
                   <p className="text-[12px] font-medium text-text-primary truncate">{profile.email}</p>
@@ -297,27 +327,30 @@ export function TabRail() {
         </div>
       </div>
 
-      {/* Mobile dropdown */}
+      {/* Mobile menu */}
       {mobileMenuOpen && (
         <div className="absolute top-12 left-0 right-0 bg-bg-primary border-b border-border-primary shadow-lg z-40 sm:hidden">
           <nav className="flex flex-col py-1">
-            {allTabs.map((tab) => {
+            {[...primaryTabs, ...allSecondaryTabs].map((tab) => {
               const active = pathname === tab.href || (tab.href !== "/dashboard" && pathname.startsWith(tab.href));
+              const isDL = tab.label === "Dead Letter";
               return (
                 <Link
                   key={tab.href}
                   href={tab.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-[13px] font-medium transition-colors ${
+                  className={`flex items-center justify-between px-4 py-2.5 text-[13px] font-medium transition-colors ${
                     active ? "text-text-accent bg-bg-hover" : "text-text-secondary hover:text-text-primary hover:bg-bg-hover"
                   }`}
                 >
-                  {tab.label}
-                  {tab.label === "Dead Letter" && deadLetterCount > 0 && (
-                    <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-red-500 text-white leading-none">{deadLetterCount}</span>
-                  )}
-                  {tab.label === "Live" && (
-                    <span className={`inline-flex rounded-full h-1.5 w-1.5 ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
+                  <span className="flex items-center gap-2">
+                    {tab.label}
+                    {tab.label === "Live" && (
+                      <span className={`inline-flex rounded-full h-1.5 w-1.5 ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
+                    )}
+                  </span>
+                  {isDL && deadLetterCount > 0 && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-mono font-semibold rounded bg-red-500/10 text-red-400 leading-none">{deadLetterCount}</span>
                   )}
                 </Link>
               );
