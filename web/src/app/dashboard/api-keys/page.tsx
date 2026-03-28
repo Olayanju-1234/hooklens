@@ -172,6 +172,11 @@ export default function ApiKeysPage() {
         <EmptyState
           title="No API keys"
           description="Create an API key for programmatic access to your workspace"
+          action={
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              Generate key
+            </Button>
+          }
         />
       ) : (
         <div className="space-y-2">

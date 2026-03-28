@@ -10,7 +10,6 @@ import {
   SignatureBadge,
 } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Onboarding } from "@/components/onboarding";
 import Link from "next/link";
 
@@ -240,24 +239,6 @@ export default function DashboardPage() {
               </div>
             )}
 
-            <EmptyState
-              icon={
-                <svg
-                  width="22"
-                  height="22"
-                  viewBox="0 0 18 18"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                >
-                  <circle cx="9" cy="9" r="2.5" />
-                  <path d="M5.5 4a7 7 0 010 10M12.5 4a7 7 0 000 10" />
-                </svg>
-              }
-              title="Waiting for webhooks"
-              description="Send a webhook to your ingress URL and it will appear here in real time"
-            />
           </div>
         ) : (
           <div className="space-y-1">

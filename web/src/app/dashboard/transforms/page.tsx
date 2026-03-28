@@ -265,6 +265,11 @@ export default function TransformsPage() {
         <EmptyState
           title="No transform rules"
           description="Create rules to rename, remove, or inject fields before forwarding"
+          action={
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              Create rule
+            </Button>
+          }
         />
       ) : (
         <div className="space-y-2">

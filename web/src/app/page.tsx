@@ -261,7 +261,7 @@ export default function LandingPage() {
           </Link>
           <div className="flex items-center gap-6">
             <a
-              href="https://github.com/Olayanju-1234/hooklens"
+              href="https://github.com/Olayanju-1234/hookdash"
               target="_blank"
               rel="noopener noreferrer"
               className="hidden sm:flex items-center gap-1.5 text-xs text-[#6b6a65] hover:text-[#ececea] transition-colors"
@@ -321,7 +321,7 @@ export default function LandingPage() {
               </svg>
             </MagneticButton>
             <MagneticButton
-              href="https://github.com/Olayanju-1234/hooklens"
+              href="https://github.com/Olayanju-1234/hookdash"
               className="px-8 py-4 rounded-xl text-sm font-medium border border-[#222220] text-[#9c9b96] hover:text-[#ececea] hover:border-[#333330] transition-all"
               strength={0.15}
             >
@@ -346,14 +346,8 @@ export default function LandingPage() {
       <section className="border-y border-[#111110] bg-[#080807]">
         <div className="max-w-6xl mx-auto px-6 sm:px-10 py-6">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-[10px] text-[#3a3a36] font-mono uppercase tracking-wider">Live event stream</span>
-            <span className="flex items-center gap-1.5">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-[#2ec4a2] animate-ping opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#2ec4a2]" />
-              </span>
-              <span className="text-[10px] text-[#2ec4a2] font-mono">streaming</span>
-            </span>
+            <span className="text-[10px] text-[#3a3a36] font-mono uppercase tracking-wider">Example event stream</span>
+            <span className="text-[10px] text-[#3a3a36] font-mono">simulated</span>
           </div>
           <div className="border border-[#141413] rounded-xl overflow-hidden divide-y divide-[#0f0f0e]">
             <div className="grid grid-cols-[8px_140px_80px_1fr_52px_48px] gap-3 px-4 py-2 bg-[#0c0c0b]">
@@ -399,13 +393,7 @@ export default function LandingPage() {
               <div className="relative rounded-2xl border border-[#1a1a18] bg-[#0c0c0b] overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a18]">
                   <span className="text-[10px] text-[#4a4a45] font-mono uppercase tracking-wider">incoming events</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="absolute inline-flex h-full w-full rounded-full bg-[#2ec4a2] animate-ping opacity-75" />
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#2ec4a2]" />
-                    </span>
-                    <span className="text-[10px] text-[#2ec4a2] font-mono">live</span>
-                  </div>
+                  <span className="text-[10px] text-[#3a3a36] font-mono">simulated</span>
                 </div>
                 <div className="py-2">
                   <LiveFeed />
@@ -606,7 +594,7 @@ export default function LandingPage() {
               </div>
               <div className="flex flex-col gap-3">
                 <MagneticButton
-                  href="https://github.com/Olayanju-1234/hooklens"
+                  href="https://github.com/Olayanju-1234/hookdash"
                   className="flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl text-sm font-medium border border-[#222220] text-[#ececea] hover:border-[#333330] hover:bg-[#111110] transition-all text-center"
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
@@ -687,7 +675,7 @@ export default function LandingPage() {
             <div>
               <div className="text-[10px] text-[#2a2a28] uppercase tracking-wider font-medium mb-4">Community</div>
               <div className="space-y-2.5">
-                <a href="https://github.com/Olayanju-1234/hooklens" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-[#4a4a45] hover:text-[#ececea] transition-colors">
+                <a href="https://github.com/Olayanju-1234/hookdash" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-[#4a4a45] hover:text-[#ececea] transition-colors">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
                   GitHub
                 </a>

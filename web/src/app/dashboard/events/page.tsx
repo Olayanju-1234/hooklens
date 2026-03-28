@@ -189,7 +189,15 @@ export default function EventsPage() {
           <button onClick={() => fetchEvents()} className="text-xs text-text-accent hover:underline cursor-pointer">Retry</button>
         </div>
       ) : items.length === 0 && !loading ? (
-        <EmptyState title="No events yet" description="Webhook events will appear here once your ingress URL receives requests" />
+        <EmptyState
+          title="No events yet"
+          description="Point your provider's webhook URL at your ingress endpoint and events will appear here in real time."
+          action={
+            <Link href="/dashboard" className="text-xs text-text-accent hover:underline">
+              View your ingress URL
+            </Link>
+          }
+        />
       ) : (
         <div ref={listRef} className="rounded-xl border border-border-primary overflow-hidden bg-bg-secondary divide-y divide-border-primary">
           {/* Column headers */}

@@ -5,9 +5,9 @@ import { Toaster } from "react-hot-toast";
 export function ToastProvider() {
   return (
     <Toaster
-      position="bottom-right"
+      position="bottom-center"
       toastOptions={{
-        duration: 4000,
+        duration: 3000,
         style: {
           background: "var(--bg-elevated)",
           color: "var(--text-primary)",
