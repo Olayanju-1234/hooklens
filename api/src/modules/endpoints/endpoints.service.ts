@@ -30,6 +30,8 @@ export class EndpointsService {
       provider: dto.provider,
       forwardUrl: dto.forwardUrl ?? null,
       webhookSecret: dto.webhookSecret ?? null,
+      retryMaxAttempts: dto.retryMaxAttempts ?? 3,
+      retryBackoffMs: dto.retryBackoffMs ?? 5000,
     });
     const saved = await this.endpointRepo.save(endpoint);
     this.logger.log(`Endpoint created: ${saved.id} for user ${userId}`);

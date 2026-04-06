@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsIn, IsUrl, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsIn, IsUrl, IsBoolean, IsInt, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { Provider } from '../../../entities/endpoint.entity.js';
 
@@ -33,6 +33,24 @@ export class CreateEndpointDto {
   @IsOptional()
   @IsString()
   webhookSecret?: string;
+
+  @ApiPropertyOptional({
+    description: 'Maximum number of retry attempts',
+    example: 5,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  retryMaxAttempts?: number;
+
+  @ApiPropertyOptional({
+    description: 'Backoff delay in milliseconds between retries',
+    example: 10000,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  retryBackoffMs?: number;
 }
 
 export class UpdateEndpointDto {
@@ -67,4 +85,22 @@ export class UpdateEndpointDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Maximum number of retry attempts',
+    example: 5,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  retryMaxAttempts?: number;
+
+  @ApiPropertyOptional({
+    description: 'Backoff delay in milliseconds between retries',
+    example: 10000,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  retryBackoffMs?: number;
 }
