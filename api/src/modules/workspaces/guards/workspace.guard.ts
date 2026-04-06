@@ -22,9 +22,7 @@ export class WorkspaceGuard implements CanActivate {
       return false;
     }
 
-    const workspaceId =
-      (request.params as Record<string, string>)['id'] ??
-      (request.headers['x-workspace-id'] as string | undefined);
+    const workspaceId = request.headers['x-workspace-id'] as string | undefined;
 
     if (!workspaceId) {
       return false;
