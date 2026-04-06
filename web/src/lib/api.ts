@@ -616,16 +616,28 @@ export const bags = {
   eventStats: () => request<BagsEventStats>("/bags/events/stats"),
 };
 
-// Event Export
+// Event Export — must fetch with auth header, then trigger blob download
+async function downloadExport(format: "csv" | "json", params?: Record<string, string>) {
+  const token = Cookies.get("token");
+  const workspaceId = Cookies.get("workspaceId");
+  const query = params ? "?" + new URLSearchParams(params).toString() : "";
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (workspaceId) headers["x-workspace-id"] = workspaceId;
+  const res = await fetch(`${API_URL}/events/export/${format}${query}`, { headers });
+  if (!res.ok) throw new ApiError(res.status, await res.text());
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `events.${format}`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export const eventExport = {
-  csvUrl: (params?: Record<string, string>) => {
-    const query = params ? "?" + new URLSearchParams(params).toString() : "";
-    return `${API_URL}/events/export/csv${query}`;
-  },
-  jsonUrl: (params?: Record<string, string>) => {
-    const query = params ? "?" + new URLSearchParams(params).toString() : "";
-    return `${API_URL}/events/export/json${query}`;
-  },
+  csv: (params?: Record<string, string>) => downloadExport("csv", params),
+  json: (params?: Record<string, string>) => downloadExport("json", params),
 };
 
 export { ApiError };

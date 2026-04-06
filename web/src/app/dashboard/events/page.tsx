@@ -160,12 +160,18 @@ export default function EventsPage() {
             </button>
             {showExport && (
               <div className="absolute right-0 top-full mt-1 w-36 bg-bg-elevated border border-border-primary rounded-lg shadow-lg z-20 overflow-hidden py-0.5">
-                <a href={eventExport.csvUrl(statusFilter ? { forwardStatus: statusFilter } : undefined)} target="_blank" rel="noopener noreferrer" className="block px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors" onClick={() => setShowExport(false)}>
+                <button
+                  className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors cursor-pointer"
+                  onClick={() => { setShowExport(false); void eventExport.csv(statusFilter ? { forwardStatus: statusFilter } : undefined); }}
+                >
                   Export CSV
-                </a>
-                <a href={eventExport.jsonUrl(statusFilter ? { forwardStatus: statusFilter } : undefined)} target="_blank" rel="noopener noreferrer" className="block px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors" onClick={() => setShowExport(false)}>
+                </button>
+                <button
+                  className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors cursor-pointer"
+                  onClick={() => { setShowExport(false); void eventExport.json(statusFilter ? { forwardStatus: statusFilter } : undefined); }}
+                >
                   Export JSON
-                </a>
+                </button>
               </div>
             )}
           </div>
