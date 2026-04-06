@@ -28,7 +28,7 @@ interface TransformOperation {
   value?: unknown;
 }
 
-@Processor('webhook-forward')
+@Processor('webhook-forward', { drainDelay: 5000, stalledInterval: 300_000, lockDuration: 60_000 })
 export class ForwardProcessor extends WorkerHost {
   private readonly logger = new Logger(ForwardProcessor.name);
 

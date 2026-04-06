@@ -10,7 +10,7 @@ export interface AlertCheckJobData {
   type: 'scheduled_no_events';
 }
 
-@Processor('alert-check')
+@Processor('alert-check', { drainDelay: 10_000, stalledInterval: 300_000, lockDuration: 60_000 })
 export class AlertingProcessor extends WorkerHost {
   private readonly logger = new Logger(AlertingProcessor.name);
 

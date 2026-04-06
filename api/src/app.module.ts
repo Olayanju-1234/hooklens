@@ -113,6 +113,20 @@ import { BagsModule } from './modules/bags/bags.module.js';
           tls: configService.get('redis.tls'),
           maxRetriesPerRequest: null,
         },
+        // Reduce Redis command usage on Upstash free tier:
+        // - drainDelay: poll every 5s when queue is empty (default 5ms = 200 polls/sec)
+        // - stalledInterval: check stalled jobs every 5 min (default 30s)
+        // - lockDuration: hold job lock for 60s to match stalledInterval
+        // - removeOnComplete/Fail: don't accumulate job history in Redis
+        defaultJobOptions: {
+          removeOnComplete: { count: 20 },
+          removeOnFail: { count: 50 },
+        },
+        settings: {
+          stalledInterval: 5 * 60 * 1000,
+          lockDuration: 60 * 1000,
+        },
+        drainDelay: 5000,
       }),
     }),
     AuthModule,

@@ -18,6 +18,8 @@ export default function TestPage() {
   const [eventTypes, setEventTypes] = useState<TestEventType[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
+  const [payloadText, setPayloadText] = useState<string>("");
+  const [payloadError, setPayloadError] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [payloadLoading, setPayloadLoading] = useState(false);
@@ -69,22 +71,38 @@ export default function TestPage() {
   async function fetchPayload(provider: string, eventType: string) {
     setPayloadLoading(true);
     setSendResult(null);
+    setPayloadError("");
     try {
       const res = await testApi.payload(provider, eventType);
       setPayload(res.payload);
+      setPayloadText(JSON.stringify(res.payload, null, 2));
     } catch {
-      setPayload(null);
+      // For custom/unknown providers with no template, start with a blank slate
+      const blank = { type: "custom.event", data: {} };
+      setPayload(blank);
+      setPayloadText(JSON.stringify(blank, null, 2));
     } finally {
       setPayloadLoading(false);
     }
   }
 
+  function handlePayloadEdit(text: string) {
+    setPayloadText(text);
+    setPayloadError("");
+    try {
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      setPayload(parsed);
+    } catch {
+      setPayloadError("Invalid JSON");
+    }
+  }
+
   async function handleSend() {
-    if (!selectedProvider || !selectedEvent) return;
+    if (!selectedProvider || !selectedEvent || payloadError) return;
     setSending(true);
     setSendResult(null);
     try {
-      const res = await testApi.send(selectedProvider, selectedEvent);
+      const res = await testApi.send(selectedProvider, selectedEvent, payload ?? undefined);
       setSendResult({
         success: true,
         message: res.status || "Event sent successfully",
@@ -291,14 +309,19 @@ export default function TestPage() {
                 <div className="flex items-center justify-center h-32">
                   <div className="w-4 h-4 border-2 border-border-secondary border-t-text-accent rounded-full animate-spin" />
                 </div>
-              ) : payload ? (
-                <pre className="text-xs font-mono text-text-secondary bg-bg-tertiary rounded-lg p-3.5 overflow-x-auto max-h-96">
-                  {JSON.stringify(payload, null, 2)}
-                </pre>
               ) : (
-                <p className="text-xs text-text-tertiary py-4 text-center">
-                  No payload available
-                </p>
+                <div className="relative">
+                  <textarea
+                    value={payloadText}
+                    onChange={(e) => handlePayloadEdit(e.target.value)}
+                    spellCheck={false}
+                    className={`w-full text-xs font-mono text-text-secondary bg-bg-tertiary rounded-lg p-3.5 resize-y min-h-64 max-h-[500px] outline-none border focus:border-border-focus transition-colors ${payloadError ? "border-border-error" : "border-border-primary"}`}
+                  />
+                  {payloadError && (
+                    <p className="text-[10px] text-text-error mt-1">{payloadError}</p>
+                  )}
+                  <p className="text-[10px] text-text-tertiary mt-1">Edit the JSON payload before sending</p>
+                </div>
               )}
             </Card>
           </section>

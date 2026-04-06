@@ -446,10 +446,14 @@ export const testPayloads = {
     request<{ payload: Record<string, unknown> }>(
       `/test-payloads/${provider}/${eventType}`,
     ),
-  send: (provider: string, eventType: string) =>
+  send: (provider: string, eventType: string, customPayload?: Record<string, unknown>) =>
     request<{ status: string }>(
       `/test-payloads/${provider}/${eventType}/send`,
-      { method: "POST" },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: customPayload ? JSON.stringify(customPayload) : undefined,
+      },
     ),
 };
 

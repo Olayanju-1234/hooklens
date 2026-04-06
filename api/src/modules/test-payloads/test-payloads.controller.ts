@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Body,
   Param,
   UseGuards,
   Logger,
@@ -79,11 +80,13 @@ export class TestPayloadsController {
     @CurrentUser() jwtUser: JwtPayload,
     @Param('provider') provider: string,
     @Param('eventType') eventType: string,
+    @Body() body: Record<string, unknown>,
   ) {
-    const testPayload = this.testPayloadsService.getPayload(
-      provider,
-      eventType,
-    );
+    // Use custom body if provided, otherwise fall back to template payload
+    const payload =
+      body && Object.keys(body).length > 0
+        ? body
+        : this.testPayloadsService.getPayload(provider, eventType).payload;
 
     const user = await this.userRepo.findOne({ where: { id: jwtUser.sub } });
     if (!user) {
@@ -92,7 +95,8 @@ export class TestPayloadsController {
 
     const port = this.configService.get<number>('port') ?? 3000;
     const baseUrl = `http://localhost:${port}`;
-    const ingressUrl = `${baseUrl}/api/in/${user.ingressSlug}`;
+    // Ingress route is excluded from global 'api' prefix — must NOT include /api/
+    const ingressUrl = `${baseUrl}/in/${user.ingressSlug}`;
 
     try {
       const response = await fetch(ingressUrl, {
@@ -100,7 +104,7 @@ export class TestPayloadsController {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(testPayload.payload),
+        body: JSON.stringify(payload),
       });
 
       const responseBody = (await response.json()) as Record<string, unknown>;
