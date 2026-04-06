@@ -10,6 +10,8 @@ import {
   UseGuards,
   ParseUUIDPipe,
   Logger,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import {
@@ -21,6 +23,7 @@ import {
 } from '@nestjs/swagger';
 import { EndpointsService } from './endpoints.service.js';
 import { CreateEndpointDto, UpdateEndpointDto } from './dto/endpoint.dto.js';
+import { CreateDestinationDto, UpdateDestinationDto } from './dto/destination.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
 import { AuditService } from '../audit/audit.service.js';
@@ -139,5 +142,48 @@ export class EndpointsController {
           `Audit log failed for endpoint.delete: ${(err as Error).message}`,
         );
       });
+  }
+
+  // ── Destinations ────────────────────────────────────────────────────────────
+
+  @Get(':id/destinations')
+  @ApiOperation({ summary: 'List all forward destinations for an endpoint' })
+  getDestinations(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.endpointsService.getDestinations(id, user.sub);
+  }
+
+  @Post(':id/destinations')
+  @ApiOperation({ summary: 'Add a forward destination to an endpoint' })
+  addDestination(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateDestinationDto,
+  ) {
+    return this.endpointsService.addDestination(id, user.sub, dto);
+  }
+
+  @Patch(':id/destinations/:destinationId')
+  @ApiOperation({ summary: 'Update a forward destination' })
+  updateDestination(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('destinationId', ParseUUIDPipe) destinationId: string,
+    @Body() dto: UpdateDestinationDto,
+  ) {
+    return this.endpointsService.updateDestination(id, destinationId, user.sub, dto);
+  }
+
+  @Delete(':id/destinations/:destinationId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remove a forward destination' })
+  removeDestination(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('destinationId', ParseUUIDPipe) destinationId: string,
+  ) {
+    return this.endpointsService.removeDestination(id, destinationId, user.sub);
   }
 }
