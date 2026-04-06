@@ -7,6 +7,9 @@ import { useTheme } from "@/lib/theme-context";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useRef, useEffect, useState } from "react";
 import { endpoints as endpointsApi, deadLetter as deadLetterApi, auth as authApi, UserProfile } from "@/lib/api";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
+const INGRESS_BASE = API_URL.replace(/\/api\/?$/, "");
 import gsap from "gsap";
 
 const primaryTabs = [
@@ -250,7 +253,7 @@ export function TabRail() {
         {/* Ingress slug */}
         {ingressSlug && (
           <button
-            onClick={() => navigator.clipboard.writeText(`${window.location.origin.replace("3001", "3000")}/in/${ingressSlug}`)}
+            onClick={() => navigator.clipboard.writeText(`${INGRESS_BASE}/in/${ingressSlug}`)}
             className="hidden lg:flex items-center gap-1.5 px-2 py-1 rounded-md bg-bg-secondary text-[11px] font-mono text-text-tertiary hover:text-text-secondary transition-colors cursor-pointer border border-border-primary"
             title="Click to copy ingress URL"
           >
