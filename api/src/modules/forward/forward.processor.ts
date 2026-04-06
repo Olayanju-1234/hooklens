@@ -101,6 +101,7 @@ export class ForwardProcessor extends WorkerHost {
 
       const start = Date.now();
       try {
+        const stripeSignature = event.headers['stripe-signature'];
         const response = await this.httpService.axiosRef({
           method: 'POST',
           url: destination.url,
@@ -110,9 +111,13 @@ export class ForwardProcessor extends WorkerHost {
             'X-Hookdash-Original-Signature':
               event.headers['x-paystack-signature'] ??
               event.headers['verif-hash'] ??
+              stripeSignature ??
               '',
+            ...(stripeSignature && { 'stripe-signature': stripeSignature }),
           },
-          data: transformed,
+          // For Stripe: send raw body to preserve signature verification on the receiving end
+          data: stripeSignature ? event.rawBody : transformed,
+          ...(stripeSignature && { transformRequest: [(data: string) => data] }),
           timeout: 15_000,
         });
 
@@ -180,6 +185,7 @@ export class ForwardProcessor extends WorkerHost {
 
       const start = Date.now();
       try {
+        const stripeSignature = event.headers['stripe-signature'];
         const response = await this.httpService.axiosRef({
           method: 'POST',
           url: endpoint.forwardUrl,
@@ -189,9 +195,12 @@ export class ForwardProcessor extends WorkerHost {
             'X-Hookdash-Original-Signature':
               event.headers['x-paystack-signature'] ??
               event.headers['verif-hash'] ??
+              stripeSignature ??
               '',
+            ...(stripeSignature && { 'stripe-signature': stripeSignature }),
           },
-          data: transformed,
+          data: stripeSignature ? event.rawBody : transformed,
+          ...(stripeSignature && { transformRequest: [(data: string) => data] }),
           timeout: 15_000,
         });
 

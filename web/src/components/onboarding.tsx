@@ -14,6 +14,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
 const BASE_URL = API_URL.replace(/\/api\/?$/, "");
 
 const PROVIDERS = [
+  { value: "stripe", label: "Stripe" },
   { value: "paystack", label: "Paystack" },
   { value: "flutterwave", label: "Flutterwave" },
   { value: "mono", label: "Mono" },

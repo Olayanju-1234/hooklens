@@ -13,9 +13,9 @@ export class CreateEndpointDto {
   @ApiProperty({
     description: 'Webhook provider',
     example: 'paystack',
-    enum: ['paystack', 'flutterwave', 'mono', 'bags', 'custom'],
+    enum: ['stripe', 'paystack', 'flutterwave', 'mono', 'bags', 'custom'],
   })
-  @IsIn(['paystack', 'flutterwave', 'mono', 'bags', 'custom'])
+  @IsIn(['stripe', 'paystack', 'flutterwave', 'mono', 'bags', 'custom'])
   provider!: Provider;
 
   @ApiPropertyOptional({

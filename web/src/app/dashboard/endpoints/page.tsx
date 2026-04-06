@@ -30,6 +30,18 @@ const emptyForm: EndpointForm = {
 
 const providers = [
   {
+    value: "stripe",
+    label: "Stripe",
+    description: "Global card payments — charges, subscriptions, checkout",
+    color: "bg-indigo-500/15 text-indigo-400",
+    dot: "bg-indigo-500",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <path d="M2 6h12M2 10h8" />
+      </svg>
+    ),
+  },
+  {
     value: "paystack",
     label: "Paystack",
     description: "Payment processing — charges, transfers, refunds",

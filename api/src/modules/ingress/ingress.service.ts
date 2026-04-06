@@ -47,18 +47,23 @@ export class IngressService {
   async resolveEndpoint(
     slug: string,
   ): Promise<{ endpoint: Endpoint; userId: string } | null> {
-    // Try resolving by user ingressSlug first
+    // Try resolving by user ingressSlug first — prefer endpoints that have
+    // destinations configured, then fall back to most-recently-created
     const user = await this.userRepo.findOne({ where: { ingressSlug: slug } });
     if (user) {
       const endpoints = await this.endpointRepo
         .createQueryBuilder('ep')
         .addSelect('ep.webhookSecret')
+        .leftJoinAndSelect('ep.destinations', 'dest', 'dest.isActive = :active', { active: true })
         .where('ep.userId = :userId', { userId: user.id })
         .andWhere('ep.isActive = :isActive', { isActive: true })
+        .orderBy('ep.createdAt', 'DESC')
         .getMany();
 
       if (endpoints.length > 0) {
-        return { endpoint: endpoints[0], userId: user.id };
+        // Prefer the endpoint that has active destinations
+        const withDest = endpoints.find((ep) => ep.destinations?.length > 0);
+        return { endpoint: withDest ?? endpoints[0], userId: user.id };
       }
     }
 
@@ -70,14 +75,18 @@ export class IngressService {
       const endpoints = await this.endpointRepo
         .createQueryBuilder('ep')
         .addSelect('ep.webhookSecret')
+        .leftJoinAndSelect('ep.destinations', 'dest', 'dest.isActive = :active', { active: true })
         .where('ep.workspaceId = :workspaceId', {
           workspaceId: workspace.id,
         })
         .andWhere('ep.isActive = :isActive', { isActive: true })
+        .orderBy('ep.createdAt', 'DESC')
         .getMany();
 
       if (endpoints.length > 0) {
-        return { endpoint: endpoints[0], userId: endpoints[0].userId };
+        const withDest = endpoints.find((ep) => ep.destinations?.length > 0);
+        const endpoint = withDest ?? endpoints[0];
+        return { endpoint, userId: endpoint.userId };
       }
     }
 
@@ -254,6 +263,8 @@ export class IngressService {
   ): string | null {
     if (!body) return null;
     switch (provider) {
+      case 'stripe':
+        return (body.type as string) ?? null;
       case 'paystack':
         return (body.event as string) ?? null;
       case 'flutterwave':
@@ -266,7 +277,7 @@ export class IngressService {
         return topic ? `${topic}${subject ? `.${subject}` : ''}` : null;
       }
       default:
-        return (body.event as string) ?? (body.type as string) ?? null;
+        return (body.type as string) ?? (body.event as string) ?? null;
     }
   }
 
@@ -276,6 +287,8 @@ export class IngressService {
   ): string | null {
     if (!body) return null;
     switch (provider) {
+      case 'stripe':
+        return (body.id as string) ?? null;
       case 'paystack': {
         const data = body.data as Record<string, unknown> | undefined;
         return (data?.id as string) ?? (data?.reference as string) ?? null;

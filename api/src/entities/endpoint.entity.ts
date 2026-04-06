@@ -14,7 +14,7 @@ import { Workspace } from './workspace.entity.js';
 import { ForwardDestination } from './forward-destination.entity.js';
 import { TransformRule } from './transform-rule.entity.js';
 
-export type Provider = 'paystack' | 'flutterwave' | 'mono' | 'bags' | 'custom';
+export type Provider = 'stripe' | 'paystack' | 'flutterwave' | 'mono' | 'bags' | 'custom';
 
 @Entity('endpoints')
 export class Endpoint {
