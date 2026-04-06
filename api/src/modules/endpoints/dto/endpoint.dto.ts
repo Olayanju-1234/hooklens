@@ -63,6 +63,15 @@ export class UpdateEndpointDto {
   name?: string;
 
   @ApiPropertyOptional({
+    description: 'Webhook provider',
+    example: 'stripe',
+    enum: ['stripe', 'paystack', 'flutterwave', 'mono', 'bags', 'custom'],
+  })
+  @IsOptional()
+  @IsIn(['stripe', 'paystack', 'flutterwave', 'mono', 'bags', 'custom'])
+  provider?: Provider;
+
+  @ApiPropertyOptional({
     description: 'Updated forward URL',
     example: 'https://api.example.com/webhooks/v2',
   })
