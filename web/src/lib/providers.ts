@@ -50,6 +50,24 @@ export const PROVIDERS: ProviderOption[] = [
     secretHint: "Your app's client secret",
   },
   {
+    value: "slack",
+    label: "Slack",
+    description: "Slack apps — Events API, slash commands, interactivity",
+    secretHint: "Signing secret from your app's Basic Information",
+  },
+  {
+    value: "linear",
+    label: "Linear",
+    description: "Issue tracking — issues, comments, projects, cycles",
+    secretHint: "Signing secret from the webhook's page in Linear",
+  },
+  {
+    value: "twilio",
+    label: "Twilio",
+    description: "SMS, voice and WhatsApp — messages, calls, status callbacks",
+    secretHint: "Your account's primary auth token",
+  },
+  {
     value: "clerk",
     label: "Clerk",
     description: "Auth and users — sign-ups, sessions, organisations",

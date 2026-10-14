@@ -4,19 +4,12 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { endpoints as endpointsApi, Endpoint, INGRESS_BASE } from "@/lib/api";
+import { PROVIDERS } from "@/lib/providers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import toast from "react-hot-toast";
 import gsap from "gsap";
-
-const PROVIDERS = [
-  { value: "stripe", label: "Stripe" },
-  { value: "paystack", label: "Paystack" },
-  { value: "flutterwave", label: "Flutterwave" },
-  { value: "mono", label: "Mono" },
-  { value: "custom", label: "Custom" },
-];
 
 const TOTAL_STEPS = 3;
 
@@ -98,7 +91,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   }
 
   const ingressUrl = createdEndpoint
-    ? `${INGRESS_BASE}/in/${ingressSlug}/${createdEndpoint.id}`
+    ? `${INGRESS_BASE}/in/${createdEndpoint.ingressSlug}`
     : `${INGRESS_BASE}/in/${ingressSlug}`;
 
   return (
