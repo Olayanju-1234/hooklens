@@ -22,7 +22,10 @@ async function bootstrap() {
 
   // CORS — restrict in production
   app.enableCors({
-    origin: process.env.CORS_ORIGIN ?? 'http://localhost:3001',
+    origin: (process.env.CORS_ORIGIN ?? 'http://localhost:3001')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-workspace-id'],
