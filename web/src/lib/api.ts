@@ -161,6 +161,7 @@ export interface Endpoint {
   provider: string;
   forwardUrl: string | null;
   isActive: boolean;
+  retryMaxAttempts?: number;
   createdAt: string;
 }
 
@@ -559,6 +560,7 @@ export interface DeadLetterEntry {
   id: string;
   eventId: string;
   endpointId: string;
+  destinationId?: string | null;
   lastAttempt: number;
   lastError: string | null;
   exhaustedAt: string;

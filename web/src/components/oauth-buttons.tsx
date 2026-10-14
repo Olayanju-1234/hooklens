@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { auth, API_URL, OAuthProviders } from "@/lib/api";
 import { OAUTH_NEXT_KEY } from "@/lib/auth-context";
 
-const buttonClass =
-  "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-[#1a1a18] bg-transparent text-[#ececea] text-sm font-medium transition-colors hover:bg-[#111110] hover:border-[#2a2a28]";
+const buttonClass = "auth-oauth";
 
 export function OAuthButtons({ next }: { next: string | null }) {
   const [providers, setProviders] = useState<OAuthProviders | null>(null);
@@ -39,14 +38,7 @@ export function OAuthButtons({ next }: { next: string | null }) {
 
   return (
     <>
-      <div className="relative my-7">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-[#1a1a18]" />
-        </div>
-        <div className="relative flex justify-center">
-          <span className="bg-[#0c0c0b] px-3 text-xs text-[#4a4a45]">or continue with</span>
-        </div>
-      </div>
+      <div className="auth-divider">or continue with</div>
 
       <div className="flex gap-3">
         {providers.google && (

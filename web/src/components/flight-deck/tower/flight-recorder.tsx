@@ -21,7 +21,7 @@ export function clockTime(epoch: number, t: number) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${Math.floor(d.getMilliseconds() / 100)}`;
 }
 
-function jsonLines(body: unknown, drift: string | null): ReactNode[] {
+export function jsonLines(body: unknown, drift: string | null): ReactNode[] {
   const text = JSON.stringify(body, null, 2);
   return text.split("\n").map((line, i) => {
     const m = /^(\s*)("(?:[^"\\]|\\.)*")(:\s*)?(.*)$/.exec(line);

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { useTheme } from "@/lib/theme-context";
+import { HookMark } from "@/components/flight-deck/hook-mark";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useRef, useEffect, useState } from "react";
 import { endpoints as endpointsApi, deadLetter as deadLetterApi, auth as authApi, UserProfile } from "@/lib/api";
@@ -13,29 +13,29 @@ const INGRESS_BASE = API_URL.replace(/\/api\/?$/, "");
 import gsap from "gsap";
 
 const primaryTabs = [
-  { label: "Live", href: "/dashboard" },
-  { label: "Events", href: "/dashboard/events" },
-  { label: "Endpoints", href: "/dashboard/endpoints" },
-  { label: "Analytics", href: "/dashboard/stats" },
-  { label: "Bags", href: "/dashboard/bags" },
+  { label: "Traffic", href: "/dashboard" },
+  { label: "History", href: "/dashboard/events" },
+  { label: "Routes", href: "/dashboard/endpoints" },
+  { label: "Recorder", href: "/dashboard/dead-letter" },
+  { label: "Health", href: "/dashboard/stats" },
 ];
 
 const secondaryGroups = [
   {
     label: "Tools",
     items: [
-      { label: "Test", href: "/dashboard/test" },
+      { label: "Simulator", href: "/dashboard/test" },
       { label: "Transforms", href: "/dashboard/transforms" },
       { label: "Alerts", href: "/dashboard/alerts" },
-      { label: "Dead Letter", href: "/dashboard/dead-letter" },
+      { label: "Bags source", href: "/dashboard/bags" },
     ],
   },
   {
-    label: "Config",
+    label: "Settings",
     items: [
-      { label: "Audit", href: "/dashboard/audit" },
       { label: "API Keys", href: "/dashboard/api-keys" },
-      { label: "Docs", href: "/dashboard/docs" },
+      { label: "Audit log", href: "/dashboard/audit" },
+      { label: "Provider docs", href: "/dashboard/docs" },
     ],
   },
 ];
@@ -45,7 +45,6 @@ const allSecondaryTabs = secondaryGroups.flatMap((g) => g.items);
 export function TabRail() {
   const pathname = usePathname();
   const { logout, ingressSlug, currentWorkspaceId, workspaceList, switchWorkspace } = useAuth();
-  const { theme, toggle } = useTheme();
   const { connected, liveEvents } = useWebSocket();
   const indicatorRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<(HTMLAnchorElement | null)[]>([]);
@@ -123,7 +122,7 @@ export function TabRail() {
   const liveCount = liveEvents.length;
 
   return (
-    <header className="relative flex items-center h-12 px-4 sm:px-5 bg-bg-primary border-b border-border-primary shrink-0 z-30">
+    <header className="relative flex items-center h-12 px-4 sm:px-5 bg-bg-secondary border-b border-border-primary shrink-0 z-30">
       {/* Mobile hamburger */}
       <button
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -136,19 +135,15 @@ export function TabRail() {
       </button>
 
       {/* Logo */}
-      <Link href="/dashboard" className="flex items-center gap-2 mr-5 shrink-0">
-        <div className="w-6 h-6 rounded-md bg-bg-accent flex items-center justify-center">
-          <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-            <path d="M2 7h3l2-4 2 8 2-4h3" stroke="var(--text-inverse)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-        <span className="hidden sm:inline text-[13px] font-semibold text-text-primary tracking-tight">Hookdash</span>
+      <Link href="/dashboard" className="flex items-center gap-2 mr-6 shrink-0 text-text-primary">
+        <HookMark size={18} />
+        <span className="hidden sm:inline text-[15px] font-extrabold tracking-tight" style={{ fontVariationSettings: '"wdth" 112' }}>hookdash</span>
       </Link>
 
       {/* Primary tabs */}
       <nav className="relative hidden sm:flex items-center h-full">
         {/* Animated bottom indicator */}
-        <div ref={indicatorRef} className="absolute bottom-0 left-0 h-[2px] bg-bg-accent rounded-full pointer-events-none" style={{ width: 0, opacity: 0 }} />
+        <div ref={indicatorRef} className="absolute bottom-0 left-0 h-[2px] bg-text-primary pointer-events-none" style={{ width: 0, opacity: 0 }} />
 
         {primaryTabs.map((tab, i) => {
           const active = i === activeIndex;
@@ -157,14 +152,14 @@ export function TabRail() {
               key={tab.href}
               href={tab.href}
               ref={(el) => { tabsRef.current[i] = el; }}
-              className={`relative flex items-center gap-1.5 h-full px-3 text-[13px] font-medium transition-colors ${
-                active ? "text-text-primary" : "text-text-tertiary hover:text-text-secondary"
+              className={`relative flex items-center gap-1.5 h-full px-3 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors ${
+                active ? "text-text-primary" : "text-text-tertiary hover:text-text-primary"
               }`}
             >
               {tab.label}
 
-              {/* Live tab — connection dot + session event count */}
-              {tab.label === "Live" && (
+              {/* Traffic tab — connection dot + session event count */}
+              {tab.label === "Traffic" && (
                 <span className="flex items-center gap-1">
                   <span className="relative flex h-1.5 w-1.5">
                     {connected && <span className="animate-pulse-ring absolute inline-flex h-full w-full rounded-full bg-emerald-500" />}
@@ -176,9 +171,10 @@ export function TabRail() {
                 </span>
               )}
 
-              {/* Bags tab — purple dot */}
-              {tab.label === "Bags" && (
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500 opacity-70" />
+              {tab.label === "Recorder" && deadLetterCount > 0 && (
+                <span className="px-1 py-px text-[9.5px] font-mono tabular-nums leading-none border border-current text-[var(--s-dead)]">
+                  {deadLetterCount}
+                </span>
               )}
             </Link>
           );
@@ -188,28 +184,24 @@ export function TabRail() {
         <div className="relative" data-more-menu>
           <button
             onClick={(e) => { e.stopPropagation(); setMoreOpen(!moreOpen); }}
-            className={`flex items-center gap-1 h-full px-3 text-[13px] font-medium transition-colors cursor-pointer ${
-              isSecondaryActive ? "text-text-primary" : "text-text-tertiary hover:text-text-secondary"
+            className={`flex items-center gap-1 h-full px-3 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors cursor-pointer ${
+              isSecondaryActive ? "text-text-primary" : "text-text-tertiary hover:text-text-primary"
             }`}
           >
             More
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className={`transition-transform duration-200 ${moreOpen ? "rotate-180" : ""}`}>
               <path d="M3 5l3 3 3-3" />
             </svg>
-            {deadLetterCount > 0 && (
-              <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-red-500" />
-            )}
           </button>
 
           {moreOpen && (
-            <div className="absolute top-full left-0 mt-1.5 w-52 py-1 rounded-xl bg-bg-elevated border border-border-primary shadow-xl overflow-hidden">
+            <div className="absolute top-full left-0 mt-1 w-52 py-1 rounded-sm bg-bg-elevated border border-border-secondary shadow-lg overflow-hidden">
               {secondaryGroups.map((group, gi) => (
                 <div key={group.label}>
                   {gi > 0 && <div className="my-1 border-t border-border-primary" />}
                   <p className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-widest text-text-tertiary font-semibold">{group.label}</p>
                   {group.items.map((tab) => {
                     const active = pathname === tab.href || pathname.startsWith(tab.href);
-                    const isDL = tab.label === "Dead Letter";
                     return (
                       <Link
                         key={tab.href}
@@ -220,11 +212,6 @@ export function TabRail() {
                         }`}
                       >
                         {tab.label}
-                        {isDL && deadLetterCount > 0 && (
-                          <span className="px-1.5 py-0.5 text-[10px] font-mono font-semibold rounded bg-red-500/10 text-red-400 leading-none tabular-nums">
-                            {deadLetterCount}
-                          </span>
-                        )}
                       </Link>
                     );
                   })}
@@ -254,34 +241,16 @@ export function TabRail() {
         {ingressSlug && (
           <button
             onClick={() => navigator.clipboard.writeText(`${INGRESS_BASE}/in/${ingressSlug}`)}
-            className="hidden lg:flex items-center gap-1.5 px-2 py-1 rounded-md bg-bg-secondary text-[11px] font-mono text-text-tertiary hover:text-text-secondary transition-colors cursor-pointer border border-border-primary"
+            className="hidden lg:flex items-center gap-1.5 px-2 py-1 rounded-sm bg-bg-secondary text-[11px] font-mono text-text-tertiary hover:text-text-primary transition-colors cursor-copy border border-dashed border-border-secondary"
             title="Click to copy ingress URL"
           >
-            <span className="text-text-accent">/in/{ingressSlug}</span>
+            <span className="text-text-primary">/in/{ingressSlug}</span>
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="opacity-50">
               <rect x="5" y="5" width="8" height="8" rx="1" />
               <path d="M3 11V4a1 1 0 011-1h7" />
             </svg>
           </button>
         )}
-
-        {/* Theme toggle */}
-        <button
-          onClick={toggle}
-          className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors cursor-pointer"
-          aria-label="Toggle theme"
-        >
-          {theme === "light" ? (
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M8 1v1M8 14v1M1 8h1M14 8h1M3.05 3.05l.7.7M12.25 12.25l.7.7M12.25 3.05l-.7.7M3.05 12.25l-.7.7" />
-              <circle cx="8" cy="8" r="3" />
-            </svg>
-          ) : (
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M14 9.5A6 6 0 016.5 2 6 6 0 1014 9.5z" />
-            </svg>
-          )}
-        </button>
 
         {/* User menu */}
         <div className="relative" data-user-menu>
@@ -299,7 +268,7 @@ export function TabRail() {
           </button>
 
           {userMenuOpen && (
-            <div className="absolute top-full right-0 mt-1.5 w-52 py-1 rounded-xl bg-bg-elevated border border-border-primary shadow-xl">
+            <div className="absolute top-full right-0 mt-1 w-52 py-1 rounded-sm bg-bg-elevated border border-border-secondary shadow-lg">
               {profile && (
                 <div className="px-3 py-2 border-b border-border-primary">
                   <p className="text-[12px] font-medium text-text-primary truncate">{profile.email}</p>
@@ -336,7 +305,7 @@ export function TabRail() {
           <nav className="flex flex-col py-1">
             {[...primaryTabs, ...allSecondaryTabs].map((tab) => {
               const active = pathname === tab.href || (tab.href !== "/dashboard" && pathname.startsWith(tab.href));
-              const isDL = tab.label === "Dead Letter";
+              const isDL = tab.label === "Recorder";
               return (
                 <Link
                   key={tab.href}
@@ -348,7 +317,7 @@ export function TabRail() {
                 >
                   <span className="flex items-center gap-2">
                     {tab.label}
-                    {tab.label === "Live" && (
+                    {tab.label === "Traffic" && (
                       <span className={`inline-flex rounded-full h-1.5 w-1.5 ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
                     )}
                   </span>

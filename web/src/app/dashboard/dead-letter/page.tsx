@@ -71,7 +71,7 @@ export default function DeadLetterPage() {
     <div className="px-4 sm:px-6 py-6 mx-auto max-w-4xl w-full">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-base font-semibold text-text-primary">Dead Letter Queue</h1>
+          <h1 className="text-base font-semibold text-text-primary">Recorder · dead letters</h1>
           <p className="text-xs text-text-tertiary mt-0.5">
             Events that exhausted all retry attempts
           </p>

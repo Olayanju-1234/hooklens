@@ -12,13 +12,13 @@ export function ToastProvider() {
           background: "var(--bg-elevated)",
           color: "var(--text-primary)",
           border: "1px solid var(--border-primary)",
-          borderRadius: "0.75rem",
+          borderRadius: "3px",
           fontSize: "0.8125rem",
           padding: "0.625rem 0.875rem",
           boxShadow: "var(--shadow-lg)",
         },
         success: {
-          iconTheme: { primary: "var(--bg-accent)", secondary: "var(--text-inverse)" },
+          iconTheme: { primary: "var(--s-ok)", secondary: "#fff" },
         },
         error: {
           iconTheme: { primary: "var(--text-error)", secondary: "#fff" },

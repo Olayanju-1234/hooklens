@@ -17,7 +17,7 @@ import {
   holdFor,
 } from "./sim/catalog";
 import { bezier, latencyRadius, racetrackPoint, racetrackPerimeter, type Vec3 } from "./sim/geometry";
-import { NIGHT } from "./sim/palette";
+import { CHART, INK, PAPER } from "./sim/palette";
 
 export type ChapterId = "hero" | "arrivals" | "seal" | "departures" | "holding" | "recorder";
 
@@ -91,7 +91,7 @@ const floorFragment = /* glsl */ `
     float r = length(vWorld.xz - vec2(0.4, 0.0));
     float fade = smoothstep(10.5, 2.5, r);
     float a = dotA * fade * 0.55;
-    gl_FragColor = vec4(vec3(0.30, 0.34, 0.31) * a, a);
+    gl_FragColor = vec4(vec3(0.42, 0.46, 0.44), a);
   }
 `;
 
@@ -103,7 +103,7 @@ function ChartFloor() {
         fragmentShader: floorFragment,
         transparent: true,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
+        blending: THREE.NormalBlending,
       }),
     [],
   );
@@ -150,7 +150,7 @@ function RangeRings() {
     <group>
       {rings.map((r) => (
         <group key={r.ms}>
-          <Polyline points={r.pts} color="#8C948E" opacity={0.28} dashed />
+          <Polyline points={r.pts} color="#6b7470" opacity={0.5} dashed />
           <Html position={r.at} center zIndexRange={[20, 0]} className="hub-label hub-label--ring">
             {r.label}
           </Html>
@@ -173,7 +173,7 @@ function Routes() {
   return (
     <group>
       {lines.map((pts, i) => (
-        <Polyline key={i} points={pts} color="#ECEAE2" opacity={0.07} />
+        <Polyline key={i} points={pts} color={INK} opacity={0.1} />
       ))}
     </group>
   );
@@ -200,7 +200,7 @@ function Gate({ stats, reducedMotion }: { stats: WorldStats | null; reducedMotio
       pts.push(new THREE.Vector3(0, GATE_RADIUS * Math.cos(a), GATE_RADIUS * Math.sin(a)));
     }
     const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: NIGHT.cyan, transparent: true, opacity: 0.6 }));
+    return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: CHART.cyan, transparent: true, opacity: 0.7 }));
   }, []);
   const outer = useMemo(() => ringPoints(GATE_RADIUS + 0.06, 96, "yz"), []);
   const inner = useMemo(() => ringPoints(0.22, 48, "yz"), []);
@@ -217,8 +217,8 @@ function Gate({ stats, reducedMotion }: { stats: WorldStats | null; reducedMotio
       <group ref={rose}>
         <primitive object={ticks} />
       </group>
-      <Polyline points={outer} color={NIGHT.cyan} opacity={0.25} />
-      <Polyline points={inner} color={NIGHT.cyan} opacity={0.35} />
+      <Polyline points={outer} color={CHART.cyan} opacity={0.3} />
+      <Polyline points={inner} color={CHART.cyan} opacity={0.45} />
       <Html position={[0, GATE_RADIUS + 0.42, 0]} center zIndexRange={[20, 0]} className="hub-label hub-label--gate">
         <span>SIGNATURE GATE</span>
         <small>{stats ? `${stats.sealedPct.toFixed(1)}% sealed` : "—"}</small>
@@ -240,7 +240,7 @@ function SourceNodes() {
     <group>
       {SOURCES.map((s) => (
         <group key={s.id} position={s.pos}>
-          <Polyline points={tri} color="#ECEAE2" opacity={0.55} />
+          <Polyline points={tri} color={INK} opacity={0.6} />
           <Html position={[-0.15, 0, 0.42]} center zIndexRange={[20, 0]} className="hub-label hub-label--source">
             <span>{s.label}</span>
             <small>{s.kind}</small>
@@ -253,7 +253,7 @@ function SourceNodes() {
 
 function DestinationNode({ dest, stats, onToggle }: { dest: (typeof DESTINATIONS)[number]; stats: WorldStats | null; onToggle: (id: string) => void }) {
   const ds = stats?.dests[dest.id];
-  const tone = ds?.down ? NIGHT.red : ds && ds.holding > 0 ? NIGHT.amber : "#ECEAE2";
+  const tone = ds?.down ? CHART.red : ds && ds.holding > 0 ? CHART.amber : INK;
   const circle = useMemo(() => ringPoints(0.3, 48, "xz", 0.02), []);
   const ticks = useMemo(() => {
     const out: THREE.Vector3[][] = [];
@@ -283,7 +283,7 @@ function DestinationNode({ dest, stats, onToggle }: { dest: (typeof DESTINATIONS
         <Polyline key={i} points={t} color={tone} opacity={0.75} />
       ))}
       {ds && ds.holding > 0 &&
-        holds.map((pts, i) => <Polyline key={i} points={pts} color={NIGHT.amber} opacity={0.32} dashed />)}
+        holds.map((pts, i) => <Polyline key={i} points={pts} color={CHART.amber} opacity={0.45} dashed />)}
       <Html position={[0.15, 0, 0.62]} center zIndexRange={[20, 0]} className="hub-label hub-label--dest">
         <button
           type="button"
@@ -352,7 +352,7 @@ export default function HubScene(props: SceneProps & { active: boolean }) {
       camera={{ position: SHOTS.hero.pos, fov: 38, near: 0.1, far: 80 }}
       dpr={[1, 1.75]}
       gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
-      onCreated={({ gl }) => gl.setClearColor("#090B0A", 1)}
+      onCreated={({ gl }) => gl.setClearColor(PAPER, 1)}
       aria-hidden
     >
       <Scene {...props} />

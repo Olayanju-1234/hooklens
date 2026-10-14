@@ -2,17 +2,17 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RouteMap2D } from "@/components/lab/route-map-2d";
-import { RecorderBar } from "@/components/lab/recorder-bar";
-import { Flap } from "@/components/lab/split-flap";
-import { LabMark } from "@/components/lab/lab-mark";
-import { FlightRecorder, clockTime } from "@/components/lab/tower/flight-recorder";
-import { createSim, useReducedMotion, useSimReadout } from "@/components/lab/use-sim";
-import { DESTINATIONS, SOURCE_BY_ID } from "@/components/lab/sim/catalog";
-import type { Status } from "@/components/lab/sim/engine";
+import { Radar } from "@/components/flight-deck/radar";
+import { simRadarModel } from "@/components/flight-deck/sim-radar";
+import { RecorderBar } from "@/components/flight-deck/recorder-bar";
+import { Flap } from "@/components/flight-deck/split-flap";
+import { HookMark } from "@/components/flight-deck/hook-mark";
+import { FlightRecorder, clockTime } from "@/components/flight-deck/tower/flight-recorder";
+import { createSim, useReducedMotion, useSimReadout } from "@/components/flight-deck/use-sim";
+import { DESTINATIONS, SOURCE_BY_ID } from "@/components/flight-deck/sim/catalog";
+import type { Status } from "@/components/flight-deck/sim/engine";
 
 type Filter = "all" | "holding" | "dead" | "rejected";
-type Theme = "night" | "day";
 
 const FILTERS: { id: Filter; label: string; tone?: string }[] = [
   { id: "all", label: "All" },
@@ -30,42 +30,17 @@ const MATCH: Record<Filter, (s: Status) => boolean> = {
 
 const ROWS = 40;
 
-function readTheme(): Theme {
-  try {
-    return localStorage.getItem("hookdash-lab-theme") === "day" ? "day" : "night";
-  } catch {
-    return "night";
-  }
-}
-
-export default function TowerPage() {
+export default function DemoTowerPage() {
   const reduced = useReducedMotion();
   const [sim] = useState(() => createSim(11));
   const readout = useSimReadout(sim, 4);
-  const [theme, setTheme] = useState<Theme>("night");
+  const [radarModel] = useState(() => simRadarModel(sim));
   const [selected, setSelected] = useState<string | null>(null);
   const [follow, setFollow] = useState(true);
   const [frozenIds, setFrozenIds] = useState<string[] | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const t = window.setTimeout(() => setTheme(readTheme()), 0);
-    return () => window.clearTimeout(t);
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    setTheme((prev) => {
-      const next = prev === "night" ? "day" : "night";
-      try {
-        localStorage.setItem("hookdash-lab-theme", next);
-      } catch {
-        // Per-viewer convenience only.
-      }
-      return next;
-    });
-  }, []);
 
   const { stats, offset, mode } = readout;
   const T = sim.clock.view;
@@ -142,26 +117,25 @@ export default function TowerPage() {
       else if (ev.key === "k" || ev.key === "ArrowUp") setSelected(rows[Math.max(0, idx - 1)]?.e.id ?? null);
       else if (ev.key === "r" && selected) replay(selected);
       else if (ev.key === "f") toggleFollow();
-      else if (ev.key === "t") toggleTheme();
       else if (ev.key === "/") searchRef.current?.focus();
       else return;
       ev.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rows, selected, replay, toggleFollow, toggleTheme]);
+  }, [rows, selected, replay, toggleFollow]);
 
   const down = stats ? DESTINATIONS.filter((d) => stats.dests[d.id]?.down).map((d) => d.host) : [];
   const billingDown = !!stats?.dests.billing?.down;
 
   return (
-    <div className="lab-root tower" data-lab-theme={theme}>
+    <div className="fd-root tower">
       <header className="tower-bar">
-        <Link href="/lab" className="lab-mark">
-          <LabMark size={18} />
+        <Link href="/" className="fd-mark">
+          <HookMark size={18} />
           hookdash
         </Link>
-        <span className="tower-ws">acme-prod ▾</span>
+        <span className="tower-ws">demo · simulated traffic</span>
         <nav className="tower-tabs" aria-label="Dashboard">
           <span aria-current="page">TRAFFIC</span>
           <span>ROUTES</span>
@@ -173,9 +147,9 @@ export default function TowerPage() {
           <i aria-hidden />
           {rewound ? `REWOUND ${Math.abs(offset).toFixed(1)}s` : follow ? "LIVE" : "BOARD PAUSED"} · {stats ? stats.perMin : "—"}/min
         </div>
-        <button type="button" className="chip chip--quiet" onClick={toggleTheme} aria-label={`Switch to ${theme === "night" ? "day" : "night"} chart`}>
-          {theme === "night" ? "Day chart" : "Night chart"} <span className="kbd">T</span>
-        </button>
+        <Link href="/signup" className="btn tower-cta">
+          Get an ingress URL
+        </Link>
       </header>
 
       <div className="tower-main">
@@ -194,11 +168,8 @@ export default function TowerPage() {
               </span>
             </div>
             <div className="radar">
-              <RouteMap2D
-                world={sim.world}
-                clock={sim.clock}
-                theme={theme}
-                stats={stats}
+              <Radar
+                model={radarModel}
                 reducedMotion={reduced}
                 selectedId={selected}
                 onSelect={setSelected}

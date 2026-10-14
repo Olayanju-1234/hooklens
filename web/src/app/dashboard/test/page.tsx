@@ -298,7 +298,7 @@ export default function TestPage() {
                         href="/dashboard"
                         className="text-xs underline hover:no-underline"
                       >
-                        View in Live
+                        View in Traffic
                       </Link>
                     )}
                   </div>

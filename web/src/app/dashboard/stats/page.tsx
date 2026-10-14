@@ -12,16 +12,9 @@ const periods = [
   { value: "all", label: "All" },
 ];
 
-const PROVIDER_COLORS: Record<string, string> = {
-  paystack: "#10b981",
-  flutterwave: "#f59e0b",
-  mono: "#3b82f6",
-  bags: "#a855f7",
-  custom: "#71717a",
-};
-
+// Colour is reserved for delivery state, so providers share one ink.
 function providerColor(p: string) {
-  return PROVIDER_COLORS[p] ?? "#71717a";
+  return p ? "var(--ink-2)" : "var(--ink-3)";
 }
 
 export default function StatsPage() {
@@ -197,8 +190,8 @@ export default function StatsPage() {
                 <div className="space-y-5">
                   {[
                     { key: "p50" as const, label: "p50", color: "var(--bg-accent)" },
-                    { key: "p95" as const, label: "p95", color: "#f59e0b" },
-                    { key: "p99" as const, label: "p99", color: "#ef4444" },
+                    { key: "p95" as const, label: "p95", color: "var(--s-hold)" },
+                    { key: "p99" as const, label: "p99", color: "var(--s-bad)" },
                   ].map(({ key, label, color }) => (
                     <div key={key} className="flex items-center gap-4">
                       <span className="text-[10px] font-mono text-text-tertiary w-6 shrink-0">{label}</span>

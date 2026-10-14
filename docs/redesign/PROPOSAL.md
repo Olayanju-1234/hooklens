@@ -1,6 +1,6 @@
 # Hookdash Flight Deck
 
-Product proposal, roadmap and design direction for Hookdash, with a working prototype at `web/src/app/lab`.
+Product proposal, roadmap and design direction for Hookdash. The design direction is now implemented in `web/`: the landing at `/`, the Traffic dashboard at `/dashboard`, and a simulated demo at `/demo`.
 
 Branch: `claude/redesign-exploration-981ad9`. Nothing here touches `api/` or production.
 
@@ -22,7 +22,7 @@ Designed version with a live simulation: https://claude.ai/artifact/13UpSVNnLe7x
 2. **Generalise sources.** Replace the provider enum and the hard-coded signature switch with declarative verification recipes, and give each source its own ingress URL. Ship Standard Webhooks first: one recipe covers Clerk, OpenAI, Resend and any other Svix-style sender. Then add GitHub, Shopify, Slack, Twilio and Linear. *(L)*
 3. **Turn replay into a time machine.** Add windowed replay (a time range plus filters, sent to a destination at original spacing or compressed), a CLI `listen` that forwards raw bodies to localhost, and a recorder scrubber in the dashboard. *(L)*
 4. **Rebuild the dashboard as the Tower.** Live and Events merge into **Traffic** (radar, arrivals board, flight recorder). Endpoints, Destinations and Transforms merge into **Routes**. Dead letters become the **Recorder**. Bags becomes a source instead of a tab. *(L)*
-5. **Ship the flight-deck landing and tokens.** Replace the particle network, aurora and glass with the `/lab` chart, where every moving pixel is a webhook. Use cockpit state colours, with Archivo and Martian Mono for type. *(M)*
+5. **Ship the flight-deck landing and tokens.** Replace the particle network, aurora and glass with the chart, where every moving pixel is a webhook. Use cockpit state colours, with Archivo and Martian Mono for type. *(M, done)*
 
 ---
 
@@ -143,7 +143,7 @@ Effort for a solo side-project developer: **S** ≤ 2 days, **M** ≤ 1 week, **
 | 3 | Recipe engine with Standard Webhooks, GitHub and Shopify recipes | L |
 | 4 | Outbound signing of forwarded requests | S |
 | 5 | CLI v2 `listen` (raw body, results reported back, auth fixed) | M |
-| 6 | Flight-deck tokens and the new landing, promoted from `/lab` | M |
+| 6 | Flight-deck tokens and the new landing (done) | M |
 
 ### Next (1–3 months): the Tower
 
@@ -191,7 +191,7 @@ The metaphor gives every visual a job. The product's words stay technical (retry
 5. **Retries are a holding stack.** One racetrack level per attempt, and each level holds twice as long as the one below. Stack height is queue depth.
 6. **Signatures are a gate.** The compass rose turns one tick per verified event. Forged packets break apart at the gate and never reach a destination.
 7. **Type from instruments.** Archivo, using its width axis (expanded for headlines, condensed for labels), plus Martian Mono, condensed, for data. Flight-strip codes in spaced capitals.
-8. **Two charts.** Night (dark) and day (paper). The dashboard isn't dark-only.
+8. **Day chart only.** Light chart-paper ground with ink type, everywhere. The owner ruled out dark themes as dated; state colours are tuned to stay legible on white.
 
 ### Concept map
 
@@ -232,31 +232,24 @@ Purple gradients, glassmorphism, aurora blobs, gradient text, the hero + 3 cards
 
 ---
 
-## Prototype
+## Implementation
 
 ```bash
-cd web && npm install && npm run dev -- --port 3017
+cd web && npm install && npm run dev
 ```
 
-- `http://localhost:3017/lab`: the landing. A sticky WebGL chart, five chapters as flight strips, the recorder scrubber and live actions.
-- `http://localhost:3017/lab/tower`: the reimagined Live dashboard. Radar, arrivals board, flight recorder, day/night chart.
+- `/`: the landing. A sticky WebGL chart on the light day chart, five chapters as flight strips, the recorder scrubber and live actions. Signed-in visitors still go straight to the dashboard.
+- `/dashboard`: **Traffic**, the Tower on real data. Radar of your routes (packets fly per socket event, holds and dead letters per destination from the event timeline), a split-flap arrivals board, and a flight recorder with signature, per-destination attempts, payload, headers, Replay and Copy as cURL.
+- `/demo`: the same Tower on simulated traffic, public, for people without an account.
+- Navigation is now Traffic · History · Routes · Recorder · Health, with Simulator, Transforms, Alerts, Bags and settings under More. Routes keep their old URLs.
+- The whole app is light only: tokens in `web/src/app/globals.css`, components in `web/src/styles/flight-deck.css`. Raw Tailwind shades and radii are remapped there, so older pages follow without per-file edits.
 - Add `?fallback=2d` to force the no-WebGL path and `?motion=reduced` to force reduced motion.
 
-**What to try**
-
-1. Click **Take billing.internal down** and watch the holding stack build.
-2. Drag the recorder back to rewind.
-3. Press **L** to return to live.
-4. Use **Restore & replay** to see the dead letters fly the magenta line.
-5. In the Tower, click a packet on the radar to open its flight recorder.
-
-Everything is simulated by a deterministic engine (`web/src/components/lab/sim`). Nothing calls the API.
-
-**Wiring it to real data.** Map socket `webhook` and `forward_result` events, plus `ForwardResult` rows, onto the engine's `SimEvent` and `Journey` shapes. That needs per-attempt socket events and real stage timings, which is roadmap item 1.
+**How it was checked.** The Traffic view was run against a real API: throwaway Postgres and Redis, a local receiver with one healthy and one flaky destination, and signed Paystack webhooks, some with forged signatures. It showed per-destination holds, real backoff timings (+0.0s, +1.6s, +4.6s, +10.7s) and dead letters after 4 attempts.
 
 **Known gaps**
 
-- In dev mode, the first load compiles three.js and takes a few seconds.
+- The radar learns each destination's latency from the timeline as events arrive. Event-level history only knows the slowest destination, so first positions are approximate.
 - Not tested on real phones or Safari, and frame rate wasn't measured.
-- Tower tabs other than Traffic are inert.
-- The engine has no tests yet.
+- Older dashboard pages (History, Routes, Recorder, Health) are reskinned through tokens but not redesigned around the flight-deck components yet.
+- The simulation engine has no tests yet.

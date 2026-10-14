@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { TONES, type Leg } from "./sim/engine";
-import { NIGHT, rgb } from "./sim/palette";
+import { CHART, rgb } from "./sim/palette";
 
 export const TRAIL = 7;
 export const LEG_CAPACITY = 14000;
@@ -93,7 +93,7 @@ const vertex = /* glsl */ `
     mv.xy += position.xy * size;
     gl_Position = projectionMatrix * mv;
     vUv = position.xy * 2.0;
-    vColor = mix(aM.yzw, vec3(1.0, 0.31, 0.85), uRewind * 0.6);
+    vColor = mix(aM.yzw, vec3(0.66, 0.07, 0.54), uRewind * 0.6);
     vAlpha = alpha;
   }
 `;
@@ -108,18 +108,19 @@ const fragment = /* glsl */ `
     if (d > 1.0) discard;
     float a;
     if (vRing > 0.5) {
-      a = smoothstep(0.1, 0.0, abs(d - 0.82)) * 0.9;
+      a = smoothstep(0.08, 0.0, abs(d - 0.82));
     } else {
-      float core = smoothstep(0.34, 0.12, d);
-      float glow = exp(-d * d * 7.0) * 0.6;
-      a = core + glow;
+      // On paper a glow reads as a smudge: crisp core, faint halo.
+      float core = smoothstep(0.42, 0.3, d);
+      float halo = exp(-d * d * 6.0) * 0.2;
+      a = max(core, halo);
     }
     a *= vAlpha;
     gl_FragColor = vec4(vColor * a, a);
   }
 `;
 
-const TONE_RGB = new Map(TONES.map((t) => [t, rgb(NIGHT[t])]));
+const TONE_RGB = new Map(TONES.map((t) => [t, rgb(CHART[t])]));
 
 export interface PacketBuffers {
   geometry: THREE.InstancedBufferGeometry;
@@ -162,7 +163,11 @@ export function createPackets(): PacketBuffers {
     uniforms: { uTime: { value: 0 }, uTrailDt: { value: 0.034 }, uRewind: { value: 0 } },
     transparent: true,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.CustomBlending,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
+    blendSrcAlpha: THREE.OneFactor,
+    blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
   });
 
   const write = (legs: Leg[]) => {

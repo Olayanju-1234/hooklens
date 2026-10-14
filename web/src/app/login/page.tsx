@@ -8,6 +8,7 @@ import { ApiError } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { OAuthButtons } from "@/components/oauth-buttons";
+import { AuthShell, Notice } from "@/components/auth-shell";
 
 const OAUTH_ERRORS: Record<string, string> = {
   oauth_failed: "Sign-in with that provider failed. Please try again.",
@@ -40,53 +41,33 @@ function LoginForm() {
   }
 
   return (
-    <div data-theme="dark" className="min-h-screen flex items-center justify-center bg-[#0a0a09] px-4 relative overflow-hidden">
-      {/* Subtle radial glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-[#2ec4a2]/[0.03] blur-[120px] pointer-events-none" />
-
-      <div className="w-full max-w-[400px] relative z-10 animate-[fadeSlideIn_0.5s_ease-out]">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 mb-10">
-          <div className="w-8 h-8 rounded-lg bg-[#2ec4a2] flex items-center justify-center">
-            <svg width="15" height="15" viewBox="0 0 14 14" fill="none">
-              <path d="M2 7h3l2-4 2 8 2-4h3" stroke="#0a0a09" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <span className="text-lg font-semibold text-[#ececea] tracking-tight">Hookdash</span>
-        </Link>
-
-        {/* Form */}
-        <div className="rounded-2xl border border-[#1a1a18] bg-[#0c0c0b] p-7">
-          <h1 className="text-2xl font-bold text-[#ececea] tracking-tight">Welcome back</h1>
-          <p className="text-sm text-[#6b6a65] mt-1.5 mb-8">Sign in to continue debugging webhooks</p>
-
-          {error && (
-            <div className="mb-5 px-3.5 py-2.5 rounded-lg bg-red-500/5 text-red-400 text-sm border border-red-500/10 animate-[fadeSlideIn_0.2s_ease-out]">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
-            <Input label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" required />
-            <Button type="submit" loading={loading} className="w-full">Sign in</Button>
-          </form>
-
-          <OAuthButtons next={next} />
-        </div>
-
-        <div className="mt-5 text-center">
-          <Link href="/forgot-password" className="text-sm text-[#4a4a45] hover:text-[#6b6a65] transition-colors">
-            Forgot your password?
-          </Link>
-        </div>
-
-        <p className="text-sm text-[#4a4a45] text-center mt-6">
-          Don&apos;t have an account?{" "}
-          <Link href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"} className="text-[#2ec4a2] font-medium hover:underline">Sign up</Link>
-        </p>
-      </div>
-    </div>
+    <AuthShell
+      title="Welcome back"
+      subtitle="Sign in to see your traffic."
+      below={
+        <>
+          <p>
+            <Link href="/forgot-password" className="auth-link font-normal">
+              Forgot your password?
+            </Link>
+          </p>
+          <p>
+            Don&apos;t have an account?{" "}
+            <Link href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"} className="auth-link">
+              Sign up
+            </Link>
+          </p>
+        </>
+      }
+    >
+      {error && <Notice tone="error">{error}</Notice>}
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
+        <Input label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" required />
+        <Button type="submit" loading={loading} className="w-full">Sign in</Button>
+      </form>
+      <OAuthButtons next={next} />
+    </AuthShell>
   );
 }
 
