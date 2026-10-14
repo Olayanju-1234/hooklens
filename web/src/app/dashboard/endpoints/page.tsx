@@ -92,6 +92,35 @@ const providerStyles: Record<string, { color: string; icon: ReactNode }> = {
       </svg>
     ),
   },
+  slack: {
+    color: "bg-fuchsia-500/15 text-fuchsia-400",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <path d="M6 2.5v11M10 2.5v11M2.5 6h11M2.5 10h11" />
+      </svg>
+    ),
+  },
+  linear: {
+    color: "bg-sky-500/15 text-sky-400",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <circle cx="8" cy="8" r="5.5" />
+        <path d="M4 9l3 3M4.5 6l5.5 5.5M6.5 4l5.5 5.5" />
+      </svg>
+    ),
+  },
+  twilio: {
+    color: "bg-rose-500/15 text-rose-400",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <circle cx="8" cy="8" r="5.5" />
+        <circle cx="6.25" cy="6.25" r="0.75" />
+        <circle cx="9.75" cy="6.25" r="0.75" />
+        <circle cx="6.25" cy="9.75" r="0.75" />
+        <circle cx="9.75" cy="9.75" r="0.75" />
+      </svg>
+    ),
+  },
   clerk: {
     color: "bg-violet-500/15 text-violet-400",
     icon: (

@@ -22,15 +22,25 @@ export interface HmacVerification {
   signatureHeaders: string[];
   algorithm: HmacAlgorithm;
   encoding: DigestEncoding;
-  /** Template over `{id}`, `{timestamp}` and `{body}` (the raw body). */
+  /**
+   * Template over `{id}`, `{timestamp}`, `{body}` (the raw body), `{url}` (the public request URL)
+   * and `{params}` (form params sorted by name, each written as name + value).
+   */
   signedPayload: string;
   /** Stripped from a single-value signature when present, e.g. `sha256=`. */
   prefix?: string;
   entries?: SignatureEntries;
   secret: { encoding: 'utf8' | 'base64'; stripPrefix?: string };
   idHeaders?: string[];
-  /** Unix seconds, read from `headers` or from `entries.timestampKey`. */
-  timestamp?: { headers?: string[]; toleranceSeconds: number };
+  /** Read from `headers`, a JSON `body` field or `entries.timestampKey`; seconds unless `unit` says otherwise. */
+  timestamp?: {
+    headers?: string[];
+    body?: string[];
+    unit?: 'seconds' | 'milliseconds';
+    toleranceSeconds: number;
+  };
+  /** Query parameter carrying the body's hex SHA-256 when the body is not form params (Twilio's JSON deliveries). */
+  bodyHashParam?: string;
 }
 
 /** The provider sends the configured secret itself in a header. */
@@ -39,9 +49,16 @@ export interface SharedSecretVerification {
   signatureHeaders: string[];
 }
 
+/** A signed POST that only asks the receiver to echo a body field back, e.g. Slack's url_verification. */
+export interface BodyChallenge {
+  when: { body: string[]; equals: string };
+  echo: string[];
+}
+
 export interface Recipe {
   label: string;
   verification: HmacVerification | SharedSecretVerification;
+  challenge?: BodyChallenge;
   /** A request without any signature header stays unverified instead of failing. */
   signatureOptional?: boolean;
   /** Headers that identify this provider on the shared user URL; defaults to the signature headers. */
@@ -173,6 +190,75 @@ export const RECIPES: Record<Provider, Recipe> = {
     },
     eventType: [{ header: 'x-shopify-topic' }],
     deliveryId: [{ header: 'x-shopify-webhook-id' }],
+  },
+  // https://docs.slack.dev/authentication/verifying-requests-from-slack
+  slack: {
+    label: 'Slack',
+    verification: {
+      kind: 'hmac',
+      signatureHeaders: ['x-slack-signature'],
+      algorithm: 'sha256',
+      encoding: 'hex',
+      signedPayload: 'v0:{timestamp}:{body}',
+      prefix: 'v0=',
+      secret: { encoding: 'utf8' },
+      timestamp: {
+        headers: ['x-slack-request-timestamp'],
+        toleranceSeconds: FIVE_MINUTES,
+      },
+    },
+    challenge: {
+      when: { body: ['type'], equals: 'url_verification' },
+      echo: ['challenge'],
+    },
+    eventType: [
+      { body: ['event', 'type'] },
+      { body: ['type'] },
+      { body: ['command'] },
+    ],
+    deliveryId: [{ body: ['event_id'] }, { body: ['trigger_id'] }],
+  },
+  // https://linear.app/developers/webhooks — webhookTimestamp is in ms and should be within a minute
+  linear: {
+    label: 'Linear',
+    verification: {
+      kind: 'hmac',
+      signatureHeaders: ['linear-signature'],
+      algorithm: 'sha256',
+      encoding: 'hex',
+      signedPayload: '{body}',
+      secret: { encoding: 'utf8' },
+      timestamp: {
+        body: ['webhookTimestamp'],
+        unit: 'milliseconds',
+        toleranceSeconds: 60,
+      },
+    },
+    eventType: [
+      { join: [{ body: ['type'] }, { body: ['action'] }], separator: '.' },
+      { header: 'linear-event' },
+    ],
+    deliveryId: [{ header: 'linear-delivery' }],
+  },
+  // https://www.twilio.com/docs/usage/webhooks/webhooks-security — the secret is the account auth token
+  twilio: {
+    label: 'Twilio',
+    verification: {
+      kind: 'hmac',
+      signatureHeaders: ['x-twilio-signature'],
+      algorithm: 'sha1',
+      encoding: 'base64',
+      signedPayload: '{url}{params}',
+      secret: { encoding: 'utf8' },
+      bodyHashParam: 'bodySHA256',
+    },
+    eventType: [
+      { body: ['type'] },
+      { body: ['MessageStatus'] },
+      { body: ['SmsStatus'] },
+      { body: ['CallStatus'] },
+    ],
+    deliveryId: [{ header: 'i-twilio-idempotency-token' }, { body: ['id'] }],
   },
   'standard-webhooks': STANDARD_WEBHOOKS,
   clerk: { ...STANDARD_WEBHOOKS, label: 'Clerk' },

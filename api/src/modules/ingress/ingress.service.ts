@@ -148,12 +148,13 @@ export class IngressService {
   async processEvent(
     event: WebhookEvent,
     endpoint: Endpoint,
-    opts: { skipForward?: boolean } = {},
+    opts: { skipForward?: boolean; urls?: string[] } = {},
   ): Promise<void> {
     const { eventType, deliveryId } = this.signatureService.identify(
       endpoint.provider,
       event.headers,
       event.body,
+      event.rawBody ?? '',
     );
     const updates: Record<string, unknown> = {
       provider: endpoint.provider,
@@ -167,8 +168,11 @@ export class IngressService {
     if (endpoint.webhookSecret) {
       const { valid } = this.signatureService.verifyRequest(
         endpoint.provider,
-        event.headers,
-        event.rawBody ?? '',
+        {
+          headers: event.headers,
+          rawBody: event.rawBody ?? '',
+          urls: opts.urls,
+        },
         endpoint.webhookSecret,
       );
       if (valid !== null) {
