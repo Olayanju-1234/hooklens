@@ -57,7 +57,9 @@ export class IngressService {
       .where('ep.isActive = :isActive', { isActive: true })
       .orderBy('ep.createdAt', 'DESC');
 
-    if (slug.startsWith('usr_')) {
+    if (slug.startsWith('src_')) {
+      query.andWhere('ep.ingressSlug = :slug', { slug });
+    } else if (slug.startsWith('usr_')) {
       const user = await this.userRepo.findOne({
         where: { ingressSlug: slug },
       });
@@ -148,10 +150,9 @@ export class IngressService {
     endpoint: Endpoint,
     opts: { skipForward?: boolean } = {},
   ): Promise<void> {
-    // Parse event type from body
-    const eventType = this.extractEventType(endpoint.provider, event.body);
-    const idempotencyKey = this.extractIdempotencyKey(
+    const { eventType, deliveryId } = this.signatureService.identify(
       endpoint.provider,
+      event.headers,
       event.body,
     );
     const updates: Record<string, unknown> = {
@@ -159,25 +160,19 @@ export class IngressService {
       eventType,
     };
 
-    if (idempotencyKey) {
-      updates.idempotencyKey = idempotencyKey;
+    if (deliveryId) {
+      updates.idempotencyKey = deliveryId;
     }
 
-    // Verify signature if secret is configured
     if (endpoint.webhookSecret) {
-      const signature = this.signatureService.extractSignature(
+      const { valid } = this.signatureService.verifyRequest(
         endpoint.provider,
         event.headers,
+        event.rawBody ?? '',
+        endpoint.webhookSecret,
       );
-      if (signature && event.rawBody) {
-        updates.signatureValid = this.signatureService.verify(
-          endpoint.provider,
-          event.rawBody,
-          signature,
-          endpoint.webhookSecret,
-        );
-      } else if (endpoint.provider !== 'custom') {
-        updates.signatureValid = false;
+      if (valid !== null) {
+        updates.signatureValid = valid;
       }
     }
 
@@ -266,56 +261,5 @@ export class IngressService {
     this.logger.log(
       `Captured webhook ${event.id} (${endpoint.provider}:${eventType})`,
     );
-  }
-
-  private extractEventType(
-    provider: string,
-    body: Record<string, unknown> | null,
-  ): string | null {
-    if (!body) return null;
-    switch (provider) {
-      case 'stripe':
-        return (body.type as string) ?? null;
-      case 'paystack':
-        return (body.event as string) ?? null;
-      case 'flutterwave':
-        return (body.event as string) ?? (body['event.type'] as string) ?? null;
-      case 'mono':
-        return (body.event as string) ?? null;
-      case 'bags': {
-        const topic = body.topic as string | undefined;
-        const subject = body.subject as string | undefined;
-        return topic ? `${topic}${subject ? `.${subject}` : ''}` : null;
-      }
-      default:
-        return (body.type as string) ?? (body.event as string) ?? null;
-    }
-  }
-
-  private extractIdempotencyKey(
-    provider: string,
-    body: Record<string, unknown> | null,
-  ): string | null {
-    if (!body) return null;
-    switch (provider) {
-      case 'stripe':
-        return (body.id as string) ?? null;
-      case 'paystack': {
-        const data = body.data as Record<string, unknown> | undefined;
-        return (data?.id as string) ?? (data?.reference as string) ?? null;
-      }
-      case 'flutterwave': {
-        const data = body.data as Record<string, unknown> | undefined;
-        return (data?.id as string) ?? (data?.tx_ref as string) ?? null;
-      }
-      case 'mono':
-        return (body.id as string) ?? null;
-      case 'bags': {
-        const data = body.data as Record<string, unknown> | undefined;
-        return (data?.mint as string) ?? (data?.signature as string) ?? null;
-      }
-      default:
-        return (body.id as string) ?? (body.idempotency_key as string) ?? null;
-    }
   }
 }

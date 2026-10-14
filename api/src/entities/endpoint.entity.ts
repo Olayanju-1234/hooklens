@@ -14,12 +14,31 @@ import { Workspace } from './workspace.entity.js';
 import { ForwardDestination } from './forward-destination.entity.js';
 import { TransformRule } from './transform-rule.entity.js';
 
-export type Provider = 'stripe' | 'paystack' | 'flutterwave' | 'mono' | 'bags' | 'custom';
+export const PROVIDERS = [
+  'stripe',
+  'paystack',
+  'flutterwave',
+  'mono',
+  'bags',
+  'github',
+  'shopify',
+  'standard-webhooks',
+  'clerk',
+  'resend',
+  'openai',
+  'custom',
+] as const;
+
+export type Provider = (typeof PROVIDERS)[number];
 
 @Entity('endpoints')
 export class Endpoint {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  // Per-source ingress URL: /in/<ingressSlug>
+  @Column({ type: 'varchar', length: 32, unique: true })
+  ingressSlug!: string;
 
   @Column({ type: 'uuid' })
   userId!: string;

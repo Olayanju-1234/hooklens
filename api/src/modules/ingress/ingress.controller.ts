@@ -4,8 +4,8 @@ import type { Request, Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { IngressService } from './ingress.service.js';
 
-// User slugs are usr_ + 12 hex, workspace slugs ws_ + 12 hex
-const SLUG_PATTERN = /^(usr|ws)_[a-f0-9]{12}$/;
+// Source slugs are src_ + 24 hex; legacy user and workspace slugs usr_/ws_ + 12 hex
+const SLUG_PATTERN = /^(src_[a-f0-9]{24}|(usr|ws)_[a-f0-9]{12})$/;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -20,7 +20,7 @@ export class IngressController {
   @Post(':slug')
   @ApiOperation({
     summary:
-      'Receive a webhook; routed to an endpoint by provider signature header, else the newest endpoint',
+      'Receive a webhook. A src_ slug is one source; a usr_/ws_ slug routes by provider header, else the newest endpoint',
   })
   @ApiResponse({ status: 200, description: 'Webhook received' })
   @ApiParam({ name: 'slug', type: String })
