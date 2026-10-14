@@ -97,10 +97,10 @@ describe('AuthService', () => {
     });
 
     it('should throw ConflictException if email already exists', async () => {
-      mockUserRepo.findOne.mockResolvedValue({ id: 'existing' });
+      mockQueryBuilder.getOne.mockResolvedValueOnce({ id: 'existing' });
 
       await expect(
-        service.signup({ email: 'taken@example.com', password: 'password123' }),
+        service.signup({ email: 'Taken@Example.com', password: 'password123' }),
       ).rejects.toThrow(ConflictException);
     });
   });

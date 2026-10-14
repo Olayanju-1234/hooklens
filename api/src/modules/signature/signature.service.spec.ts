@@ -37,8 +37,24 @@ describe('SignatureService', () => {
       expect(service.verify('flutterwave', '{}', 'wrong', secret)).toBe(false);
     });
 
-    it('should return true for custom/unknown providers', () => {
-      expect(service.verify('custom', '{}', 'anything', 'secret')).toBe(true);
+    it('should verify HMAC-SHA256 for custom providers', () => {
+      const body = '{"a":1}';
+      const hmac = crypto
+        .createHmac('sha256', 'secret')
+        .update(body)
+        .digest('hex');
+      expect(service.verify('custom', body, hmac, 'secret')).toBe(true);
+      expect(service.verify('custom', body, `sha256=${hmac}`, 'secret')).toBe(
+        true,
+      );
+      expect(service.verify('custom', body, 'deadbeef', 'secret')).toBe(false);
+    });
+
+    it('should compare the plain secret for Mono', () => {
+      expect(service.verify('mono', '{}', 'mono-secret', 'mono-secret')).toBe(
+        true,
+      );
+      expect(service.verify('mono', '{}', 'wrong', 'mono-secret')).toBe(false);
     });
   });
 

@@ -13,7 +13,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { CombinedAuthGuard } from '../auth/guards/auth.guard.js';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -23,7 +23,10 @@ import {
 } from '@nestjs/swagger';
 import { EndpointsService } from './endpoints.service.js';
 import { CreateEndpointDto, UpdateEndpointDto } from './dto/endpoint.dto.js';
-import { CreateDestinationDto, UpdateDestinationDto } from './dto/destination.dto.js';
+import {
+  CreateDestinationDto,
+  UpdateDestinationDto,
+} from './dto/destination.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
 import { AuditService } from '../audit/audit.service.js';
@@ -32,7 +35,7 @@ import { WorkspaceGuard } from '../workspaces/guards/workspace.guard.js';
 @ApiTags('Endpoints')
 @ApiBearerAuth()
 @Controller('endpoints')
-@UseGuards(AuthGuard('jwt'), WorkspaceGuard)
+@UseGuards(CombinedAuthGuard, WorkspaceGuard)
 export class EndpointsController {
   private readonly logger = new Logger(EndpointsController.name);
 
@@ -173,7 +176,12 @@ export class EndpointsController {
     @Param('destinationId', ParseUUIDPipe) destinationId: string,
     @Body() dto: UpdateDestinationDto,
   ) {
-    return this.endpointsService.updateDestination(id, destinationId, user.sub, dto);
+    return this.endpointsService.updateDestination(
+      id,
+      destinationId,
+      user.sub,
+      dto,
+    );
   }
 
   @Delete(':id/destinations/:destinationId')

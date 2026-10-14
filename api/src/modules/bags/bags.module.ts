@@ -1,3 +1,4 @@
+import { AuthModule } from '../auth/auth.module.js';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Endpoint } from '../../entities/endpoint.entity.js';
@@ -9,6 +10,7 @@ import { BagsController } from './bags.controller.js';
 
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([Endpoint, WebhookEvent]),
     IngressModule,
     AlertingModule,

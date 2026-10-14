@@ -8,14 +8,23 @@ import {
   TransformOperationDto,
 } from './dto/transform.dto.js';
 
-function getByPath(obj: Record<string, unknown>, path: string): unknown {
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function splitPath(path: string): string[] | null {
   const keys = path.split('.');
+  // Rules saved before path validation existed may still carry prototype keys
+  return keys.some((k) => FORBIDDEN_KEYS.has(k) || k === '') ? null : keys;
+}
+
+function getByPath(obj: Record<string, unknown>, path: string): unknown {
+  const keys = splitPath(path);
+  if (!keys) return undefined;
   let current: unknown = obj;
   for (const key of keys) {
     if (
       current === null ||
-      current === undefined ||
-      typeof current !== 'object'
+      typeof current !== 'object' ||
+      !Object.hasOwn(current, key)
     ) {
       return undefined;
     }
@@ -29,15 +38,13 @@ function setByPath(
   path: string,
   value: unknown,
 ): void {
-  const keys = path.split('.');
+  const keys = splitPath(path);
+  if (!keys) return;
   let current: Record<string, unknown> = obj;
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
-    if (
-      current[key] === null ||
-      current[key] === undefined ||
-      typeof current[key] !== 'object'
-    ) {
+    const next = Object.hasOwn(current, key) ? current[key] : undefined;
+    if (next === null || typeof next !== 'object') {
       current[key] = {};
     }
     current = current[key] as Record<string, unknown>;
@@ -46,23 +53,19 @@ function setByPath(
 }
 
 function deleteByPath(obj: Record<string, unknown>, path: string): void {
-  const keys = path.split('.');
+  const keys = splitPath(path);
+  if (!keys) return;
   let current: Record<string, unknown> = obj;
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
-    if (
-      current[key] === null ||
-      current[key] === undefined ||
-      typeof current[key] !== 'object'
-    ) {
-      return;
-    }
-    current = current[key] as Record<string, unknown>;
+    const next = Object.hasOwn(current, key) ? current[key] : undefined;
+    if (next === null || typeof next !== 'object') return;
+    current = next as Record<string, unknown>;
   }
   delete current[keys[keys.length - 1]];
 }
 
-function applyOperations(
+export function applyOperations(
   operations: TransformOperationDto[],
   body: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -137,10 +140,13 @@ export class TransformService {
   }
 
   async update(
+    endpointId: string,
     ruleId: string,
     dto: UpdateTransformRuleDto,
   ): Promise<TransformRule> {
-    const rule = await this.ruleRepo.findOne({ where: { id: ruleId } });
+    const rule = await this.ruleRepo.findOne({
+      where: { id: ruleId, endpointId },
+    });
     if (!rule) {
       throw new NotFoundException('Transform rule not found');
     }
@@ -150,8 +156,10 @@ export class TransformService {
     return updated;
   }
 
-  async remove(ruleId: string): Promise<void> {
-    const rule = await this.ruleRepo.findOne({ where: { id: ruleId } });
+  async remove(endpointId: string, ruleId: string): Promise<void> {
+    const rule = await this.ruleRepo.findOne({
+      where: { id: ruleId, endpointId },
+    });
     if (!rule) {
       throw new NotFoundException('Transform rule not found');
     }

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
+import { WorkspacesService } from '../workspaces/workspaces.service.js';
 import { EventsService } from './events.service.js';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
 import { Endpoint } from '../../entities/endpoint.entity.js';
@@ -21,6 +22,10 @@ describe('EventsService', () => {
   const mockForwardResultRepo = {
     find: jest.fn(),
   };
+  const mockWorkspacesService = {
+    isMember: jest.fn().mockResolvedValue(false),
+    assertMembership: jest.fn().mockResolvedValue(undefined),
+  };
   const mockForwardQueue = {
     add: jest.fn(),
   };
@@ -36,6 +41,7 @@ describe('EventsService', () => {
           useValue: mockForwardResultRepo,
         },
         { provide: 'BullQueue_webhook-forward', useValue: mockForwardQueue },
+        { provide: WorkspacesService, useValue: mockWorkspacesService },
       ],
     }).compile();
 
@@ -59,13 +65,13 @@ describe('EventsService', () => {
       );
     });
 
-    it('should throw ForbiddenException for wrong user', async () => {
+    it('should hide events from users outside the owner and workspace', async () => {
       mockEventRepo.findOne.mockResolvedValue({
         id: 'evt-1',
         userId: 'user-2',
       });
       await expect(service.findOne('evt-1', 'user-1')).rejects.toThrow(
-        ForbiddenException,
+        NotFoundException,
       );
     });
   });
@@ -130,7 +136,12 @@ describe('EventsService', () => {
         forwardStatus: 'forwarded' as const,
         receivedAt: new Date(),
       };
-      const endpoint = { id: 'ep-1', forwardUrl: 'https://example.com/hook' };
+      const endpoint = {
+        id: 'ep-1',
+        forwardUrl: 'https://example.com/hook',
+        retryMaxAttempts: 3,
+        retryBackoffMs: 500,
+      };
 
       mockEventRepo.findOne.mockResolvedValue(original);
       mockEndpointRepo.findOne.mockResolvedValue(endpoint);
@@ -147,11 +158,11 @@ describe('EventsService', () => {
       expect(result.isReplay).toBe(true);
       expect(result.originalEventId).toBe('evt-1');
       expect(result.forwardStatus).toBe('pending');
-      expect(mockForwardQueue.add).toHaveBeenCalledWith('forward', {
-        eventId: 'evt-replay-1',
-        endpointId: 'ep-1',
-        userId: 'user-1',
-      });
+      expect(mockForwardQueue.add).toHaveBeenCalledWith(
+        'forward',
+        { eventId: 'evt-replay-1', endpointId: 'ep-1', userId: 'user-1' },
+        { attempts: 4, backoff: { type: 'exponential', delay: 1000 } },
+      );
     });
   });
 });

@@ -4,8 +4,10 @@ import type { Request, Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { IngressService } from './ingress.service.js';
 
-// Slug must match usr_ followed by exactly 12 hex chars
-const SLUG_PATTERN = /^usr_[a-f0-9]{12}$/;
+// User slugs are usr_ + 12 hex, workspace slugs ws_ + 12 hex
+const SLUG_PATTERN = /^(usr|ws)_[a-f0-9]{12}$/;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @ApiTags('Ingress')
 @Controller('in')
@@ -16,58 +18,119 @@ export class IngressController {
   constructor(private readonly ingressService: IngressService) {}
 
   @Post(':slug')
-  @ApiOperation({ summary: 'Receive an incoming webhook event' })
-  @ApiResponse({
-    status: 200,
-    description: 'Webhook received and acknowledged',
+  @ApiOperation({
+    summary:
+      'Receive a webhook; routed to an endpoint by provider signature header, else the newest endpoint',
   })
+  @ApiResponse({ status: 200, description: 'Webhook received' })
   @ApiParam({ name: 'slug', type: String })
-  async receive(
+  receive(
     @Param('slug') slug: string,
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    // Validate slug format — prevents path traversal and junk lookups
+    return this.handle(slug, undefined, req, res);
+  }
+
+  @Post(':slug/:endpointId')
+  @ApiOperation({ summary: 'Receive a webhook for a specific endpoint' })
+  @ApiResponse({ status: 200, description: 'Webhook received' })
+  @ApiParam({ name: 'slug', type: String })
+  @ApiParam({ name: 'endpointId', type: String })
+  receiveForEndpoint(
+    @Param('slug') slug: string,
+    @Param('endpointId') endpointId: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    if (!UUID_PATTERN.test(endpointId)) {
+      return res.status(200).json({ status: 'ok' });
+    }
+    return this.handle(slug, endpointId, req, res);
+  }
+
+  private async handle(
+    slug: string,
+    endpointId: string | undefined,
+    req: Request,
+    res: Response,
+  ) {
+    // Unknown or malformed slugs get a plain 200 so nothing leaks to the sender
     if (!SLUG_PATTERN.test(slug)) {
       return res.status(200).json({ status: 'ok' });
     }
 
-    // Always respond 200 quickly — never leak info to PSP
-    const resolved = await this.ingressService.resolveEndpoint(slug);
+    const headers = req.headers as Record<string, string>;
+    const resolved = await this.ingressService.resolveEndpoint(slug, {
+      endpointId,
+      headers,
+    });
     if (!resolved) {
       return res.status(200).json({ status: 'ok' });
     }
 
     const { endpoint, userId } = resolved;
-
-    const rawBody =
-      (req as unknown as { rawBody?: Buffer }).rawBody?.toString() ??
-      JSON.stringify(req.body);
+    const { rawBody, body } = this.readBody(req);
 
     const event = await this.ingressService.capture({
       endpointId: endpoint.id,
       userId,
       method: req.method,
       path: req.path,
-      headers: req.headers as Record<string, string>,
+      headers,
       rawBody,
-      body: req.body as Record<string, unknown> | null,
+      body,
       sourceIp: req.ip ?? null,
     });
 
-    // Process async — don't block the response
+    // A request Hookdash itself forwarded must not be forwarded again (loops)
+    const fromHookdash = Boolean(headers['x-hookdash-event-id']);
+
     void this.ingressService
-      .processEvent(event, endpoint)
+      .processEvent(event, endpoint, { skipForward: fromHookdash })
       .catch((err: Error) => {
         this.logger.error(
           `Failed to process event ${event.id}: ${err.message}`,
         );
       });
 
-    const statusCode = endpoint.responseStatusCode ?? 200;
-    const responseBody = endpoint.responseBody
-      ? (JSON.parse(endpoint.responseBody) as Record<string, unknown>)
-      : { status: 'ok' };
-    return res.status(statusCode).json(responseBody);
+    return res
+      .status(endpoint.responseStatusCode ?? 200)
+      .json(this.responseBody(endpoint.responseBody));
+  }
+
+  private readBody(req: Request): {
+    rawBody: string;
+    body: Record<string, unknown> | null;
+  } {
+    const raw = (req as Request & { rawBody?: Buffer }).rawBody;
+    const parsed: unknown = req.body;
+
+    if (typeof parsed === 'string') {
+      return { rawBody: raw?.toString() ?? parsed, body: this.tryJson(parsed) };
+    }
+    if (parsed && typeof parsed === 'object') {
+      return {
+        rawBody: raw?.toString() ?? JSON.stringify(parsed),
+        body: parsed as Record<string, unknown>,
+      };
+    }
+    return { rawBody: raw?.toString() ?? '', body: null };
+  }
+
+  private tryJson(text: string): Record<string, unknown> | null {
+    try {
+      const value: unknown = JSON.parse(text);
+      return value && typeof value === 'object'
+        ? (value as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private responseBody(configured: string | null): Record<string, unknown> {
+    if (!configured) return { status: 'ok' };
+    return this.tryJson(configured) ?? { status: 'ok' };
   }
 }

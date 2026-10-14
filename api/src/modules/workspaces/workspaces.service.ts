@@ -9,6 +9,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
+import { isUUID } from 'class-validator';
 import { Workspace } from '../../entities/workspace.entity.js';
 import { WorkspaceMember } from '../../entities/workspace-member.entity.js';
 import { WorkspaceInvite } from '../../entities/workspace-invite.entity.js';
@@ -18,6 +19,16 @@ import {
   InviteMemberDto,
 } from './dto/workspace.dto.js';
 import { EmailService } from '../email/email.service.js';
+
+export interface WorkspaceMemberView {
+  id: string;
+  userId: string;
+  email: string;
+  role: string;
+  createdAt: Date;
+}
+
+export type WorkspaceInviteView = WorkspaceInvite & { inviteUrl: string };
 
 @Injectable()
 export class WorkspacesService {
@@ -64,7 +75,9 @@ export class WorkspacesService {
     return memberships.map((m) => m.workspace);
   }
 
-  async findOne(workspaceId: string): Promise<Workspace> {
+  async findOne(
+    workspaceId: string,
+  ): Promise<Omit<Workspace, 'members'> & { members: WorkspaceMemberView[] }> {
     const workspace = await this.workspaceRepo.findOne({
       where: { id: workspaceId },
       relations: ['members', 'members.user'],
@@ -72,7 +85,15 @@ export class WorkspacesService {
     if (!workspace) {
       throw new NotFoundException('Workspace not found');
     }
-    return workspace;
+    // Expose only what the members list needs, never co-members' ingress slugs
+    const members = (workspace.members ?? []).map((m) => ({
+      id: m.id,
+      userId: m.userId,
+      email: m.user?.email ?? '',
+      role: m.role,
+      createdAt: m.createdAt,
+    }));
+    return { ...workspace, members };
   }
 
   async update(
@@ -110,14 +131,19 @@ export class WorkspacesService {
   async invite(
     workspaceId: string,
     dto: InviteMemberDto,
-  ): Promise<WorkspaceInvite> {
+    inviterEmail: string,
+  ): Promise<WorkspaceInviteView> {
+    const email = dto.email.trim().toLowerCase();
     const existing = await this.inviteRepo.findOne({
-      where: { workspaceId, email: dto.email },
+      where: { workspaceId, email },
     });
     if (existing) {
-      throw new ConflictException(
-        'An invite already exists for this email in this workspace',
-      );
+      if (existing.expiresAt > new Date()) {
+        throw new ConflictException(
+          'An invite already exists for this email in this workspace',
+        );
+      }
+      await this.inviteRepo.remove(existing);
     }
 
     const token = randomBytes(32).toString('hex');
@@ -126,7 +152,7 @@ export class WorkspacesService {
 
     const invite = this.inviteRepo.create({
       workspaceId,
-      email: dto.email,
+      email,
       role: dto.role ?? 'member',
       token,
       expiresAt,
@@ -139,24 +165,26 @@ export class WorkspacesService {
     });
     this.emailService
       .sendInvite(
-        dto.email,
+        email,
         workspace?.name ?? 'Hookdash Workspace',
         token,
-        'team@hookdash.dev',
+        inviterEmail || 'A Hookdash user',
       )
       .catch((err: Error) => {
         this.logger.error(
-          `Failed to send invite email to ${dto.email}: ${err.message}`,
+          `Failed to send invite email to ${email}: ${err.message}`,
         );
       });
 
-    this.logger.log(
-      `Invite created for ${dto.email} in workspace ${workspaceId}`,
-    );
-    return saved;
+    this.logger.log(`Invite created for ${email} in workspace ${workspaceId}`);
+    return this.toInviteView(saved);
   }
 
-  async acceptInvite(token: string, userId: string): Promise<WorkspaceMember> {
+  async acceptInvite(
+    token: string,
+    userId: string,
+    userEmail: string,
+  ): Promise<WorkspaceMember> {
     const invite = await this.inviteRepo.findOne({ where: { token } });
     if (!invite) {
       throw new NotFoundException('Invite not found');
@@ -164,6 +192,11 @@ export class WorkspacesService {
     if (new Date() > invite.expiresAt) {
       await this.inviteRepo.remove(invite);
       throw new BadRequestException('Invite has expired');
+    }
+    if (invite.email.toLowerCase() !== userEmail.trim().toLowerCase()) {
+      throw new ForbiddenException(
+        `This invite was sent to ${invite.email}. Sign in with that email to accept it.`,
+      );
     }
 
     const existingMembership = await this.memberRepo.findOne({
@@ -211,11 +244,16 @@ export class WorkspacesService {
     this.logger.log(`Member ${userId} removed from workspace ${workspaceId}`);
   }
 
-  async listInvites(workspaceId: string): Promise<WorkspaceInvite[]> {
-    return this.inviteRepo.find({
+  async listInvites(workspaceId: string): Promise<WorkspaceInviteView[]> {
+    const invites = await this.inviteRepo.find({
       where: { workspaceId },
       order: { createdAt: 'DESC' },
     });
+    return invites.map((invite) => this.toInviteView(invite));
+  }
+
+  private toInviteView(invite: WorkspaceInvite): WorkspaceInviteView {
+    return { ...invite, inviteUrl: this.emailService.inviteUrl(invite.token) };
   }
 
   async revokeInvite(workspaceId: string, inviteId: string): Promise<void> {
@@ -229,19 +267,22 @@ export class WorkspacesService {
     this.logger.log(`Invite ${inviteId} revoked in workspace ${workspaceId}`);
   }
 
+  async isMember(workspaceId: string, userId: string): Promise<boolean> {
+    // A malformed x-workspace-id would otherwise reach Postgres as an invalid uuid
+    if (!isUUID(workspaceId)) return false;
+    return this.memberRepo.exists({ where: { workspaceId, userId } });
+  }
+
   async assertMembership(workspaceId: string, userId: string): Promise<void> {
-    const membership = await this.memberRepo.findOne({
-      where: { workspaceId, userId },
-    });
-    if (!membership) {
+    if (!(await this.isMember(workspaceId, userId))) {
       throw new ForbiddenException('Not a member of this workspace');
     }
   }
 
   async assertOwner(workspaceId: string, userId: string): Promise<void> {
-    const membership = await this.memberRepo.findOne({
-      where: { workspaceId, userId },
-    });
+    const membership = isUUID(workspaceId)
+      ? await this.memberRepo.findOne({ where: { workspaceId, userId } })
+      : null;
     if (!membership || membership.role !== 'owner') {
       throw new ForbiddenException('Owner access required');
     }

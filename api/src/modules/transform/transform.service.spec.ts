@@ -100,7 +100,7 @@ describe('TransformService', () => {
       mockRuleRepo.findOne.mockResolvedValue(rule);
       mockRuleRepo.save.mockImplementation((r: Partial<TransformRule>) => r);
 
-      const result = await service.update('r-1', {
+      const result = await service.update('ep-1', 'r-1', {
         name: 'Updated Name',
         isActive: false,
       });
@@ -112,9 +112,9 @@ describe('TransformService', () => {
     it('should throw NotFoundException when rule not found', async () => {
       mockRuleRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.update('r-999', { name: 'Nope' })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.update('ep-1', 'r-999', { name: 'Nope' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -124,7 +124,7 @@ describe('TransformService', () => {
       mockRuleRepo.findOne.mockResolvedValue(rule);
       mockRuleRepo.remove.mockResolvedValue(rule);
 
-      await service.remove('r-1');
+      await service.remove('ep-1', 'r-1');
 
       expect(mockRuleRepo.remove).toHaveBeenCalledWith(rule);
     });
@@ -132,7 +132,9 @@ describe('TransformService', () => {
     it('should throw NotFoundException when rule not found', async () => {
       mockRuleRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.remove('r-999')).rejects.toThrow(NotFoundException);
+      await expect(service.remove('ep-1', 'r-999')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

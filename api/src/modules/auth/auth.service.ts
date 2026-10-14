@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
   NotFoundException,
   BadRequestException,
+  ServiceUnavailableException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -26,6 +27,10 @@ import {
 } from './dto/auth.dto.js';
 import { EmailService } from '../email/email.service.js';
 
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -44,9 +49,8 @@ export class AuthService {
   async signup(
     dto: SignupDto,
   ): Promise<{ accessToken: string; ingressSlug: string }> {
-    const existing = await this.userRepo.findOne({
-      where: { email: dto.email },
-    });
+    const email = normalizeEmail(dto.email);
+    const existing = await this.findByEmail(email);
     if (existing) {
       throw new ConflictException('Email already registered');
     }
@@ -56,7 +60,7 @@ export class AuthService {
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
     const user = this.userRepo.create({
-      email: dto.email,
+      email,
       passwordHash,
       ingressSlug,
       verificationToken,
@@ -98,7 +102,7 @@ export class AuthService {
     const user = await this.userRepo
       .createQueryBuilder('user')
       .addSelect('user.passwordHash')
-      .where('user.email = :email', { email: dto.email })
+      .where('LOWER(user.email) = :email', { email: normalizeEmail(dto.email) })
       .getOne();
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -120,9 +124,13 @@ export class AuthService {
   }
 
   async forgotPassword(dto: ForgotPasswordDto): Promise<{ sent: boolean }> {
-    const user = await this.userRepo.findOne({
-      where: { email: dto.email },
-    });
+    if (!this.emailService.isConfigured()) {
+      throw new ServiceUnavailableException(
+        'Password reset by email is not available right now. Sign in with Google or GitHub, or contact support.',
+      );
+    }
+
+    const user = await this.findByEmail(normalizeEmail(dto.email));
 
     // Always return success to prevent email enumeration
     if (!user) {
@@ -283,14 +291,26 @@ export class AuthService {
     email: string;
     provider: string;
   }): Promise<{ accessToken: string; ingressSlug: string }> {
-    let user = await this.userRepo.findOne({
-      where: { email: profile.email },
-    });
+    const email = normalizeEmail(profile.email);
+    let user = await this.findByEmail(email);
+
+    if (user && !user.emailVerified) {
+      // The provider just proved ownership; drop any password set by whoever registered the address unverified
+      await this.userRepo.update(user.id, {
+        emailVerified: true,
+        verificationToken: null,
+        passwordHash: null,
+        oauthProvider: profile.provider,
+      });
+      this.logger.warn(
+        `OAuth sign-in verified unverified account ${user.id}; password login removed`,
+      );
+    }
 
     if (!user) {
       const ingressSlug = `usr_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
       user = this.userRepo.create({
-        email: profile.email,
+        email,
         ingressSlug,
         oauthProvider: profile.provider,
         emailVerified: true,
@@ -317,6 +337,13 @@ export class AuthService {
 
     const accessToken = this.generateToken(user);
     return { accessToken, ingressSlug: user.ingressSlug };
+  }
+
+  private findByEmail(email: string): Promise<User | null> {
+    return this.userRepo
+      .createQueryBuilder('user')
+      .where('LOWER(user.email) = :email', { email })
+      .getOne();
   }
 
   private generateToken(user: User): string {

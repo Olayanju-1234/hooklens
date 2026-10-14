@@ -10,7 +10,7 @@ import {
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { CombinedAuthGuard } from '../auth/guards/auth.guard.js';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -30,7 +30,7 @@ import { WorkspaceGuard } from '../workspaces/guards/workspace.guard.js';
 @ApiTags('Alerting')
 @ApiBearerAuth()
 @Controller()
-@UseGuards(AuthGuard('jwt'), WorkspaceGuard)
+@UseGuards(CombinedAuthGuard, WorkspaceGuard)
 export class AlertingController {
   constructor(private readonly alertingService: AlertingService) {}
 
@@ -64,10 +64,11 @@ export class AlertingController {
   })
   @ApiParam({ name: 'id', type: String })
   updateChannel(
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAlertChannelDto,
   ) {
-    return this.alertingService.updateChannel(id, dto);
+    return this.alertingService.updateChannel(workspaceId, id, dto);
   }
 
   @Delete('alert-channels/:id')
@@ -77,8 +78,11 @@ export class AlertingController {
     description: 'Alert channel deleted successfully',
   })
   @ApiParam({ name: 'id', type: String })
-  deleteChannel(@Param('id', ParseUUIDPipe) id: string) {
-    return this.alertingService.deleteChannel(id);
+  deleteChannel(
+    @Headers('x-workspace-id') workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.alertingService.deleteChannel(workspaceId, id);
   }
 
   @Post('alert-channels/:id/test')
@@ -88,8 +92,11 @@ export class AlertingController {
     description: 'Test notification sent successfully',
   })
   @ApiParam({ name: 'id', type: String })
-  testChannel(@Param('id', ParseUUIDPipe) id: string) {
-    return this.alertingService.testChannel(id);
+  testChannel(
+    @Headers('x-workspace-id') workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.alertingService.testChannel(workspaceId, id);
   }
 
   // ─── Rules ─────────────────────────────────────────────
@@ -116,18 +123,22 @@ export class AlertingController {
   @ApiResponse({ status: 200, description: 'Alert rule updated successfully' })
   @ApiParam({ name: 'id', type: String })
   updateRule(
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAlertRuleDto,
   ) {
-    return this.alertingService.updateRule(id, dto);
+    return this.alertingService.updateRule(workspaceId, id, dto);
   }
 
   @Delete('alert-rules/:id')
   @ApiOperation({ summary: 'Delete an alert rule' })
   @ApiResponse({ status: 200, description: 'Alert rule deleted successfully' })
   @ApiParam({ name: 'id', type: String })
-  deleteRule(@Param('id', ParseUUIDPipe) id: string) {
-    return this.alertingService.deleteRule(id);
+  deleteRule(
+    @Headers('x-workspace-id') workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.alertingService.deleteRule(workspaceId, id);
   }
 
   // ─── History ───────────────────────────────────────────

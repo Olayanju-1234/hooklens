@@ -3,7 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { DeadLetterService } from './dead-letter.service.js';
 import { DeadLetterEvent } from '../../entities/dead-letter-event.entity.js';
-import { Endpoint } from '../../entities/endpoint.entity.js';
+import { EndpointsService } from '../endpoints/endpoints.service.js';
 
 describe('DeadLetterService', () => {
   let service: DeadLetterService;
@@ -13,8 +13,14 @@ describe('DeadLetterService', () => {
     findOne: jest.fn(),
     remove: jest.fn(),
   };
-  const mockEndpointRepo = {
+  const mockEndpointsService = {
     findOne: jest.fn(),
+  };
+  const endpoint = {
+    id: 'ep-1',
+    userId: 'user-1',
+    retryMaxAttempts: 2,
+    retryBackoffMs: 5000,
   };
   const mockForwardQueue = {
     add: jest.fn(),
@@ -28,10 +34,7 @@ describe('DeadLetterService', () => {
           provide: getRepositoryToken(DeadLetterEvent),
           useValue: mockDeadLetterRepo,
         },
-        {
-          provide: getRepositoryToken(Endpoint),
-          useValue: mockEndpointRepo,
-        },
+        { provide: EndpointsService, useValue: mockEndpointsService },
         { provide: 'BullQueue_webhook-forward', useValue: mockForwardQueue },
       ],
     }).compile();
@@ -42,20 +45,20 @@ describe('DeadLetterService', () => {
 
   describe('list', () => {
     it('should return dead letters for endpoint', async () => {
-      const endpoint = { id: 'ep-1', userId: 'user-1' };
       const deadLetters = [
         { id: 'dl-1', eventId: 'evt-1', endpointId: 'ep-1' },
         { id: 'dl-2', eventId: 'evt-2', endpointId: 'ep-1' },
       ];
-      mockEndpointRepo.findOne.mockResolvedValue(endpoint);
+      mockEndpointsService.findOne.mockResolvedValue(endpoint);
       mockDeadLetterRepo.find.mockResolvedValue(deadLetters);
 
       const result = await service.list('ep-1', 'user-1');
 
       expect(result).toEqual(deadLetters);
-      expect(mockEndpointRepo.findOne).toHaveBeenCalledWith({
-        where: { id: 'ep-1', userId: 'user-1' },
-      });
+      expect(mockEndpointsService.findOne).toHaveBeenCalledWith(
+        'ep-1',
+        'user-1',
+      );
       expect(mockDeadLetterRepo.find).toHaveBeenCalledWith({
         where: { endpointId: 'ep-1' },
         relations: ['event'],
@@ -64,7 +67,9 @@ describe('DeadLetterService', () => {
     });
 
     it('should throw NotFoundException when endpoint not found', async () => {
-      mockEndpointRepo.findOne.mockResolvedValue(null);
+      mockEndpointsService.findOne.mockRejectedValue(
+        new NotFoundException('Endpoint not found'),
+      );
 
       await expect(service.list('ep-999', 'user-1')).rejects.toThrow(
         NotFoundException,
@@ -72,7 +77,9 @@ describe('DeadLetterService', () => {
     });
 
     it('should throw NotFoundException for wrong user', async () => {
-      mockEndpointRepo.findOne.mockResolvedValue(null);
+      mockEndpointsService.findOne.mockRejectedValue(
+        new NotFoundException('Endpoint not found'),
+      );
 
       await expect(service.list('ep-1', 'user-wrong')).rejects.toThrow(
         NotFoundException,
@@ -82,54 +89,57 @@ describe('DeadLetterService', () => {
 
   describe('retry', () => {
     it('should re-queue job and remove dead letter', async () => {
-      const endpoint = { id: 'ep-1', userId: 'user-1' };
       const deadLetter = {
         id: 'dl-1',
         eventId: 'evt-1',
         endpointId: 'ep-1',
         destinationId: 'dest-1',
       };
-      mockEndpointRepo.findOne.mockResolvedValue(endpoint);
+      mockEndpointsService.findOne.mockResolvedValue(endpoint);
       mockDeadLetterRepo.findOne.mockResolvedValue(deadLetter);
       mockForwardQueue.add.mockResolvedValue({});
       mockDeadLetterRepo.remove.mockResolvedValue(deadLetter);
 
       await service.retry('ep-1', 'dl-1', 'user-1');
 
-      expect(mockForwardQueue.add).toHaveBeenCalledWith('forward', {
-        eventId: 'evt-1',
-        endpointId: 'ep-1',
-        userId: 'user-1',
-        destinationId: 'dest-1',
-      });
+      expect(mockForwardQueue.add).toHaveBeenCalledWith(
+        'forward',
+        {
+          eventId: 'evt-1',
+          endpointId: 'ep-1',
+          userId: 'user-1',
+          destinationId: 'dest-1',
+        },
+        { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
+      );
       expect(mockDeadLetterRepo.remove).toHaveBeenCalledWith(deadLetter);
     });
 
     it('should pass undefined destinationId when null', async () => {
-      const endpoint = { id: 'ep-1', userId: 'user-1' };
       const deadLetter = {
         id: 'dl-1',
         eventId: 'evt-1',
         endpointId: 'ep-1',
         destinationId: null,
       };
-      mockEndpointRepo.findOne.mockResolvedValue(endpoint);
+      mockEndpointsService.findOne.mockResolvedValue(endpoint);
       mockDeadLetterRepo.findOne.mockResolvedValue(deadLetter);
       mockForwardQueue.add.mockResolvedValue({});
       mockDeadLetterRepo.remove.mockResolvedValue(deadLetter);
 
       await service.retry('ep-1', 'dl-1', 'user-1');
 
-      expect(mockForwardQueue.add).toHaveBeenCalledWith('forward', {
-        eventId: 'evt-1',
-        endpointId: 'ep-1',
-        userId: 'user-1',
-        destinationId: undefined,
-      });
+      expect(mockForwardQueue.add).toHaveBeenCalledWith(
+        'forward',
+        expect.objectContaining({ destinationId: undefined }),
+        expect.any(Object),
+      );
     });
 
     it('should throw NotFoundException when endpoint not found', async () => {
-      mockEndpointRepo.findOne.mockResolvedValue(null);
+      mockEndpointsService.findOne.mockRejectedValue(
+        new NotFoundException('Endpoint not found'),
+      );
 
       await expect(service.retry('ep-999', 'dl-1', 'user-1')).rejects.toThrow(
         NotFoundException,
@@ -137,10 +147,7 @@ describe('DeadLetterService', () => {
     });
 
     it('should throw NotFoundException when dead letter not found', async () => {
-      mockEndpointRepo.findOne.mockResolvedValue({
-        id: 'ep-1',
-        userId: 'user-1',
-      });
+      mockEndpointsService.findOne.mockResolvedValue(endpoint);
       mockDeadLetterRepo.findOne.mockResolvedValue(null);
 
       await expect(service.retry('ep-1', 'dl-999', 'user-1')).rejects.toThrow(
@@ -151,9 +158,8 @@ describe('DeadLetterService', () => {
 
   describe('discard', () => {
     it('should remove dead letter', async () => {
-      const endpoint = { id: 'ep-1', userId: 'user-1' };
       const deadLetter = { id: 'dl-1', eventId: 'evt-1', endpointId: 'ep-1' };
-      mockEndpointRepo.findOne.mockResolvedValue(endpoint);
+      mockEndpointsService.findOne.mockResolvedValue(endpoint);
       mockDeadLetterRepo.findOne.mockResolvedValue(deadLetter);
       mockDeadLetterRepo.remove.mockResolvedValue(deadLetter);
 
@@ -164,7 +170,9 @@ describe('DeadLetterService', () => {
     });
 
     it('should throw NotFoundException when endpoint not found', async () => {
-      mockEndpointRepo.findOne.mockResolvedValue(null);
+      mockEndpointsService.findOne.mockRejectedValue(
+        new NotFoundException('Endpoint not found'),
+      );
 
       await expect(service.discard('ep-999', 'dl-1', 'user-1')).rejects.toThrow(
         NotFoundException,
@@ -172,10 +180,7 @@ describe('DeadLetterService', () => {
     });
 
     it('should throw NotFoundException when dead letter not found', async () => {
-      mockEndpointRepo.findOne.mockResolvedValue({
-        id: 'ep-1',
-        userId: 'user-1',
-      });
+      mockEndpointsService.findOne.mockResolvedValue(endpoint);
       mockDeadLetterRepo.findOne.mockResolvedValue(null);
 
       await expect(service.discard('ep-1', 'dl-999', 'user-1')).rejects.toThrow(

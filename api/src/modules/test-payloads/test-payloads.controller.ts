@@ -10,7 +10,7 @@ import {
   HttpStatus,
   NotFoundException,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { CombinedAuthGuard } from '../auth/guards/auth.guard.js';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -22,6 +22,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { User } from '../../entities/user.entity.js';
+import { Endpoint, type Provider } from '../../entities/endpoint.entity.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
 import { TestPayloadsService } from './test-payloads.service.js';
@@ -29,7 +30,7 @@ import { TestPayloadsService } from './test-payloads.service.js';
 @ApiTags('Test Payloads')
 @ApiBearerAuth()
 @Controller('test-payloads')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(CombinedAuthGuard)
 export class TestPayloadsController {
   private readonly logger = new Logger(TestPayloadsController.name);
 
@@ -38,6 +39,8 @@ export class TestPayloadsController {
     private readonly configService: ConfigService,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(Endpoint)
+    private readonly endpointRepo: Repository<Endpoint>,
   ) {}
 
   @Get()
@@ -95,8 +98,19 @@ export class TestPayloadsController {
 
     const port = this.configService.get<number>('port') ?? 3000;
     const baseUrl = `http://localhost:${port}`;
+    // Route to this provider's endpoint when there is one, else the shared slug URL
+    const endpoint = await this.endpointRepo.findOne({
+      where: {
+        userId: user.id,
+        provider: provider as Provider,
+        isActive: true,
+      },
+      order: { createdAt: 'DESC' },
+    });
     // Ingress route is excluded from global 'api' prefix — must NOT include /api/
-    const ingressUrl = `${baseUrl}/in/${user.ingressSlug}`;
+    const ingressUrl = endpoint
+      ? `${baseUrl}/in/${user.ingressSlug}/${endpoint.id}`
+      : `${baseUrl}/in/${user.ingressSlug}`;
 
     try {
       const response = await fetch(ingressUrl, {

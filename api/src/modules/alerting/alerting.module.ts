@@ -1,3 +1,4 @@
+import { AuthModule } from '../auth/auth.module.js';
 import { Module, Logger, OnModuleInit } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule, InjectQueue } from '@nestjs/bullmq';
@@ -19,6 +20,7 @@ import type { AlertCheckJobData } from './alerting.processor.js';
 
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([
       AlertChannel,
       AlertRule,
@@ -56,7 +58,7 @@ export class AlertingModule implements OnModuleInit {
         {
           repeat: { every: 5 * 60 * 1000 },
           removeOnComplete: true,
-          removeOnFail: false,
+          removeOnFail: 20,
         },
       );
       this.logger.log(

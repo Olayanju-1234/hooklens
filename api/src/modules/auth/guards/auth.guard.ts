@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiKeyGuard } from './api-key.guard.js';
@@ -28,14 +29,11 @@ export class CombinedAuthGuard implements CanActivate {
       // JWT failed, fall through to API key
     }
 
-    // Fall back to API key
-    try {
-      return await this.apiKeyGuard.canActivate(context);
-    } catch (err: unknown) {
-      this.logger.warn(
-        `Both JWT and API key auth failed: ${(err as Error).message}`,
-      );
-      return false;
+    // Fall back to API key; a plain false would surface as 403 instead of 401
+    if (await this.apiKeyGuard.canActivate(context)) {
+      return true;
     }
+    this.logger.debug('Request rejected: no valid JWT or API key');
+    throw new UnauthorizedException();
   }
 }

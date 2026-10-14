@@ -1,3 +1,4 @@
+import { AuthModule } from '../auth/auth.module.js';
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditLog } from '../../entities/audit-log.entity.js';
@@ -7,6 +8,7 @@ import { WorkspacesModule } from '../workspaces/workspaces.module.js';
 
 @Module({
   imports: [
+    forwardRef(() => AuthModule),
     TypeOrmModule.forFeature([AuditLog]),
     forwardRef(() => WorkspacesModule),
   ],

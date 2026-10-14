@@ -4,8 +4,21 @@ import {
   IsBoolean,
   IsArray,
   IsNumber,
+  IsIn,
+  IsObject,
+  Matches,
+  MaxLength,
+  ArrayMaxSize,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+// Dot paths only; blocks prototype keys so a rule can't reach Object.prototype
+const SAFE_PATH =
+  /^(?!.*(?:^|\.)(?:__proto__|constructor|prototype)(?:\.|$))[^.]+(?:\.[^.]+)*$/;
+const SAFE_PATH_MESSAGE =
+  'path must be a dot path without __proto__, constructor or prototype segments';
 
 export class TransformOperationDto {
   @ApiProperty({
@@ -13,7 +26,7 @@ export class TransformOperationDto {
     example: 'rename',
     enum: ['rename', 'remove', 'set', 'copy'],
   })
-  @IsString()
+  @IsIn(['rename', 'remove', 'set', 'copy'])
   type!: 'rename' | 'remove' | 'set' | 'copy';
 
   @ApiProperty({
@@ -21,6 +34,8 @@ export class TransformOperationDto {
     example: 'data.amount',
   })
   @IsString()
+  @MaxLength(200)
+  @Matches(SAFE_PATH, { message: SAFE_PATH_MESSAGE })
   path!: string;
 
   @ApiPropertyOptional({
@@ -29,6 +44,8 @@ export class TransformOperationDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(200)
+  @Matches(SAFE_PATH, { message: SAFE_PATH_MESSAGE })
   newPath?: string;
 
   @ApiPropertyOptional({
@@ -45,6 +62,7 @@ export class CreateTransformRuleDto {
     example: 'Normalize Paystack payload',
   })
   @IsString()
+  @MaxLength(100)
   name!: string;
 
   @ApiProperty({
@@ -52,6 +70,9 @@ export class CreateTransformRuleDto {
     type: [TransformOperationDto],
   })
   @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => TransformOperationDto)
   operations!: TransformOperationDto[];
 
   @ApiPropertyOptional({
@@ -70,6 +91,7 @@ export class UpdateTransformRuleDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   name?: string;
 
   @ApiPropertyOptional({
@@ -78,6 +100,9 @@ export class UpdateTransformRuleDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => TransformOperationDto)
   operations?: TransformOperationDto[];
 
   @ApiPropertyOptional({
@@ -95,4 +120,23 @@ export class UpdateTransformRuleDto {
   @IsOptional()
   @IsNumber()
   priority?: number;
+}
+
+export class TestTransformDto {
+  @ApiProperty({
+    description: 'Operations to run against the payload',
+    type: [TransformOperationDto],
+  })
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => TransformOperationDto)
+  operations!: TransformOperationDto[];
+
+  @ApiProperty({
+    description: 'Sample payload',
+    example: { data: { amount: 5 } },
+  })
+  @IsObject()
+  body!: Record<string, unknown>;
 }

@@ -5,14 +5,14 @@ import {
   ApiOperation,
   ApiResponse,
 } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { CombinedAuthGuard } from '../auth/guards/auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
 import { BagsService } from './bags.service.js';
 
 @ApiTags('Bags')
 @Controller('bags')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(CombinedAuthGuard)
 @ApiBearerAuth()
 export class BagsController {
   constructor(private readonly bagsService: BagsService) {}

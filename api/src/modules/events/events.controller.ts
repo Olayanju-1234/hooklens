@@ -9,8 +9,9 @@ import {
   Headers,
   UseGuards,
   ParseUUIDPipe,
+  BadRequestException,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { CombinedAuthGuard } from '../auth/guards/auth.guard.js';
 import type { Response } from 'express';
 import {
   ApiTags,
@@ -20,14 +21,35 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { EventsService } from './events.service.js';
+import type { WebhookEvent } from '../../entities/webhook-event.entity.js';
 import { EventsQueryDto } from './dto/events-query.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
 
+const EXPORT_MAX_ROWS = 10_000;
+const CSV_COLUMNS = [
+  'id',
+  'provider',
+  'eventType',
+  'method',
+  'forwardStatus',
+  'forwardCode',
+  'signatureValid',
+  'receivedAt',
+] as const satisfies readonly (keyof WebhookEvent)[];
+
+function csvCell(value: string | number | boolean | Date | null): string {
+  if (value === null || value === undefined) return '';
+  let text = value instanceof Date ? value.toISOString() : String(value);
+  // Cells starting with these are run as formulas by spreadsheet apps
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
 @ApiTags('Events')
 @ApiBearerAuth()
 @Controller('events')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(CombinedAuthGuard)
 export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
@@ -54,38 +76,26 @@ export class EventsController {
     @Query() query: EventsQueryDto,
     @Res() res: Response,
   ) {
-    const { items } = await this.eventsService.findAll(
-      user.sub,
-      { ...query, limit: 1000 },
-      workspaceId,
-    );
+    if (format !== 'csv' && format !== 'json') {
+      throw new BadRequestException('Export format must be csv or json');
+    }
+
+    const items: Awaited<ReturnType<EventsService['findAll']>>['items'] = [];
+    let cursor = query.cursor;
+    do {
+      const page = await this.eventsService.findAll(
+        user.sub,
+        { ...query, cursor, limit: 1000 },
+        workspaceId,
+      );
+      items.push(...page.items);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor && items.length < EXPORT_MAX_ROWS);
 
     if (format === 'csv') {
-      const headers = [
-        'id',
-        'provider',
-        'eventType',
-        'method',
-        'forwardStatus',
-        'forwardCode',
-        'signatureValid',
-        'receivedAt',
-      ];
       const csv = [
-        headers.join(','),
-        ...items.map((e) =>
-          headers
-            .map((h) => {
-              const val = e[h as keyof typeof e] as
-                | string
-                | number
-                | boolean
-                | null
-                | undefined;
-              return val === null || val === undefined ? '' : String(val);
-            })
-            .join(','),
-        ),
+        CSV_COLUMNS.join(','),
+        ...items.map((e) => CSV_COLUMNS.map((h) => csvCell(e[h])).join(',')),
       ].join('\n');
 
       res.setHeader('Content-Type', 'text/csv');
@@ -93,7 +103,6 @@ export class EventsController {
       return res.send(csv);
     }
 
-    // Default: JSON
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', 'attachment; filename=events.json');
     return res.json(items);

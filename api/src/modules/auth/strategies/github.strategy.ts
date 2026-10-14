@@ -8,10 +8,7 @@ export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
   constructor(configService: ConfigService) {
     const clientID = configService.get<string>('github.clientId', '');
     const clientSecret = configService.get<string>('github.clientSecret', '');
-    const callbackURL = configService.get<string>(
-      'github.callbackUrl',
-      'https://hookdash-api.onrender.com/api/auth/github/callback',
-    );
+    const callbackURL = configService.get<string>('github.callbackUrl', '');
 
     super({
       clientID: clientID || 'not-configured',
