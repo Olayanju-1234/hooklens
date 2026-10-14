@@ -44,7 +44,7 @@ export function lanesFromTimeline(steps: TimelineStep[], receivedAt: string): La
     lane.attempts.push({
       n: lane.attempts.length + 1,
       ok: s.status === "success",
-      code: right.replace(/^Forward\s+/, ""),
+      code: /\((\d{3})\)/.exec(right)?.[1] ?? right.replace(/^Forward\s+/, "").replace(/\s*\(N\/A\)$/, ""),
       latencyMs: s.latencyMs,
       at: (new Date(s.timestamp).getTime() - t0) / 1000,
     });

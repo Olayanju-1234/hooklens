@@ -1,318 +1,471 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { events as eventsApi, eventExport, WebhookEvent } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
-import { useStaggerIn } from "@/hooks/use-gsap";
+import { useWebSocket, type SocketMessage } from "@/hooks/use-websocket";
+import { endpoints as endpointsApi, eventExport, events as eventsApi, type Endpoint, type WebhookEvent } from "@/lib/api";
+import { Flap } from "@/components/flight-deck/split-flap";
+import { LiveRecorder } from "@/components/flight-deck/tower/live-recorder";
+import { liveStatus } from "@/components/flight-deck/tower/live-status";
+import { useReducedMotion } from "@/components/flight-deck/use-sim";
+import { PROVIDERS, fmtStamp } from "@/components/flight-deck/deck/format";
 
-const statusFilters = [
-  { value: "", label: "All" },
-  { value: "forwarded", label: "Forwarded" },
-  { value: "failed", label: "Failed" },
-  { value: "skipped", label: "Skipped" },
-  { value: "pending", label: "Pending" },
+const PAGE_SIZE = 50;
+
+const STATUSES: { id: string; label: string; tone?: string }[] = [
+  { id: "", label: "All" },
+  { id: "forwarded", label: "Delivered", tone: "green" },
+  { id: "failed", label: "Failed", tone: "orange" },
+  { id: "pending", label: "En route", tone: "cyan" },
+  { id: "skipped", label: "No route" },
+  { id: "blocked", label: "Rejected", tone: "red" },
 ];
 
-const METHOD_COLORS: Record<string, string> = {
-  POST: "text-sky-400",
-  GET: "text-emerald-400",
-  PUT: "text-amber-400",
-  DELETE: "text-red-400",
-  PATCH: "text-purple-400",
-};
+const WINDOWS: { id: string; label: string; ms: number | null }[] = [
+  { id: "any", label: "Any time", ms: null },
+  { id: "1h", label: "Last hour", ms: 3_600_000 },
+  { id: "24h", label: "Last 24h", ms: 86_400_000 },
+  { id: "7d", label: "Last 7 days", ms: 7 * 86_400_000 },
+  { id: "30d", label: "Last 30 days", ms: 30 * 86_400_000 },
+];
 
-const STATUS_RAIL: Record<string, string> = {
-  forwarded: "bg-emerald-500",
-  failed: "bg-red-500",
-  pending: "bg-amber-500",
-  skipped: "bg-zinc-500",
-};
-
-const STATUS_DOT: Record<string, string> = {
-  forwarded: "text-emerald-400",
-  failed: "text-red-400",
-  pending: "text-amber-400",
-  skipped: "text-zinc-500",
-};
-
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+interface Filters {
+  status: string;
+  endpointId: string;
+  provider: string;
+  window: string;
+  duplicates: boolean;
+  search: string;
 }
 
-function SigIcon({ valid }: { valid: boolean | null }) {
-  if (valid === null) return <span className="text-text-tertiary text-[10px] font-mono">—</span>;
-  return valid ? (
-    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-emerald-400 shrink-0">
-      <path d="M2 6l3 3 5-5" />
-    </svg>
-  ) : (
-    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-red-400 shrink-0">
-      <path d="M3 3l6 6M9 3l-6 6" />
-    </svg>
-  );
+const NO_FILTERS: Filters = { status: "", endpointId: "", provider: "", window: "any", duplicates: false, search: "" };
+
+function queryFor(f: Filters): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (f.status) params.forwardStatus = f.status;
+  if (f.endpointId) params.endpointId = f.endpointId;
+  if (f.provider) params.provider = f.provider;
+  if (f.duplicates) params.isDuplicate = "true";
+  if (f.search) params.search = f.search;
+  const win = WINDOWS.find((w) => w.id === f.window);
+  if (win?.ms) params.from = new Date(Date.now() - win.ms).toISOString();
+  return params;
 }
 
-export default function EventsPage() {
+export default function HistoryPage() {
+  const { subscribe } = useWebSocket();
+  const reduced = useReducedMotion();
+  const [endpointList, setEndpointList] = useState<Endpoint[]>([]);
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [query, setQuery] = useState("");
+  // Cursor per page; page 0 has none. The API pages backwards in time by receivedAt.
+  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
+  const [page, setPage] = useState(0);
   const [items, setItems] = useState<WebhookEvent[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [showExport, setShowExport] = useState(false);
-  const listRef = useStaggerIn<HTMLDivElement>();
-
-  const fetchEvents = useCallback(
-    async (cursor?: string) => {
-      setLoading(true);
-      setError("");
-      try {
-        const params: Record<string, string> = {};
-        if (statusFilter) params.forwardStatus = statusFilter;
-        if (search) params.search = search;
-        if (cursor) params.cursor = cursor;
-        const res = await eventsApi.list(params);
-        setItems((prev) => (cursor ? [...prev, ...res.items] : res.items));
-        setNextCursor(res.nextCursor);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load events");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [statusFilter, search],
-  );
+  const [selected, setSelected] = useState<string | null>(null);
+  const [revisions, setRevisions] = useState<Record<string, number>>({});
+  const [replaying, setReplaying] = useState(false);
+  const [fresh, setFresh] = useState(0);
+  const [exporting, setExporting] = useState<"csv" | "json" | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const recorderRef = useRef<HTMLDivElement>(null);
+  const requestId = useRef(0);
 
   useEffect(() => {
-    void fetchEvents();
-  }, [fetchEvents]);
+    endpointsApi
+      .list()
+      .then(setEndpointList)
+      .catch(() => {
+        // Only feeds the endpoint filter and retry limits; the board works without it.
+      });
+  }, []);
 
-  function handleExport(format: "csv" | "json") {
-    setShowExport(false);
-    const params: Record<string, string> = {};
-    if (statusFilter) params.forwardStatus = statusFilter;
-    if (search) params.search = search;
-    eventExport[format](params).catch((err: unknown) => {
+  const cursor = cursors[page];
+  useEffect(() => {
+    const id = ++requestId.current;
+    const params: Record<string, string> = { ...queryFor(filters), limit: String(PAGE_SIZE) };
+    if (cursor) params.cursor = cursor;
+    eventsApi
+      .list(params)
+      .then((res) => {
+        if (id !== requestId.current) return;
+        setItems(res.items);
+        setNextCursor(res.nextCursor);
+        setError("");
+        if (!cursor) setFresh(0);
+      })
+      .catch((err: unknown) => {
+        if (id === requestId.current) setError(err instanceof Error ? err.message : "Failed to load events");
+      })
+      .finally(() => {
+        if (id === requestId.current) setLoading(false);
+      });
+  }, [filters, cursor, reloadKey]);
+
+  const applyFilters = useCallback((patch: Partial<Filters>) => {
+    setLoading(true);
+    setFilters((f) => ({ ...f, ...patch }));
+    setCursors([undefined]);
+    setPage(0);
+  }, []);
+
+  const goTo = useCallback(
+    (next: number) => {
+      if (next < 0) return;
+      if (next > page) {
+        if (!nextCursor) return;
+        setCursors((c) => [...c.slice(0, next), nextCursor]);
+      }
+      setLoading(true);
+      setPage(next);
+    },
+    [page, nextCursor],
+  );
+
+  const reload = useCallback(() => {
+    setLoading(true);
+    setReloadKey((k) => k + 1);
+  }, []);
+
+  useEffect(
+    () =>
+      subscribe((m: SocketMessage) => {
+        if (m.kind === "webhook") {
+          setFresh((n) => n + 1);
+          return;
+        }
+        const { eventId, forwardStatus, forwardCode, forwardLatency } = m.result;
+        setRevisions((r) => ({ ...r, [eventId]: (r[eventId] ?? 0) + 1 }));
+        setItems((list) =>
+          list.some((e) => e.id === eventId)
+            ? list.map((e) => (e.id === eventId ? { ...e, forwardStatus, forwardCode, forwardLatency } : e))
+            : list,
+        );
+      }),
+    [subscribe],
+  );
+
+  const maxAttemptsOf = useMemo(() => {
+    const map = new Map(endpointList.map((ep) => [ep.id, (ep.retryMaxAttempts ?? 3) + 1]));
+    return (endpointId: string | undefined) => (endpointId && map.get(endpointId)) || 4;
+  }, [endpointList]);
+
+  const endpointName = useMemo(() => new Map(endpointList.map((ep) => [ep.id, ep.name])), [endpointList]);
+  const activeSelected = selected && items.some((e) => e.id === selected) ? selected : items[0]?.id ?? null;
+  const selectedRow = items.find((e) => e.id === activeSelected);
+
+  const select = useCallback((id: string) => {
+    setSelected(id);
+    if (window.matchMedia("(max-width: 1100px)").matches) {
+      window.requestAnimationFrame(() => recorderRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  }, []);
+
+  const replay = useCallback(
+    async (id: string) => {
+      setReplaying(true);
+      try {
+        const next = await eventsApi.replay(id);
+        toast.success("Replay queued");
+        setSelected(next.id);
+        if (page === 0) reload();
+        else goTo(0);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Replay failed");
+      } finally {
+        setReplaying(false);
+      }
+    },
+    [page, reload, goTo],
+  );
+
+  async function exportAs(format: "csv" | "json") {
+    setExporting(format);
+    try {
+      await eventExport[format](queryFor(filters));
+    } catch (err) {
       toast.error(err instanceof Error ? err.message : "Export failed");
-    });
+    } finally {
+      setExporting(null);
+    }
   }
 
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      const el = ev.target as HTMLElement;
+      if (el.closest("input, textarea, select, [contenteditable]")) {
+        if (ev.key === "Escape") (el as HTMLInputElement).blur();
+        return;
+      }
+      const idx = items.findIndex((r) => r.id === activeSelected);
+      if (ev.key === "j" || ev.key === "ArrowDown") setSelected(items[Math.min(items.length - 1, idx + 1)]?.id ?? null);
+      else if (ev.key === "k" || ev.key === "ArrowUp") setSelected(items[Math.max(0, idx - 1)]?.id ?? null);
+      else if (ev.key === "r" && activeSelected && !replaying) void replay(activeSelected);
+      else if (ev.key === "/") searchRef.current?.focus();
+      else if (ev.key === "]") goTo(page + 1);
+      else if (ev.key === "[") goTo(page - 1);
+      else return;
+      ev.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [items, activeSelected, replay, replaying, goTo, page]);
+
+  const filtered = filters !== NO_FILTERS && JSON.stringify(filters) !== JSON.stringify(NO_FILTERS);
+  const providerOptions = Array.from(new Set([...endpointList.map((e) => e.provider), ...PROVIDERS]));
+  const first = page * PAGE_SIZE + 1;
+
   return (
-    <div className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full">
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-        {/* Status filters */}
-        <div className="flex items-center gap-0 border border-border-primary rounded-lg overflow-hidden w-fit">
-          {statusFilters.map((f, i) => (
-            <button
-              key={f.value}
-              onClick={() => setStatusFilter(f.value)}
-              className={`px-3 py-1.5 text-[12px] font-medium transition-all cursor-pointer border-r border-border-primary last:border-r-0
-                ${statusFilter === f.value
-                  ? "bg-bg-hover text-text-primary"
-                  : "bg-bg-secondary text-text-tertiary hover:text-text-secondary hover:bg-bg-hover"
-                } ${i === 0 ? "" : ""}`}
-            >
-              {f.label}
-            </button>
-          ))}
+    <div className="fd-root traffic history">
+      <div className="traffic-bar">
+        <div className="page-title">
+          <h1>History</h1>
+          <span className="label-sm">every arrival, newest first</span>
         </div>
-
-        <div className="flex items-center gap-2">
-          <form
-            onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); }}
-            className="relative"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none">
-              <circle cx="5" cy="5" r="3.5" />
-              <path d="M8 8l2.5 2.5" />
-            </svg>
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search…"
-              className="w-36 pl-7 pr-3 py-1.5 text-[12px] rounded-lg bg-bg-secondary border border-border-primary text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-bg-accent"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => { setSearch(""); setSearchInput(""); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary cursor-pointer"
-              >
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M3 3l6 6M9 3l-6 6" />
-                </svg>
-              </button>
-            )}
-          </form>
-
-          {/* Export */}
-          <div className="relative">
-            <button
-              onClick={() => setShowExport(!showExport)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-text-tertiary hover:text-text-primary bg-bg-secondary border border-border-primary rounded-lg transition-colors cursor-pointer"
-            >
-              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <path d="M12 8.5v3a1 1 0 01-1 1H3a1 1 0 01-1-1v-3M7 1.5v8M4 4.5l3-3 3 3" />
-              </svg>
-              Export
-            </button>
-            {showExport && (
-              <div className="absolute right-0 top-full mt-1 w-36 bg-bg-elevated border border-border-primary rounded-lg shadow-lg z-20 overflow-hidden py-0.5">
-                <button
-                  className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors cursor-pointer"
-                  onClick={() => handleExport("csv")}
-                >
-                  Export CSV
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors cursor-pointer"
-                  onClick={() => handleExport("json")}
-                >
-                  Export JSON
-                </button>
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={() => fetchEvents()}
-            className="p-1.5 text-text-tertiary hover:text-text-primary bg-bg-secondary border border-border-primary rounded-lg transition-colors cursor-pointer"
-            title="Refresh"
-          >
-            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M1 7a6 6 0 0111.5-2.5M13 7a6 6 0 01-11.5 2.5" />
-              <path d="M12.5 1v3.5H9M1.5 13V9.5H5" />
-            </svg>
+        <span className="grow" />
+        {fresh > 0 && (
+          <button type="button" className="chip" data-tone="cyan" onClick={() => (page === 0 ? reload() : goTo(0))}>
+            {fresh} new · show
           </button>
-        </div>
+        )}
+        <button type="button" className="chip chip--quiet" onClick={reload} disabled={loading}>
+          Refresh
+        </button>
+        <span className="chip-group" role="group" aria-label="Export">
+          <span className="label-sm">export</span>
+          <button type="button" className="chip chip--quiet" onClick={() => void exportAs("csv")} disabled={!!exporting}>
+            {exporting === "csv" ? "…" : "CSV"}
+          </button>
+          <button type="button" className="chip chip--quiet" onClick={() => void exportAs("json")} disabled={!!exporting}>
+            {exporting === "json" ? "…" : "JSON"}
+          </button>
+        </span>
       </div>
 
-      {error ? (
-        <div className="flex flex-col items-center justify-center h-64 gap-3">
-          <p className="text-sm text-text-error">{error}</p>
-          <button onClick={() => fetchEvents()} className="text-xs text-text-accent hover:underline cursor-pointer">Retry</button>
-        </div>
-      ) : items.length === 0 && !loading ? (
-        <EmptyState
-          title="No events yet"
-          description="Point your provider's webhook URL at your ingress endpoint and events will appear here in real time."
-          action={
-            <Link href="/dashboard" className="text-xs text-text-accent hover:underline">
-              View your ingress URL
-            </Link>
-          }
-        />
-      ) : (
-        <div ref={listRef} className="rounded-xl border border-border-primary overflow-hidden bg-bg-secondary divide-y divide-border-primary">
-          {/* Column headers */}
-          <div className="hidden sm:grid grid-cols-[4px_52px_1fr_80px_60px_56px_72px] items-center gap-4 px-4 py-2 bg-bg-tertiary">
-            <span />
-            <span className="text-[10px] uppercase tracking-widest text-text-tertiary font-medium">Method</span>
-            <span className="text-[10px] uppercase tracking-widest text-text-tertiary font-medium">Event</span>
-            <span className="text-[10px] uppercase tracking-widest text-text-tertiary font-medium">Status</span>
-            <span className="text-[10px] uppercase tracking-widest text-text-tertiary font-medium text-right">Sig</span>
-            <span className="text-[10px] uppercase tracking-widest text-text-tertiary font-medium text-right">Lat</span>
-            <span className="text-[10px] uppercase tracking-widest text-text-tertiary font-medium text-right">Time</span>
+      <div className="tower-main">
+        <section aria-label="Arrivals board" className="board-pane history-board">
+          <div className="pane-head">
+            <h2>Arrivals board</h2>
+            <span>
+              {items.length ? `${first}–${first + items.length - 1}` : "0"} {filtered ? "matching" : "events"}
+            </span>
+            <span className="grow" />
+            <span className="hide-sm">
+              <span className="kbd">[</span> <span className="kbd">]</span> page
+            </span>
+          </div>
+          <div className="board-tools">
+            {STATUSES.map((s) => (
+              <button
+                key={s.id || "all"}
+                type="button"
+                className="chip"
+                data-tone={s.tone}
+                aria-pressed={filters.status === s.id}
+                onClick={() => applyFilters({ status: s.id })}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <div className="board-tools board-tools--fields">
+            <label className="fd-mini">
+              <span>Route</span>
+              <select className="fd-input" value={filters.endpointId} onChange={(e) => applyFilters({ endpointId: e.target.value })}>
+                <option value="">All routes</option>
+                {endpointList.map((ep) => (
+                  <option key={ep.id} value={ep.id}>
+                    {ep.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="fd-mini">
+              <span>Source</span>
+              <select className="fd-input" value={filters.provider} onChange={(e) => applyFilters({ provider: e.target.value })}>
+                <option value="">All sources</option>
+                {providerOptions.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="fd-mini">
+              <span>Window</span>
+              <select className="fd-input" value={filters.window} onChange={(e) => applyFilters({ window: e.target.value })}>
+                {WINDOWS.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="fd-check">
+              <input type="checkbox" checked={filters.duplicates} onChange={(e) => applyFilters({ duplicates: e.target.checked })} />
+              <span>Duplicates only</span>
+            </label>
+            <form
+              className="fd-search"
+              role="search"
+              onSubmit={(e) => {
+                e.preventDefault();
+                applyFilters({ search: query.trim() });
+              }}
+            >
+              <input
+                ref={searchRef}
+                className="fd-input"
+                type="search"
+                placeholder="Search payloads  /"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  if (!e.target.value && filters.search) applyFilters({ search: "" });
+                }}
+                aria-label="Search event payloads"
+              />
+            </form>
+            {filtered && (
+              <button
+                type="button"
+                className="chip chip--quiet"
+                onClick={() => {
+                  setQuery("");
+                  applyFilters(NO_FILTERS);
+                }}
+              >
+                Clear
+              </button>
+            )}
           </div>
 
-          {items.map((event) => {
-            const rail = STATUS_RAIL[event.forwardStatus] ?? "bg-zinc-600";
-            const dotColor = STATUS_DOT[event.forwardStatus] ?? "text-zinc-400";
-            const methodColor = METHOD_COLORS[event.method] ?? "text-text-tertiary";
+          <div className="board-scroll" aria-busy={loading}>
+            {error ? (
+              <div className="board-empty">
+                <p className="tone-red">{error}</p>
+                <p>
+                  <button type="button" className="chip chip--quiet" onClick={reload}>
+                    Retry
+                  </button>
+                </p>
+              </div>
+            ) : items.length === 0 ? (
+              <div className="board-empty">
+                {loading ? (
+                  <p>Loading the board…</p>
+                ) : filtered ? (
+                  <p>Nothing on the board matches these filters.</p>
+                ) : (
+                  <>
+                    <p>No arrivals recorded yet.</p>
+                    <p>
+                      Point a provider at your ingress URL from <Link href="/dashboard">Traffic</Link> and events land here.
+                    </p>
+                  </>
+                )}
+              </div>
+            ) : (
+              <table className="board" role="grid" aria-label="Arrivals" aria-rowcount={items.length} data-loading={loading || undefined}>
+                <thead>
+                  <tr>
+                    <th scope="col">TIME</th>
+                    <th scope="col">EVENT</th>
+                    <th scope="col" className="hide-sm">
+                      ROUTE
+                    </th>
+                    <th scope="col" className="hide-sm">
+                      SEAL
+                    </th>
+                    <th scope="col" className="hide-md">
+                      CODE
+                    </th>
+                    <th scope="col" className="hide-md">
+                      LATENCY
+                    </th>
+                    <th scope="col">STATUS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((e) => {
+                    const st = liveStatus(e.forwardStatus, 0, maxAttemptsOf(e.endpointId));
+                    return (
+                      <tr
+                        key={e.id}
+                        aria-selected={activeSelected === e.id}
+                        tabIndex={0}
+                        onClick={() => select(e.id)}
+                        onKeyDown={(ev) => {
+                          if (ev.key === "Enter" || ev.key === " ") {
+                            ev.preventDefault();
+                            select(e.id);
+                          }
+                        }}
+                      >
+                        <td className="t-time">{fmtStamp(e.receivedAt)}</td>
+                        <td>
+                          <Flap text={e.eventType ?? "unknown"} width={24} reduced={reduced} />
+                          {e.isReplay && <span className="replay-tag">replay</span>}
+                          {e.isDuplicate && <span className="dup-tag">dup</span>}
+                        </td>
+                        <td className="t-src hide-sm">
+                          {endpointName.get(e.endpointId) ?? e.provider ?? "custom"}
+                          <span className="t-sub">{e.provider ?? "custom"}</span>
+                        </td>
+                        <td className={`hide-sm ${e.signatureValid === null ? "t-time" : e.signatureValid ? "seal-ok" : "seal-bad"}`}>
+                          {e.signatureValid === null ? "— unsigned" : e.signatureValid ? "✓ sealed" : "✗ invalid"}
+                        </td>
+                        <td className={`hide-md ${e.forwardCode ? (e.forwardCode < 300 ? "seal-ok" : "seal-bad") : "t-time"}`}>
+                          {e.forwardCode || "—"}
+                        </td>
+                        <td className="t-time hide-md">{e.forwardLatency ? `${e.forwardLatency}ms` : "—"}</td>
+                        <td className="status" data-p={st.phase}>
+                          <Flap text={st.label} width={11} reduced={reduced} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
 
-            return (
-              <Link key={event.id} href={`/dashboard/events/${event.id}`}>
-                <div className="group relative hidden sm:grid grid-cols-[4px_52px_1fr_80px_60px_56px_72px] items-center gap-4 px-4 py-2.5 hover:bg-bg-hover transition-colors cursor-pointer">
-                  {/* Status rail */}
-                  <span className={`${rail} rounded-full w-[3px] h-5 shrink-0`} />
+          <nav className="pager" aria-label="Pages">
+            <button type="button" className="chip chip--quiet" onClick={() => goTo(page - 1)} disabled={page === 0 || loading}>
+              ← Newer
+            </button>
+            <span className="label-sm">page {page + 1}</span>
+            <button type="button" className="chip chip--quiet" onClick={() => goTo(page + 1)} disabled={!nextCursor || loading}>
+              Older →
+            </button>
+          </nav>
+        </section>
 
-                  {/* Method */}
-                  <span className={`text-[11px] font-mono font-semibold ${methodColor}`}>{event.method}</span>
-
-                  {/* Event type + provider */}
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[13px] font-medium text-text-primary truncate group-hover:text-text-accent transition-colors">
-                      {event.eventType || "unknown"}
-                    </span>
-                    {event.provider && (
-                      <span className="text-[10px] font-mono text-text-tertiary shrink-0">{event.provider}</span>
-                    )}
-                    {event.isReplay && (
-                      <span className="text-[9px] uppercase tracking-widest text-text-accent font-bold bg-bg-accent-subtle px-1.5 py-0.5 rounded shrink-0">replay</span>
-                    )}
-                  </div>
-
-                  {/* Status */}
-                  <div className="flex items-center gap-1.5">
-                    <span className={`text-[11px] font-medium ${dotColor}`}>{event.forwardStatus}</span>
-                  </div>
-
-                  {/* Signature */}
-                  <div className="flex justify-end">
-                    <SigIcon valid={event.signatureValid} />
-                  </div>
-
-                  {/* Latency */}
-                  <span className="text-[11px] font-mono text-text-tertiary tabular-nums text-right">
-                    {event.forwardLatency ? `${event.forwardLatency}ms` : "—"}
-                  </span>
-
-                  {/* Time */}
-                  <span className="text-[11px] font-mono text-text-tertiary tabular-nums text-right whitespace-nowrap">
-                    {relativeTime(event.receivedAt)}
-                  </span>
-                </div>
-
-                {/* Mobile row */}
-                <div className="group relative flex sm:hidden items-start gap-3 px-4 py-3 hover:bg-bg-hover transition-colors cursor-pointer">
-                  <span className={`${rail} rounded-full w-[3px] h-full min-h-[40px] shrink-0 mt-0.5`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className={`text-[11px] font-mono font-semibold ${methodColor}`}>{event.method}</span>
-                      <span className="text-[13px] font-medium text-text-primary truncate group-hover:text-text-accent transition-colors">
-                        {event.eventType || "unknown"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {event.provider && <span className="text-[10px] font-mono text-text-tertiary">{event.provider}</span>}
-                      <span className={`text-[11px] ${dotColor}`}>{event.forwardStatus}</span>
-                      <SigIcon valid={event.signatureValid} />
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-mono text-text-tertiary shrink-0">{relativeTime(event.receivedAt)}</span>
-                </div>
-              </Link>
-            );
-          })}
-
-          {loading && (
-            <div className="flex items-center justify-center py-8">
-              <div className="w-4 h-4 border-2 border-border-secondary border-t-text-accent rounded-full animate-spin" />
-            </div>
-          )}
+        <div ref={recorderRef} className="recorder-slot">
+          <LiveRecorder
+            eventId={activeSelected}
+            revision={`${activeSelected}:${activeSelected ? revisions[activeSelected] ?? 0 : 0}:${selectedRow?.forwardStatus ?? ""}`}
+            attempts={0}
+            maxAttempts={maxAttemptsOf(selectedRow?.endpointId)}
+            replaying={replaying}
+            onReplay={(id) => void replay(id)}
+            emptyHint={
+              <>
+                Select an arrival to open its flight recorder.
+                <br />
+                <span className="kbd">J</span> <span className="kbd">K</span> move · <span className="kbd">R</span> replay ·{" "}
+                <span className="kbd">[</span> <span className="kbd">]</span> page · <span className="kbd">/</span> search
+              </>
+            }
+          />
         </div>
-      )}
-
-      {nextCursor && (
-        <div className="flex justify-center mt-6">
-          <Button variant="secondary" size="sm" loading={loading} onClick={() => fetchEvents(nextCursor)}>
-            Load more
-          </Button>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
