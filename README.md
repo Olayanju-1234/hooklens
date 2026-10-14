@@ -19,12 +19,17 @@ No more `ngrok` + `console.log` guesswork.
 
 | Provider | Signature verification |
 |----------|----------------------|
-| Paystack | HMAC-SHA512 |
-| Flutterwave | Secret hash header |
-| Mono | HMAC-SHA512 |
-| Stripe | HMAC-SHA256 with timestamp tolerance + replay attack prevention |
-| Bags.fm | HMAC-SHA256 (WebSocket stream for Solana token launch events) |
-| Custom | Skipped |
+| Stripe | HMAC-SHA256 hex over `t.body`, 5 min timestamp tolerance |
+| Paystack | HMAC-SHA512 hex |
+| Flutterwave | Secret hash in `verif-hash` |
+| Mono | Secret in `mono-webhook-secret` |
+| Bags.fm | HMAC-SHA256 hex (WebSocket stream for Solana token launch events) |
+| GitHub | HMAC-SHA256 hex in `X-Hub-Signature-256` (`sha256=`); event from `X-GitHub-Event` |
+| Shopify | HMAC-SHA256 base64 in `X-Shopify-Hmac-Sha256`; topic from `X-Shopify-Topic` |
+| Standard Webhooks (Clerk, Resend, OpenAI, any Svix sender) | HMAC-SHA256 base64 over `id.timestamp.body`, `whsec_` secret, `webhook-*` or `svix-*` headers, 5 min tolerance |
+| Custom | HMAC-SHA256 hex in `X-Webhook-Signature` if sent, otherwise unverified |
+
+Each provider is a declarative recipe in `api/src/modules/signature/recipes.ts`.
 
 ## Architecture
 
@@ -105,9 +110,9 @@ npm run dev             # http://localhost:3001
 ### 4. Use it
 
 1. Open `http://localhost:3001` and create an account
-2. You'll get a unique ingress URL like `http://localhost:3000/in/usr_a1b2c3d4e5f6`
-3. Set this as your webhook URL in Paystack / Flutterwave / Stripe / etc.
-4. Create an **endpoint** to configure forwarding and signature verification
+2. Create an **endpoint** (a source) to configure forwarding and signature verification
+3. Each endpoint gets its own ingress URL like `http://localhost:3000/in/src_…`. Set it as the webhook URL in the provider
+4. The older per-account URL (`/in/usr_…`) still works and routes by provider header
 5. Send a test webhook — it appears on the Live Stream page instantly
 
 ## API routes

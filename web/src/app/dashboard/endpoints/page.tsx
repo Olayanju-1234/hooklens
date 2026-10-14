@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { endpoints as endpointsApi, Endpoint, ApiError, INGRESS_BASE } from "@/lib/api";
-import { useAuth } from "@/lib/auth-context";
+import { PROVIDERS } from "@/lib/providers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -30,61 +30,41 @@ const emptyForm: EndpointForm = {
   retryBackoffMs: "1000",
 };
 
-const providers = [
-  {
-    value: "stripe",
-    label: "Stripe",
-    description: "Global card payments — charges, subscriptions, checkout",
+const providerStyles: Record<string, { color: string; icon: ReactNode }> = {
+  stripe: {
     color: "bg-indigo-500/15 text-indigo-400",
-    dot: "bg-indigo-500",
     icon: (
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
         <path d="M2 6h12M2 10h8" />
       </svg>
     ),
   },
-  {
-    value: "paystack",
-    label: "Paystack",
-    description: "Payment processing — charges, transfers, refunds",
+  paystack: {
     color: "bg-emerald-500/15 text-emerald-400",
-    dot: "bg-emerald-500",
     icon: (
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
         <path d="M3 8h10M5 5h6M6 11h4" />
       </svg>
     ),
   },
-  {
-    value: "flutterwave",
-    label: "Flutterwave",
-    description: "Pan-African payments — cards, bank transfers, USSD",
+  flutterwave: {
     color: "bg-orange-500/15 text-orange-400",
-    dot: "bg-orange-500",
     icon: (
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
         <path d="M2 12c2-4 4-8 6-8s4 4 6 8" />
       </svg>
     ),
   },
-  {
-    value: "mono",
-    label: "Mono",
-    description: "Open banking — account data, statements, direct debit",
+  mono: {
     color: "bg-blue-500/15 text-blue-400",
-    dot: "bg-blue-500",
     icon: (
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
         <path d="M2 4l4 8 4-8 4 8" />
       </svg>
     ),
   },
-  {
-    value: "bags",
-    label: "Bags",
-    description: "Solana token launchpad — launches, swaps, fee claims",
+  bags: {
     color: "bg-purple-500/15 text-purple-400",
-    dot: "bg-purple-500",
     icon: (
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
         <circle cx="8" cy="8" r="5" />
@@ -92,19 +72,73 @@ const providers = [
       </svg>
     ),
   },
-  {
-    value: "custom",
-    label: "Custom",
-    description: "Any provider — manual signature verification",
+  github: {
+    color: "bg-slate-500/15 text-slate-400",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <circle cx="5" cy="4" r="1.5" />
+        <circle cx="5" cy="12" r="1.5" />
+        <circle cx="11" cy="6" r="1.5" />
+        <path d="M5 5.5v5M11 7.5c0 2-2 2.5-6 3" />
+      </svg>
+    ),
+  },
+  shopify: {
+    color: "bg-lime-500/15 text-lime-500",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <path d="M3 5h10l-1 8H4L3 5z" />
+        <path d="M6 5V4a2 2 0 0 1 4 0v1" />
+      </svg>
+    ),
+  },
+  clerk: {
+    color: "bg-violet-500/15 text-violet-400",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <circle cx="8" cy="6" r="2.5" />
+        <path d="M3 13c1-2.5 3-3.5 5-3.5s4 1 5 3.5" />
+      </svg>
+    ),
+  },
+  resend: {
+    color: "bg-neutral-500/15 text-neutral-400",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <rect x="2" y="4" width="12" height="8" rx="1" />
+        <path d="M2 5l6 4 6-4" />
+      </svg>
+    ),
+  },
+  openai: {
+    color: "bg-teal-500/15 text-teal-400",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <circle cx="8" cy="8" r="5" />
+        <path d="M8 3v10M3 8h10" />
+      </svg>
+    ),
+  },
+  "standard-webhooks": {
+    color: "bg-cyan-500/15 text-cyan-400",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <path d="M2 8h3l2-3 2 6 2-3h3" />
+        <path d="M2 12h12" />
+      </svg>
+    ),
+  },
+  custom: {
     color: "bg-zinc-500/15 text-zinc-400",
-    dot: "bg-zinc-500",
     icon: (
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
         <path d="M2 8h2l2-4 2 8 2-4h2" />
       </svg>
     ),
   },
-];
+};
+
+const providers = PROVIDERS.map((p) => ({ ...p, ...(providerStyles[p.value] ?? providerStyles.custom) }));
 
 function getProvider(value: string) {
   return providers.find((p) => p.value === value) ?? providers[providers.length - 1];
@@ -118,7 +152,6 @@ function copyIngressUrl(url: string) {
 }
 
 export default function EndpointsPage() {
-  const { ingressSlug } = useAuth();
   const [items, setItems] = useState<Endpoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -266,7 +299,7 @@ export default function EndpointsPage() {
           <div ref={listRef} className="rounded-xl border border-border-primary overflow-hidden divide-y divide-border-primary">
             {items.map((ep) => {
               const prov = getProvider(ep.provider);
-              const ingressUrl = ingressSlug ? `${INGRESS_BASE}/in/${ingressSlug}/${ep.id}` : null;
+              const ingressUrl = ep.ingressSlug ? `${INGRESS_BASE}/in/${ep.ingressSlug}` : null;
               return (
                 <div
                   key={ep.id}
@@ -433,7 +466,7 @@ export default function EndpointsPage() {
                 </button>
 
                 {providerPickerOpen && (
-                  <div className="mt-1 rounded-lg border border-border-primary overflow-hidden divide-y divide-border-primary shadow-lg">
+                  <div className="mt-1 max-h-80 overflow-y-auto rounded-lg border border-border-primary divide-y divide-border-primary shadow-lg">
                     {providers.map((prov) => (
                       <button
                         key={prov.value}
@@ -472,7 +505,7 @@ export default function EndpointsPage() {
                 type="password"
                 value={form.webhookSecret}
                 onChange={(e) => setForm((f) => ({ ...f, webhookSecret: e.target.value }))}
-                placeholder={modalMode === "edit" ? "Enter new secret to rotate" : "Provider's webhook signing secret"}
+                placeholder={modalMode === "edit" ? "Enter new secret to rotate" : getProvider(form.provider).secretHint}
               />
               <div className="grid grid-cols-2 gap-3">
                 <Input
