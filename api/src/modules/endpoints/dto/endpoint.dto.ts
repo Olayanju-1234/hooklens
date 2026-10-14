@@ -9,6 +9,7 @@ import {
   Max,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PROVIDERS } from '../../../entities/endpoint.entity.js';
 import type { Provider } from '../../../entities/endpoint.entity.js';
 
 export class CreateEndpointDto {
@@ -22,9 +23,9 @@ export class CreateEndpointDto {
   @ApiProperty({
     description: 'Webhook provider',
     example: 'paystack',
-    enum: ['stripe', 'paystack', 'flutterwave', 'mono', 'bags', 'custom'],
+    enum: PROVIDERS,
   })
-  @IsIn(['stripe', 'paystack', 'flutterwave', 'mono', 'bags', 'custom'])
+  @IsIn(PROVIDERS)
   provider!: Provider;
 
   @ApiPropertyOptional({
@@ -76,10 +77,10 @@ export class UpdateEndpointDto {
   @ApiPropertyOptional({
     description: 'Webhook provider',
     example: 'stripe',
-    enum: ['stripe', 'paystack', 'flutterwave', 'mono', 'bags', 'custom'],
+    enum: PROVIDERS,
   })
   @IsOptional()
-  @IsIn(['stripe', 'paystack', 'flutterwave', 'mono', 'bags', 'custom'])
+  @IsIn(PROVIDERS)
   provider?: Provider;
 
   @ApiPropertyOptional({

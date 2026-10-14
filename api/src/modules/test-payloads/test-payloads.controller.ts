@@ -109,7 +109,7 @@ export class TestPayloadsController {
     });
     // Ingress route is excluded from global 'api' prefix — must NOT include /api/
     const ingressUrl = endpoint
-      ? `${baseUrl}/in/${user.ingressSlug}/${endpoint.id}`
+      ? `${baseUrl}/in/${endpoint.ingressSlug}`
       : `${baseUrl}/in/${user.ingressSlug}`;
 
     try {

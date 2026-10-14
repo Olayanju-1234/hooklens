@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import {
   Injectable,
   NotFoundException,
@@ -48,6 +49,7 @@ export class EndpointsService {
     const endpoint = this.endpointRepo.create({
       userId,
       workspaceId,
+      ingressSlug: `src_${crypto.randomBytes(12).toString('hex')}`,
       name: dto.name,
       provider: dto.provider,
       forwardUrl: dto.forwardUrl ?? null,
