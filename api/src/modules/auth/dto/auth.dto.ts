@@ -4,6 +4,7 @@ import {
   IsUrl,
   IsBoolean,
   IsOptional,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -91,8 +92,10 @@ export class UpdateAvatarDto {
   @ApiProperty({
     description: 'URL of the avatar image',
     example: 'https://gravatar.com/avatar/abc123',
+    maxLength: 500,
   })
-  @IsUrl()
+  @IsUrl({ require_protocol: true, protocols: ['https'] })
+  @MaxLength(500)
   avatarUrl!: string;
 }
 
