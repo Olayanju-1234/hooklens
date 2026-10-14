@@ -1,260 +1,511 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { stats as statsApi, latency as latencyApi, Stats, LatencyStats } from "@/lib/api";
-import { Sparkline } from "@/components/ui/sparkline";
-import { useCountUp, useFadeIn } from "@/hooks/use-gsap";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  destinations as destinationsApi,
+  endpoints as endpointsApi,
+  events as eventsApi,
+  latency as latencyApi,
+  stats as statsApi,
+  timeline as timelineApi,
+  type Endpoint,
+  type ForwardDestination,
+  type LatencyStats,
+  type Stats,
+  type TimelineStep,
+  type WebhookEvent,
+} from "@/lib/api";
+import { lanesFromTimeline } from "@/components/flight-deck/tower/live-status";
+import { RangeRings, healthTone, type Blip } from "@/components/flight-deck/deck/range-rings";
+import { fmtMs, percentile, pool } from "@/components/flight-deck/deck/format";
 
-const periods = [
-  { value: "24h", label: "24h" },
-  { value: "7d", label: "7d" },
-  { value: "30d", label: "30d" },
-  { value: "all", label: "All" },
+const PERIODS = [
+  { value: "24h", label: "24h", ms: 86_400_000 },
+  { value: "7d", label: "7d", ms: 7 * 86_400_000 },
+  { value: "30d", label: "30d", ms: 30 * 86_400_000 },
+  { value: "all", label: "All", ms: null },
 ];
 
-// Colour is reserved for delivery state, so providers share one ink.
-function providerColor(p: string) {
-  return p ? "var(--ink-2)" : "var(--ink-3)";
+// The API allows 60 requests a minute per client, so per-attempt timelines are only read for routes that fan out.
+const TIMELINE_BUDGET = 16;
+
+interface DestHealth {
+  key: string;
+  tag: string;
+  endpoint: Endpoint;
+  label: string;
+  url: string | null;
+  paused: boolean;
+  events: number;
+  delivered: number;
+  p50: number | null;
+  p95: number | null;
+  codes: Map<string, number>;
 }
 
-export default function StatsPage() {
-  const [data, setData] = useState<Stats | null>(null);
-  const [latencyData, setLatencyData] = useState<LatencyStats | null>(null);
-  const [period, setPeriod] = useState("7d");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const contentRef = useFadeIn<HTMLDivElement>();
+interface Sample {
+  endpoints: Endpoint[];
+  dests: Map<string, ForwardDestination[]>;
+  events: Map<string, WebhookEvent[]>;
+  traces: { event: WebhookEvent; steps: TimelineStep[] }[];
+}
 
-  const fetchStats = useCallback(async (p: string) => {
-    setLoading(true);
-    setError("");
-    try {
-      const [result, latResult] = await Promise.all([
-        statsApi.get(p),
-        latencyApi.get(p).catch(() => null),
-      ]);
-      setData(result);
-      setLatencyData(latResult);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load stats");
-    } finally {
-      setLoading(false);
+function codeLabel(code: string) {
+  if (/^\d{3}$/.test(code)) return code;
+  return code === "failed" || code === "none" ? "no reply" : code;
+}
+
+function codeClass(code: string) {
+  return /^2\d\d$/.test(code) ? "ok" : "bad";
+}
+
+async function loadSample(period: (typeof PERIODS)[number]): Promise<Sample> {
+  const eps = await endpointsApi.list();
+  const dests = new Map(await Promise.all(eps.map(async (ep) => [ep.id, await destinationsApi.list(ep.id).catch(() => [])] as const)));
+  const routed = eps.filter((ep) => (dests.get(ep.id)?.length ?? 0) > 0 || ep.forwardUrl);
+  const from = period.ms ? new Date(Date.now() - period.ms).toISOString() : null;
+  const lists = await Promise.all(
+    routed.map((ep) =>
+      eventsApi
+        .list({ endpointId: ep.id, limit: "100", ...(from ? { from } : {}) })
+        .then((r) => [ep.id, r.items.filter((e) => e.forwardStatus === "forwarded" || e.forwardStatus === "failed")] as const)
+        .catch(() => [ep.id, [] as WebhookEvent[]] as const),
+    ),
+  );
+  const events = new Map(lists);
+  const fanOut = routed.filter((ep) => (dests.get(ep.id)?.length ?? 0) > 1);
+  const per = Math.max(3, Math.floor(TIMELINE_BUDGET / Math.max(1, fanOut.length)));
+  const picked = fanOut.flatMap((ep) => (events.get(ep.id) ?? []).slice(0, per)).slice(0, TIMELINE_BUDGET);
+  const results = await pool(picked, 3, (event) => timelineApi.get(event.id).then((t) => ({ event, steps: t.steps })));
+  const traces = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  return { endpoints: eps, dests, events, traces };
+}
+
+type Row = DestHealth & { lat: number[] };
+
+function blankRow(ep: Endpoint, key: string, label: string, url: string | null, paused: boolean): Row {
+  return { key, tag: "", endpoint: ep, label, url, paused, events: 0, delivered: 0, p50: null, p95: null, codes: new Map(), lat: [] };
+}
+
+/** Final outcome per delivery: one row per destination, from timelines on fan-out routes, from the event itself otherwise. */
+function computeHealth(sample: Sample): DestHealth[] {
+  const rows: Row[] = [];
+  const byId = new Map(sample.endpoints.map((ep) => [ep.id, ep]));
+  for (const ep of sample.endpoints) {
+    const dests = sample.dests.get(ep.id) ?? [];
+    const evs = sample.events.get(ep.id) ?? [];
+    if (dests.length > 1) {
+      const lanes = new Map<string, Row>();
+      for (const d of dests) lanes.set(d.label || d.url, blankRow(ep, `${ep.id}:${d.id}`, d.label || d.url, d.url, !d.isActive));
+      for (const { event, steps } of sample.traces) {
+        if (byId.get(event.endpointId) !== ep) continue;
+        for (const lane of lanesFromTimeline(steps, event.receivedAt)) {
+          const row = lanes.get(lane.key);
+          if (!row) continue;
+          const last = lane.attempts[lane.attempts.length - 1];
+          row.events++;
+          if (last.ok) {
+            row.delivered++;
+            if (last.latencyMs !== null) row.lat.push(last.latencyMs);
+          }
+          row.codes.set(last.code, (row.codes.get(last.code) ?? 0) + 1);
+        }
+      }
+      rows.push(...lanes.values());
+      continue;
     }
-  }, []);
+    const d = dests[0];
+    if (!d && !ep.forwardUrl) continue;
+    const row = d ? blankRow(ep, `${ep.id}:${d.id}`, d.label || d.url, d.url, !d.isActive) : blankRow(ep, `${ep.id}:legacy`, "fallback forward URL", ep.forwardUrl, false);
+    for (const e of evs) {
+      row.events++;
+      const code = e.forwardCode ? String(e.forwardCode) : "none";
+      row.codes.set(code, (row.codes.get(code) ?? 0) + 1);
+      if (e.forwardStatus === "forwarded") {
+        row.delivered++;
+        if (e.forwardLatency !== null) row.lat.push(e.forwardLatency);
+      }
+    }
+    rows.push(row);
+  }
+  const out = rows.map(({ lat, ...row }) => {
+    const sorted = lat.sort((a, b) => a - b);
+    return { ...row, p50: percentile(sorted, 0.5), p95: percentile(sorted, 0.95) };
+  });
+  out.sort((a, b) => a.endpoint.name.localeCompare(b.endpoint.name) || a.label.localeCompare(b.label));
+  out.forEach((r, i) => (r.tag = String(i + 1).padStart(2, "0")));
+  return out;
+}
+
+export default function HealthPage() {
+  const [period, setPeriod] = useState("7d");
+  const [data, setData] = useState<{ period: string; stats: Stats; latency: LatencyStats | null } | null>(null);
+  const [error, setError] = useState("");
+  const [sample, setSample] = useState<{ period: string; value: Sample } | null>(null);
+  const [sampleError, setSampleError] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    void fetchStats(period);
-  }, [period, fetchStats]);
+    let cancelled = false;
+    const p = PERIODS.find((x) => x.value === period) ?? PERIODS[1];
+    Promise.all([statsApi.get(period), latencyApi.get(period).catch(() => null)])
+      .then(([stats, latency]) => {
+        if (cancelled) return;
+        setData({ period, stats, latency });
+        setError("");
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load stats");
+      });
+    loadSample(p)
+      .then((value) => {
+        if (cancelled) return;
+        setSample({ period, value });
+        setSampleError("");
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setSampleError(err instanceof Error ? err.message : "Could not sample deliveries");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [period, reloadKey]);
+
+  const health = useMemo(() => (sample ? computeHealth(sample.value) : []), [sample]);
+  const sel = health.find((h) => h.key === selected) ?? null;
+  const codeRows = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const h of sel ? [sel] : health) for (const [c, n] of h.codes) totals.set(c, (totals.get(c) ?? 0) + n);
+    return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
+  }, [health, sel]);
+  const codeMax = Math.max(1, ...codeRows.map(([, n]) => n));
+  const codeTotal = codeRows.reduce((n, [, c]) => n + c, 0);
+  const sampled = health.reduce((n, h) => n + h.events, 0);
+  const stale = (data && data.period !== period) || (sample && sample.period !== period);
+  const stats = data?.stats;
+  const lat = data?.latency ?? null;
+
+  const blips: Blip[] = health.map((h) => ({
+    key: h.key,
+    tag: h.tag,
+    label: h.label,
+    group: h.endpoint.id,
+    p50: h.p50,
+    p95: h.p95,
+    rate: h.events ? h.delivered / h.events : null,
+  }));
 
   return (
-    <div ref={contentRef} className="px-4 sm:px-6 py-6 mx-auto max-w-5xl w-full">
-      {/* Period selector */}
-      <div className="flex items-center gap-0 border border-border-primary rounded-lg overflow-hidden w-fit mb-8">
-        {periods.map((p) => (
-          <button
-            key={p.value}
-            onClick={() => setPeriod(p.value)}
-            className={`px-4 py-1.5 text-[12px] font-medium transition-all cursor-pointer border-r border-border-primary last:border-r-0
-              ${period === p.value
-                ? "bg-bg-hover text-text-primary"
-                : "bg-bg-secondary text-text-tertiary hover:text-text-secondary hover:bg-bg-hover"
-              }`}
-          >
-            {p.label}
-          </button>
-        ))}
+    <div className="fd-root fd-page health">
+      <div className="traffic-bar">
+        <div className="page-title">
+          <h1>Health</h1>
+          <span className="label-sm">delivery per destination</span>
+        </div>
+        <span className="grow" />
+        <span className="chip-group" role="group" aria-label="Period">
+          {PERIODS.map((p) => (
+            <button key={p.value} type="button" className="chip chip--quiet" aria-pressed={period === p.value} onClick={() => setPeriod(p.value)}>
+              {p.label}
+            </button>
+          ))}
+        </span>
+        <button type="button" className="chip chip--quiet" onClick={() => setReloadKey((k) => k + 1)}>
+          Refresh
+        </button>
       </div>
 
-      {error ? (
-        <div className="flex flex-col items-center justify-center h-64 gap-3">
-          <p className="text-sm text-text-error">{error}</p>
-          <button onClick={() => fetchStats(period)} className="text-xs text-text-accent hover:underline cursor-pointer">Retry</button>
-        </div>
-      ) : loading && !data ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="w-5 h-5 border-2 border-border-secondary border-t-text-accent rounded-full animate-spin" />
-        </div>
-      ) : data ? (
-        <div className="space-y-10">
-
-          {/* Primary numbers — no borders, pure typography */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 divide-x divide-border-primary border border-border-primary rounded-xl overflow-hidden">
-            <BigStat label="Total Events" value={data.total} />
-            <BigStat label="Forwarded" value={data.forwarded} sub={data.total > 0 ? `${data.successRate.toFixed(1)}% rate` : undefined} accent />
-            <BigStat label="Failed" value={data.failed} warn={data.failed > 0} />
-            <BigStat label="Avg Latency" value={data.avgLatencyMs ? Math.round(data.avgLatencyMs) : 0} suffix="ms" />
+      <div className="page-body page-body--wide" aria-busy={!!stale}>
+        {error && !stats ? (
+          <div className="board-empty">
+            <p className="tone-red">{error}</p>
+            <p>
+              <button type="button" className="chip chip--quiet" onClick={() => setReloadKey((k) => k + 1)}>
+                Retry
+              </button>
+            </p>
           </div>
-
-          {/* Delivery bar */}
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[11px] uppercase tracking-widest font-semibold text-text-tertiary">Delivery</h3>
-              {data.total > 0 && (
-                <span className="text-[11px] font-mono text-text-tertiary tabular-nums">{data.total} total</span>
-              )}
-            </div>
-            <div className="flex items-center gap-0.5 h-2 rounded-full overflow-hidden bg-bg-tertiary">
-              {data.total > 0 ? (
-                <>
-                  {data.forwarded > 0 && (
-                    <div className="h-full bg-emerald-500" style={{ width: `${(data.forwarded / data.total) * 100}%`, transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)" }} />
-                  )}
-                  {data.failed > 0 && (
-                    <div className="h-full bg-red-500" style={{ width: `${(data.failed / data.total) * 100}%`, transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)" }} />
-                  )}
-                  {data.skipped > 0 && (
-                    <div className="h-full bg-amber-500" style={{ width: `${(data.skipped / data.total) * 100}%`, transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)" }} />
-                  )}
-                </>
-              ) : <div className="h-full w-full" />}
-            </div>
-            <div className="flex flex-wrap items-center gap-5 mt-3">
-              <LegendItem color="bg-emerald-500" label="Forwarded" value={data.forwarded} />
-              <LegendItem color="bg-red-500" label="Failed" value={data.failed} />
-              <LegendItem color="bg-amber-500" label="Skipped" value={data.skipped} />
-            </div>
-          </section>
-
-          {/* Event type + provider side by side */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <section>
-              <h3 className="text-[11px] uppercase tracking-widest font-semibold text-text-tertiary mb-4">By Event Type</h3>
-              {data.byEventType.length === 0 ? (
-                <p className="text-xs text-text-tertiary py-4">No data yet</p>
-              ) : (
-                <div className="space-y-3">
-                  {data.byEventType.slice(0, 8).map((item) => {
-                    const pct = data.total > 0 ? (item.count / data.total) * 100 : 0;
-                    return (
-                      <div key={item.eventType}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[12px] font-mono text-text-secondary truncate max-w-[65%]">{item.eventType || "unknown"}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-text-tertiary">{pct.toFixed(0)}%</span>
-                            <span className="text-[12px] font-mono text-text-primary tabular-nums w-10 text-right">{item.count}</span>
-                          </div>
-                        </div>
-                        <div className="h-1 bg-bg-tertiary rounded-full overflow-hidden">
-                          <div className="h-full bg-bg-accent rounded-full" style={{ width: `${Math.max(pct, 1)}%`, transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)" }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            <section>
-              <h3 className="text-[11px] uppercase tracking-widest font-semibold text-text-tertiary mb-4">By Provider</h3>
-              {data.byProvider.length === 0 ? (
-                <p className="text-xs text-text-tertiary py-4">No data yet</p>
-              ) : (
-                <div className="space-y-3">
-                  {data.byProvider.map((item) => {
-                    const pct = data.total > 0 ? (item.count / data.total) * 100 : 0;
-                    const col = providerColor(item.provider);
-                    return (
-                      <div key={item.provider}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: col }} />
-                            <span className="text-[12px] font-medium text-text-secondary capitalize">{item.provider || "unknown"}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-text-tertiary">{pct.toFixed(0)}%</span>
-                            <span className="text-[12px] font-mono text-text-primary tabular-nums w-10 text-right">{item.count}</span>
-                          </div>
-                        </div>
-                        <div className="h-1 bg-bg-tertiary rounded-full overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${Math.max(pct, 1)}%`, backgroundColor: col, transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)" }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          </div>
-
-          {/* Latency */}
-          {latencyData && (
-            <section>
-              <h3 className="text-[11px] uppercase tracking-widest font-semibold text-text-tertiary mb-4">Latency Percentiles</h3>
-              <div className="grid grid-cols-3 gap-0 divide-x divide-border-primary border border-border-primary rounded-xl overflow-hidden mb-6">
-                <BigStat label="p50" value={latencyData.p50 ? Math.round(latencyData.p50) : 0} suffix="ms" />
-                <BigStat label="p95" value={latencyData.p95 ? Math.round(latencyData.p95) : 0} suffix="ms" warn={(latencyData.p95 ?? 0) > 1000} />
-                <BigStat label="p99" value={latencyData.p99 ? Math.round(latencyData.p99) : 0} suffix="ms" warn={(latencyData.p99 ?? 0) > 2000} />
+        ) : !stats ? (
+          <p className="board-empty">Reading instruments…</p>
+        ) : (
+          <>
+            <dl className="readout" data-stale={stale || undefined}>
+              <div>
+                <dt>Events</dt>
+                <dd>{stats.total.toLocaleString()}</dd>
               </div>
+              <div>
+                <dt>Delivered</dt>
+                <dd className="tone-green">{stats.forwarded.toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt>Failed</dt>
+                <dd className={stats.failed ? "tone-orange" : undefined}>{stats.failed.toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt>Not sent</dt>
+                <dd>{stats.skipped.toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt>Success</dt>
+                <dd>{stats.total ? `${stats.successRate.toFixed(0)}%` : "—"}</dd>
+              </div>
+              <div>
+                <dt>p50</dt>
+                <dd>{fmtMs(lat?.p50)}</dd>
+              </div>
+              <div>
+                <dt>p95</dt>
+                <dd>{fmtMs(lat?.p95)}</dd>
+              </div>
+              <div>
+                <dt>p99</dt>
+                <dd>{fmtMs(lat?.p99)}</dd>
+              </div>
+            </dl>
 
-              {latencyData.timeSeries.length > 1 && (
-                <div className="space-y-5">
-                  {[
-                    { key: "p50" as const, label: "p50", color: "var(--bg-accent)" },
-                    { key: "p95" as const, label: "p95", color: "var(--s-hold)" },
-                    { key: "p99" as const, label: "p99", color: "var(--s-bad)" },
-                  ].map(({ key, label, color }) => (
-                    <div key={key} className="flex items-center gap-4">
-                      <span className="text-[10px] font-mono text-text-tertiary w-6 shrink-0">{label}</span>
-                      <div className="flex-1">
-                        <Sparkline
-                          data={latencyData.timeSeries.map((t) => t[key])}
-                          width={600}
-                          height={36}
-                          color={color}
-                          fill
-                          className="w-full"
-                        />
-                      </div>
-                      <span className="text-[11px] font-mono text-text-tertiary tabular-nums w-14 text-right shrink-0">
-                        {latencyData[key] ? `${Math.round(latencyData[key]!)}ms` : "—"}
-                      </span>
-                    </div>
-                  ))}
+            <div className="mix" aria-label="Delivery mix">
+              <div className="mix-bar" aria-hidden>
+                {stats.total > 0 && (
+                  <>
+                    <i data-s="ok" style={{ width: `${(stats.forwarded / stats.total) * 100}%` }} />
+                    <i data-s="dead" style={{ width: `${(stats.failed / stats.total) * 100}%` }} />
+                    <i data-s="none" style={{ width: `${(stats.skipped / stats.total) * 100}%` }} />
+                  </>
+                )}
+              </div>
+              <div className="mix-legend">
+                <span data-s="ok">delivered {stats.forwarded}</span>
+                <span data-s="dead">failed {stats.failed}</span>
+                <span data-s="none">not sent (no route, rejected, queued) {stats.skipped}</span>
+              </div>
+            </div>
+
+            <div className="health-main">
+              <section className="panel" aria-label="Range rings">
+                <div className="pane-head">
+                  <h2>Range rings</h2>
+                  <span>distance = latency</span>
+                  <span className="grow" />
+                  {selected && (
+                    <button type="button" className="link-btn" onClick={() => setSelected(null)}>
+                      Clear
+                    </button>
+                  )}
                 </div>
-              )}
-            </section>
-          )}
-        </div>
-      ) : null}
+                <div className="rings-wrap">
+                  {!sample && sampleError ? (
+                    <p className="board-empty tone-red">{sampleError}</p>
+                  ) : !sample ? (
+                    <p className="board-empty">Sampling deliveries…</p>
+                  ) : blips.length === 0 ? (
+                    <p className="board-empty">
+                      No destinations to plot. Add one under <Link href="/dashboard/endpoints">Routes</Link>.
+                    </p>
+                  ) : (
+                    <RangeRings blips={blips} fleetP50={lat?.p50 ?? null} fleetP95={lat?.p95 ?? null} selected={selected} onSelect={(k) => setSelected(k === selected ? null : k)} />
+                  )}
+                </div>
+                <p className="rings-key">
+                  <span>
+                    <i className="k-dot" /> p50
+                  </span>
+                  <span>
+                    <i className="k-tail" /> tail to p95
+                  </span>
+                  <span>
+                    <i className="k-ring" /> fleet p95
+                  </span>
+                  <span data-tone="green">≥99% delivered</span>
+                  <span data-tone="amber">≥90%</span>
+                  <span data-tone="orange">below 90%</span>
+                </p>
+              </section>
+
+              <section className="panel" aria-label="Destinations">
+                <div className="pane-head">
+                  <h2>Destinations</h2>
+                  <span>{sampleError ? <span className="tone-red">{sampleError}</span> : sample ? `${sampled} recent deliveries` : "sampling…"}</span>
+                </div>
+                <div className="table-scroll">
+                  <table className="board health-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">DESTINATION</th>
+                        <th scope="col">DELIVERED</th>
+                        <th scope="col">P50</th>
+                        <th scope="col">P95</th>
+                        <th scope="col" className="hide-sm">
+                          CODES
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {health.map((h) => {
+                        const rate = h.events ? h.delivered / h.events : null;
+                        const tone = healthTone(rate);
+                        const okCodes = Array.from(h.codes.entries()).filter(([c]) => codeClass(c) === "ok").reduce((n, [, c]) => n + c, 0);
+                        return (
+                          <tr
+                            key={h.key}
+                            aria-selected={selected === h.key}
+                            tabIndex={0}
+                            onClick={() => setSelected(selected === h.key ? null : h.key)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setSelected(selected === h.key ? null : h.key);
+                              }
+                            }}
+                          >
+                            <td className="t-time">{h.tag}</td>
+                            <td className="health-dest">
+                              <b>{h.label}</b>
+                              <span className="t-sub">
+                                {h.endpoint.name}
+                                {h.paused ? " · paused" : ""}
+                              </span>
+                            </td>
+                            <td>
+                              {rate === null ? (
+                                <span className="t-time">no traffic</span>
+                              ) : (
+                                <span className="rate" data-tone={tone}>
+                                  <span className="rate-bar" aria-hidden>
+                                    <i style={{ width: `${rate * 100}%` }} />
+                                  </span>
+                                  {(rate * 100).toFixed(rate === 1 ? 0 : 1)}%<span className="t-sub">{h.delivered}/{h.events}</span>
+                                </span>
+                              )}
+                            </td>
+                            <td className="t-num">{fmtMs(h.p50)}</td>
+                            <td className="t-num">{fmtMs(h.p95)}</td>
+                            <td className="hide-sm">
+                              {h.events ? (
+                                <span className="code-strip" title={Array.from(h.codes.entries()).map(([c, n]) => `${codeLabel(c)} ×${n}`).join(", ")}>
+                                  <i data-c="ok" style={{ width: `${(okCodes / h.events) * 100}%` }} />
+                                  <i data-c="bad" style={{ width: `${((h.events - okCodes) / h.events) * 100}%` }} />
+                                </span>
+                              ) : (
+                                <span className="t-time">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+
+            <div className="health-lower">
+              <section className="panel" aria-label="Status codes">
+                <div className="pane-head">
+                  <h2>Status codes</h2>
+                  <span>final response · {sel ? sel.label : "all destinations"} · {codeTotal}</span>
+                </div>
+                {codeRows.length === 0 ? (
+                  <p className="board-empty">No deliveries in this window.</p>
+                ) : (
+                  <ul className="hbars">
+                    {codeRows.map(([code, n]) => (
+                      <li key={code}>
+                        <span className={`hbars-k code-${codeClass(code)}`}>{codeLabel(code)}</span>
+                        <span className="hbars-bar" aria-hidden>
+                          <i data-c={codeClass(code)} style={{ width: `${(n / codeMax) * 100}%` }} />
+                        </span>
+                        <span className="hbars-v">{n}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section className="panel" aria-label="Latency over time">
+                <div className="pane-head">
+                  <h2>Latency</h2>
+                  <span>p50 and p95 per {period === "24h" ? "hour" : "day"}</span>
+                </div>
+                <LatencyTrend series={lat?.timeSeries ?? []} />
+              </section>
+
+              <section className="panel" aria-label="By event type">
+                <div className="pane-head">
+                  <h2>By event type</h2>
+                </div>
+                <Breakdown rows={stats.byEventType.slice(0, 8).map((r) => [r.eventType || "unknown", r.count])} total={stats.total} />
+              </section>
+
+              <section className="panel" aria-label="By source">
+                <div className="pane-head">
+                  <h2>By source</h2>
+                </div>
+                <Breakdown rows={stats.byProvider.map((r) => [r.provider || "unknown", r.count])} total={stats.total} />
+              </section>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-function BigStat({
-  label,
-  value,
-  sub,
-  suffix,
-  accent,
-  warn,
-}: {
-  label: string;
-  value: number;
-  sub?: string;
-  suffix?: string;
-  accent?: boolean;
-  warn?: boolean;
-}) {
-  const countRef = useCountUp(value);
-
+function Breakdown({ rows, total }: { rows: [string, number][]; total: number }) {
+  if (!rows.length) return <p className="board-empty">No data yet.</p>;
+  const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
-    <div className="px-5 py-5 bg-bg-secondary">
-      <p className="text-[10px] uppercase tracking-widest text-text-tertiary font-medium mb-2">{label}</p>
-      <p className={`text-[28px] font-semibold font-mono tabular-nums leading-none ${accent ? "text-emerald-400" : warn ? "text-red-400" : "text-text-primary"}`}>
-        <span ref={countRef}>0</span>
-        {suffix && <span className="text-[14px] text-text-tertiary ml-1 font-sans">{suffix}</span>}
-      </p>
-      {sub && <p className="text-[11px] text-text-tertiary mt-1.5">{sub}</p>}
-    </div>
+    <ul className="hbars">
+      {rows.map(([k, n]) => (
+        <li key={k}>
+          <span className="hbars-k">{k}</span>
+          <span className="hbars-bar" aria-hidden>
+            <i style={{ width: `${(n / max) * 100}%` }} />
+          </span>
+          <span className="hbars-v">
+            {n}
+            <small>{total ? `${Math.round((n / total) * 100)}%` : ""}</small>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
-function LegendItem({ color, label, value }: { color: string; label: string; value: number }) {
+function LatencyTrend({ series }: { series: LatencyStats["timeSeries"] }) {
+  if (series.length < 2) return <p className="board-empty">Not enough deliveries yet to draw a trend.</p>;
+  const W = 480;
+  const H = 150;
+  const pad = { l: 44, r: 8, t: 10, b: 20 };
+  const max = Math.max(1, ...series.map((s) => s.p95 ?? 0));
+  const x = (i: number) => pad.l + (i / (series.length - 1)) * (W - pad.l - pad.r);
+  const y = (v: number) => H - pad.b - (v / max) * (H - pad.t - pad.b);
+  const line = (k: "p50" | "p95") => series.map((s, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(s[k] ?? 0).toFixed(1)}`).join(" ");
+  const fmtBucket = (b: string) => {
+    const d = new Date(b);
+    return series.length > 30 || (d.getHours() === 0 && d.getMinutes() === 0) ? `${d.getMonth() + 1}/${d.getDate()}` : `${String(d.getHours()).padStart(2, "0")}:00`;
+  };
   return (
-    <div className="flex items-center gap-2">
-      <span className={`w-1.5 h-1.5 rounded-full ${color}`} />
-      <span className="text-[12px] text-text-secondary">{label}</span>
-      <span className="text-[12px] font-mono text-text-tertiary tabular-nums">{value.toLocaleString()}</span>
-    </div>
+    <svg className="trend" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Latency trend, p95 peaking at ${fmtMs(max)}`}>
+      {[0, 0.5, 1].map((t) => (
+        <g key={t}>
+          <line x1={pad.l} x2={W - pad.r} y1={y(max * t)} y2={y(max * t)} className="trend-grid" />
+          <text x={pad.l - 6} y={y(max * t) + 3} textAnchor="end" className="trend-label">
+            {fmtMs(max * t)}
+          </text>
+        </g>
+      ))}
+      <path d={line("p95")} className="trend-line trend-line--p95" />
+      <path d={line("p50")} className="trend-line" />
+      <text x={pad.l} y={H - 4} className="trend-label">
+        {fmtBucket(series[0].bucket)}
+      </text>
+      <text x={W - pad.r} y={H - 4} textAnchor="end" className="trend-label">
+        {fmtBucket(series[series.length - 1].bucket)}
+      </text>
+    </svg>
   );
 }

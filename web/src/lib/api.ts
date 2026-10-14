@@ -163,6 +163,8 @@ export interface Endpoint {
   forwardUrl: string | null;
   isActive: boolean;
   retryMaxAttempts?: number;
+  retryBackoffMs?: number;
+  blockInvalidSignatures?: boolean;
   createdAt: string;
 }
 
@@ -198,6 +200,8 @@ export interface WebhookEvent {
   forwardBody?: string;
   forwardLatency: number | null;
   isReplay: boolean;
+  isDuplicate?: boolean;
+  originalEventId?: string | null;
   receivedAt: string;
   createdAt: string;
 }
@@ -565,6 +569,7 @@ export interface DeadLetterEntry {
   lastAttempt: number;
   lastError: string | null;
   exhaustedAt: string;
+  event?: WebhookEvent;
 }
 
 export const deadLetter = {

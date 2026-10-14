@@ -4,25 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import {
-  events as eventsApi,
-  timeline as timelineApi,
-  WebhookEvent,
-  TimelineStep,
-  INGRESS_BASE,
-} from "@/lib/api";
-import {
-  StatusBadge,
-  MethodBadge,
-  SignatureBadge,
-} from "@/components/ui/badge";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { EventTimeline } from "@/components/event-timeline";
+import { endpoints as endpointsApi, events as eventsApi, timeline as timelineApi, type TimelineStep, type WebhookEvent } from "@/lib/api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { useFadeIn } from "@/hooks/use-gsap";
+import { RecorderView } from "@/components/flight-deck/tower/live-recorder";
 
 interface DiffResult {
   event1: { id: string; body: unknown; receivedAt: string };
@@ -31,18 +15,26 @@ interface DiffResult {
   bodyDiff: Record<string, { old: unknown; new: unknown; status: string }>;
 }
 
+interface ForwardResultRow {
+  destinationId: string;
+  url: string;
+  statusCode: number | null;
+  error: string | null;
+  latencyMs: number | null;
+}
+
+type DetailEvent = WebhookEvent & { forwardResults?: ForwardResultRow[] };
+
 export default function EventDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const [event, setEvent] = useState<WebhookEvent | null>(null);
-  const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>([]);
-  const [error, setError] = useState("");
+  const eventId = params.id as string;
+  const [loaded, setLoaded] = useState<{ id: string; event: DetailEvent; steps: TimelineStep[] } | null>(null);
+  const [error, setError] = useState<{ id: string; message: string } | null>(null);
+  const [maxAttempts, setMaxAttempts] = useState(4);
   const [replaying, setReplaying] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const contentRef = useFadeIn<HTMLDivElement>();
-
-  // Diff state
   const [diffOpen, setDiffOpen] = useState(false);
   const [diffEventId, setDiffEventId] = useState("");
   const [diffLoading, setDiffLoading] = useState(false);
@@ -50,28 +42,33 @@ export default function EventDetailPage() {
   const [diffError, setDiffError] = useState("");
 
   useEffect(() => {
-    if (params.id) {
-      const eventId = params.id as string;
-      eventsApi
-        .get(eventId)
-        .then(setEvent)
-        .catch((err) => {
-          setError(err instanceof Error ? err.message : "Failed to load event");
-        });
-      timelineApi
-        .get(eventId)
-        .then((res) => setTimelineSteps(res.steps))
-        .catch(() => {
-          // Timeline is optional, don't block on failure
-        });
-    }
-  }, [params.id]);
+    if (!eventId) return;
+    let cancelled = false;
+    Promise.all([
+      eventsApi.get(eventId),
+      // Timeline is optional; the recorder still renders the payload without it.
+      timelineApi.get(eventId).catch(() => ({ steps: [] as TimelineStep[] })),
+    ])
+      .then(async ([event, tl]) => {
+        // Without the endpoint the default retry budget applies.
+        const ep = await endpointsApi.get(event.endpointId).catch(() => null);
+        if (cancelled) return;
+        if (ep) setMaxAttempts((ep.retryMaxAttempts ?? 3) + 1);
+        setLoaded({ id: eventId, event, steps: tl.steps });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError({ id: eventId, message: err instanceof Error ? err.message : "Failed to load event" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
 
   async function handleDelete() {
-    if (!event) return;
+    if (!loaded) return;
     setDeleting(true);
     try {
-      await eventsApi.delete(event.id);
+      await eventsApi.delete(loaded.event.id);
       toast.success("Event deleted");
       router.push("/dashboard/events");
     } catch (err) {
@@ -81,11 +78,10 @@ export default function EventDetailPage() {
     }
   }
 
-  async function handleReplay() {
-    if (!event) return;
+  async function handleReplay(id: string) {
     setReplaying(true);
     try {
-      const replayed = await eventsApi.replay(event.id);
+      const replayed = await eventsApi.replay(id);
       toast.success("Event replayed");
       router.push(`/dashboard/events/${replayed.id}`);
     } catch (err) {
@@ -96,13 +92,12 @@ export default function EventDetailPage() {
   }
 
   async function handleDiff() {
-    if (!event || !diffEventId.trim()) return;
+    if (!loaded || !diffEventId.trim()) return;
     setDiffLoading(true);
     setDiffError("");
     setDiffResult(null);
     try {
-      const result = await eventsApi.diff(event.id, diffEventId.trim());
-      setDiffResult(result);
+      setDiffResult(await eventsApi.diff(loaded.event.id, diffEventId.trim()));
     } catch (err) {
       setDiffError(err instanceof Error ? err.message : "Failed to compare events");
     } finally {
@@ -110,303 +105,178 @@ export default function EventDetailPage() {
     }
   }
 
-  if (error) {
+  const current = loaded?.id === eventId ? loaded : null;
+
+  if (!current) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <p className="text-sm text-text-error">{error}</p>
-        <button
-          onClick={() => router.back()}
-          className="text-xs text-text-accent hover:underline cursor-pointer"
-        >
-          Go back
-        </button>
+      <div className="fd-root fd-page">
+        <div className="traffic-bar">
+          <Link href="/dashboard/events" className="chip chip--quiet">
+            ← History
+          </Link>
+        </div>
+        <div className="page-body">
+          {error?.id === eventId ? (
+            <div className="board-empty">
+              <p className="tone-red">{error.message}</p>
+              <p>
+                <button type="button" className="chip chip--quiet" onClick={() => router.back()}>
+                  Go back
+                </button>
+              </p>
+            </div>
+          ) : (
+            <p className="board-empty">Loading event…</p>
+          )}
+        </div>
       </div>
     );
   }
 
-  if (!event) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-5 h-5 border-2 border-border-secondary border-t-text-accent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const { event, steps } = current;
+  const results = event.forwardResults ?? [];
 
   return (
-    <>
-      <div
-        ref={contentRef}
-        className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full"
-      >
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={() => router.back()}
-              className="p-2 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-hover cursor-pointer"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              >
-                <path d="M10 4l-4 4 4 4" />
-              </svg>
-            </button>
-            <MethodBadge method={event.method} />
-            <span className="text-base font-semibold text-text-primary">
-              {event.eventType || "unknown"}
-            </span>
-            {event.isReplay && (
-              <span className="text-[9px] uppercase tracking-widest text-text-accent font-semibold bg-bg-accent-subtle px-1.5 py-0.5 rounded">
-                replay
-              </span>
-            )}
-            {(event as WebhookEvent & { isDuplicate?: boolean; originalEventId?: string }).isDuplicate && (
-              <Badge variant="warning">
-                duplicate
-                {(event as WebhookEvent & { originalEventId?: string }).originalEventId && (
-                  <Link
-                    href={`/dashboard/events/${(event as WebhookEvent & { originalEventId?: string }).originalEventId}`}
-                    className="ml-1 underline"
-                  >
-                    (original)
-                  </Link>
+    <div className="fd-root fd-page">
+      <div className="traffic-bar">
+        <Link href="/dashboard/events" className="chip chip--quiet">
+          ← History
+        </Link>
+        <span className="label-sm hide-sm">event</span>
+        <button
+          type="button"
+          className="ingress-chip"
+          title="Copy event ID"
+          onClick={() => {
+            void navigator.clipboard.writeText(event.id).then(
+              () => toast.success("Event ID copied"),
+              () => toast.error("Clipboard unavailable"),
+            );
+          }}
+        >
+          <span>{event.id}</span>
+        </button>
+      </div>
+
+      <div className="page-body page-body--wide">
+        <RecorderView
+          event={event}
+          steps={steps}
+          attempts={0}
+          maxAttempts={maxAttempts}
+          replaying={replaying}
+          onReplay={(id) => void handleReplay(id)}
+          variant="page"
+          kicker={
+            event.isDuplicate ? (
+              <span className="tone-amber">
+                {" "}
+                · duplicate
+                {event.originalEventId && (
+                  <>
+                    {" "}
+                    of{" "}
+                    <Link href={`/dashboard/events/${event.originalEventId}`} className="fd-link">
+                      original
+                    </Link>
+                  </>
                 )}
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                navigator.clipboard.writeText(event.id);
-                toast.success("Event ID copied");
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <rect x="5" y="5" width="8" height="8" rx="1" />
-                <path d="M3 11V4a1 1 0 011-1h7" />
-              </svg>
-              ID
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const curl = `curl -X POST '${INGRESS_BASE}/in/${event.path.split("/in/")[1] || "SLUG"}' \\\n  -H 'Content-Type: application/json' \\\n  -d '${JSON.stringify(event.body)}'`;
-                navigator.clipboard.writeText(curl);
-                toast.success("curl command copied");
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <path d="M4 6l3 3-3 3M8 12h5" />
-              </svg>
-              curl
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => { setDiffOpen(!diffOpen); setDiffResult(null); setDiffError(""); }}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <path d="M4 2v10M10 2v10M1 5h6M7 9h6" />
-              </svg>
-              Compare
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              loading={replaying}
-              onClick={handleReplay}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 14 14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
+              </span>
+            ) : null
+          }
+          actions={
+            <>
+              <button
+                type="button"
+                className="chip chip--quiet"
+                aria-expanded={diffOpen}
+                onClick={() => {
+                  setDiffOpen(!diffOpen);
+                  setDiffResult(null);
+                  setDiffError("");
+                }}
               >
-                <path d="M1 7a6 6 0 0111.5-2.5M13 7a6 6 0 01-11.5 2.5" />
-                <path d="M12.5 1v3.5H9M1.5 13V9.5H5" />
-              </svg>
-              Replay
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setDeleteOpen(true)}
-              className="text-text-error hover:text-text-error"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <path d="M3 5h10M5 5V3a1 1 0 011-1h4a1 1 0 011 1v2M13 5v8a1 1 0 01-1 1H4a1 1 0 01-1-1V5" />
-              </svg>
-              Delete
-            </Button>
-          </div>
-        </div>
-
-        {/* Meta grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
-          <MetaItem
-            label="Status"
-            value={<StatusBadge status={event.forwardStatus} />}
-          />
-          <MetaItem
-            label="Signature"
-            value={<SignatureBadge valid={event.signatureValid} />}
-          />
-          <MetaItem
-            label="Latency"
-            value={
-              <span className="text-sm font-mono text-text-primary tabular-nums">
-                {event.forwardLatency ? `${event.forwardLatency}ms` : "\u2014"}
-              </span>
-            }
-          />
-          <MetaItem
-            label="Received"
-            value={
-              <span className="text-sm text-text-primary tabular-nums">
-                {new Date(event.receivedAt).toLocaleString()}
-              </span>
-            }
-          />
-        </div>
-
-        {/* Diff Panel */}
-        {diffOpen && (
-          <Card className="mb-3">
-            <CardHeader title="Compare Events" description="Diff this event against another by ID" />
-            <div className="flex items-end gap-2 mb-3">
-              <div className="flex-1">
-                <Input
-                  label="Other Event ID"
+                Compare
+              </button>
+              <button type="button" className="chip chip--quiet" onClick={() => setDeleteOpen(true)}>
+                Delete
+              </button>
+            </>
+          }
+        >
+          {diffOpen && (
+            <section className="fr-block" aria-label="Compare">
+              <h3>
+                <span>Compare with another event</span>
+              </h3>
+              <form
+                className="inline-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleDiff();
+                }}
+              >
+                <input
+                  className="fd-input"
                   value={diffEventId}
                   onChange={(e) => setDiffEventId(e.target.value)}
-                  placeholder="Paste event ID to compare"
+                  placeholder="Paste an event ID"
+                  aria-label="Other event ID"
                 />
-              </div>
-              <Button size="sm" loading={diffLoading} onClick={() => void handleDiff()}>
-                Diff
-              </Button>
-            </div>
-            {diffError && (
-              <p className="text-sm text-text-error mb-2">{diffError}</p>
-            )}
-            {diffResult && (
-              <div className="space-y-3">
-                <DiffTable title="Headers" diff={diffResult.headersDiff} />
-                <DiffTable title="Body" diff={diffResult.bodyDiff} />
-              </div>
-            )}
-          </Card>
-        )}
+                <button type="submit" className="chip" disabled={diffLoading || !diffEventId.trim()}>
+                  {diffLoading ? "Comparing…" : "Diff"}
+                </button>
+              </form>
+              {diffError && <p className="fr-note tone-red">{diffError}</p>}
+              {diffResult && (
+                <>
+                  <DiffTable title="Headers" diff={diffResult.headersDiff} />
+                  <DiffTable title="Body" diff={diffResult.bodyDiff} />
+                </>
+              )}
+            </section>
+          )}
 
-        {/* Event Timeline */}
-        {timelineSteps.length > 0 && (
-          <Card className="mb-3">
-            <CardHeader title="Event Timeline" description="Step-by-step processing trace" />
-            <EventTimeline steps={timelineSteps} />
-          </Card>
-        )}
-
-        {/* Forward Results (per-destination) */}
-        {(event as WebhookEvent & { forwardResults?: Array<{ destinationId: string; url: string; statusCode: number | null; error: string | null; latencyMs: number | null }> }).forwardResults &&
-          (event as WebhookEvent & { forwardResults: Array<{ destinationId: string; url: string; statusCode: number | null; error: string | null; latencyMs: number | null }> }).forwardResults.length > 0 && (
-          <Card className="mb-3">
-            <CardHeader title="Forward Results" description="Per-destination delivery status" />
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border-primary">
-                    <th className="text-left py-2 pr-4 font-medium text-text-tertiary uppercase tracking-widest text-[10px]">
-                      Destination
-                    </th>
-                    <th className="text-left py-2 pr-4 font-medium text-text-tertiary uppercase tracking-widest text-[10px]">
-                      Status
-                    </th>
-                    <th className="text-left py-2 pr-4 font-medium text-text-tertiary uppercase tracking-widest text-[10px]">
-                      Latency
-                    </th>
-                    <th className="text-left py-2 font-medium text-text-tertiary uppercase tracking-widest text-[10px]">
-                      Error
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(event as WebhookEvent & { forwardResults: Array<{ destinationId: string; url: string; statusCode: number | null; error: string | null; latencyMs: number | null }> }).forwardResults.map((result, idx) => (
-                    <tr key={idx} className="border-b border-border-primary last:border-0">
-                      <td className="py-2 pr-4 font-mono text-text-secondary truncate max-w-[200px]">
-                        {result.url}
-                      </td>
-                      <td className="py-2 pr-4">
-                        {result.statusCode ? (
-                          <Badge variant={result.statusCode < 400 ? "success" : "error"}>
-                            {result.statusCode}
-                          </Badge>
-                        ) : (
-                          <Badge variant="default">--</Badge>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4 font-mono text-text-tertiary tabular-nums">
-                        {result.latencyMs !== null ? `${result.latencyMs}ms` : "\u2014"}
-                      </td>
-                      <td className="py-2 text-text-error truncate max-w-[200px]">
-                        {result.error || "\u2014"}
-                      </td>
+          {results.length > 0 && (
+            <section className="fr-block" aria-label="Forward results">
+              <h3>
+                <span>Per destination</span>
+              </h3>
+              <div className="table-scroll">
+                <table className="mini-table">
+                  <thead>
+                    <tr>
+                      <th>DESTINATION</th>
+                      <th>CODE</th>
+                      <th>LATENCY</th>
+                      <th>ERROR</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        )}
+                  </thead>
+                  <tbody>
+                    {results.map((r, i) => (
+                      <tr key={`${r.destinationId}-${i}`}>
+                        <td>{r.url}</td>
+                        <td className={r.statusCode && r.statusCode < 400 ? "seal-ok" : "seal-bad"}>{r.statusCode ?? "—"}</td>
+                        <td>{r.latencyMs !== null ? `${r.latencyMs}ms` : "—"}</td>
+                        <td className="tone-red">{r.error || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
-        {/* Forward Response */}
-        {event.forwardCode && (
-          <Card className="mb-3">
-            <CardHeader
-              title="Forward Response"
-              description={`HTTP ${event.forwardCode}`}
-            />
-            <pre className="text-xs font-mono text-text-secondary bg-bg-tertiary rounded-lg p-3.5 overflow-x-auto max-h-48">
-              {event.forwardBody || "No response body"}
-            </pre>
-          </Card>
-        )}
-
-        {/* Headers */}
-        {event.headers && (
-          <Card className="mb-3">
-            <CardHeader title="Request Headers" />
-            <div className="space-y-1">
-              {Object.entries(event.headers).map(([key, val]) => (
-                <div key={key} className="flex gap-2 text-xs font-mono">
-                  <span className="text-text-accent shrink-0">{key}:</span>
-                  <span className="text-text-secondary break-all">{val}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* Body */}
-        {event.body && (
-          <Card>
-            <CardHeader title="Request Body" />
-            <pre className="text-xs font-mono text-text-secondary bg-bg-tertiary rounded-lg p-3.5 overflow-x-auto max-h-96">
-              {JSON.stringify(event.body, null, 2)}
-            </pre>
-          </Card>
-        )}
+          {event.forwardCode ? (
+            <section className="fr-block" aria-label="Destination response">
+              <h3>
+                <span>Destination response</span>
+                <span className={event.forwardCode < 300 ? "seal-ok" : "seal-bad"}>HTTP {event.forwardCode}</span>
+              </h3>
+              <pre className="payload payload--short">{event.forwardBody || "No response body"}</pre>
+            </section>
+          ) : null}
+        </RecorderView>
       </div>
 
       <ConfirmDialog
@@ -419,63 +289,40 @@ export default function EventDetailPage() {
         onConfirm={() => void handleDelete()}
         onCancel={() => setDeleteOpen(false)}
       />
-    </>
-  );
-}
-
-function MetaItem({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="px-3.5 py-3 rounded-xl bg-bg-secondary border border-border-primary">
-      <p className="text-[10px] uppercase tracking-widest text-text-tertiary font-medium mb-1.5">
-        {label}
-      </p>
-      {value}
     </div>
   );
 }
 
+function show(v: unknown) {
+  if (v === null || v === undefined) return "—";
+  return typeof v === "object" ? JSON.stringify(v) : String(v);
+}
+
 function DiffTable({ title, diff }: { title: string; diff: Record<string, { old: unknown; new: unknown; status: string }> }) {
   const entries = Object.entries(diff);
-  if (entries.length === 0) {
-    return (
-      <div className="text-xs text-text-tertiary">
-        No {title.toLowerCase()} differences
-      </div>
-    );
-  }
-
+  if (entries.length === 0) return <p className="fr-note">No {title.toLowerCase()} differences.</p>;
   return (
-    <div>
-      <p className="text-xs font-medium text-text-secondary mb-1.5">{title}</p>
-      <div className="border border-border-primary rounded-lg overflow-hidden">
-        <table className="w-full text-xs">
+    <div className="diff">
+      <p className="label-sm">{title}</p>
+      <div className="table-scroll">
+        <table className="mini-table">
           <thead>
-            <tr className="bg-bg-tertiary border-b border-border-primary">
-              <th className="text-left px-3 py-1.5 text-text-tertiary font-medium">Field</th>
-              <th className="text-left px-3 py-1.5 text-text-tertiary font-medium">Status</th>
-              <th className="text-left px-3 py-1.5 text-text-tertiary font-medium">This Event</th>
-              <th className="text-left px-3 py-1.5 text-text-tertiary font-medium">Other Event</th>
+            <tr>
+              <th>FIELD</th>
+              <th>CHANGE</th>
+              <th>THIS EVENT</th>
+              <th>OTHER EVENT</th>
             </tr>
           </thead>
           <tbody>
-            {entries.map(([field, { old: oldVal, new: newVal, status }]) => (
-              <tr key={field} className="border-b border-border-primary last:border-0">
-                <td className="px-3 py-1.5 font-mono text-text-primary">{field}</td>
-                <td className="px-3 py-1.5">
-                  <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                    status === "added" ? "bg-emerald-500/10 text-emerald-400" :
-                    status === "removed" ? "bg-red-500/10 text-red-400" :
-                    "bg-yellow-500/10 text-yellow-400"
-                  }`}>
-                    {status}
-                  </span>
+            {entries.map(([field, d]) => (
+              <tr key={field}>
+                <td>{field}</td>
+                <td className="diff-status" data-s={d.status}>
+                  {d.status}
                 </td>
-                <td className="px-3 py-1.5 font-mono text-text-secondary max-w-[200px] truncate">
-                  {oldVal !== null && oldVal !== undefined ? (typeof oldVal === "object" ? JSON.stringify(oldVal) : String(oldVal)) : "\u2014"}
-                </td>
-                <td className="px-3 py-1.5 font-mono text-text-secondary max-w-[200px] truncate">
-                  {newVal !== null && newVal !== undefined ? (typeof newVal === "object" ? JSON.stringify(newVal) : String(newVal)) : "\u2014"}
-                </td>
+                <td>{show(d.old)}</td>
+                <td>{show(d.new)}</td>
               </tr>
             ))}
           </tbody>

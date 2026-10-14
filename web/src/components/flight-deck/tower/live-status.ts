@@ -44,7 +44,7 @@ export function lanesFromTimeline(steps: TimelineStep[], receivedAt: string): La
     lane.attempts.push({
       n: lane.attempts.length + 1,
       ok: s.status === "success",
-      code: right.replace(/^Forward\s+/, ""),
+      code: /\((\d{3})\)/.exec(right)?.[1] ?? right.replace(/^Forward\s+/, "").replace(/\s*\(N\/A\)$/, ""),
       latencyMs: s.latencyMs,
       at: (new Date(s.timestamp).getTime() - t0) / 1000,
     });
@@ -60,11 +60,45 @@ export function outcomesFromTimeline(steps: TimelineStep[], receivedAt: string):
   });
 }
 
-export const SCHEMES: Record<string, { scheme: string; header: string | null; kind: string }> = {
+export interface Scheme {
+  scheme: string;
+  header: string | null;
+  kind: string;
+  /** Other headers the API accepts for this provider, checked after `header`. */
+  altHeaders?: string[];
+  /** A request without a signature header stays unverified rather than failing. */
+  optional?: boolean;
+}
+
+export const SCHEMES: Record<string, Scheme> = {
   stripe: { scheme: "HMAC-SHA256 · t=,v1= · 5 min tolerance", header: "stripe-signature", kind: "payments" },
   paystack: { scheme: "HMAC-SHA512 · hex", header: "x-paystack-signature", kind: "payments" },
   flutterwave: { scheme: "secret hash", header: "verif-hash", kind: "payments" },
-  mono: { scheme: "HMAC-SHA512", header: "mono-webhook-secret", kind: "open banking" },
+  mono: { scheme: "secret in header", header: "mono-webhook-secret", kind: "open banking" },
   bags: { scheme: "HMAC-SHA256 · hex", header: "x-bags-signature", kind: "on-chain" },
-  custom: { scheme: "no signature scheme", header: null, kind: "custom" },
+  github: { scheme: "HMAC-SHA256 · sha256= hex", header: "x-hub-signature-256", kind: "code" },
+  shopify: { scheme: "HMAC-SHA256 · base64", header: "x-shopify-hmac-sha256", kind: "commerce" },
+  slack: { scheme: "HMAC-SHA256 · v0= hex · 5 min tolerance", header: "x-slack-signature", kind: "chat" },
+  linear: { scheme: "HMAC-SHA256 · hex · 60 s timestamp", header: "linear-signature", kind: "issues" },
+  twilio: { scheme: "HMAC-SHA1 · base64 · URL + params", header: "x-twilio-signature", kind: "messaging" },
+  "standard-webhooks": { scheme: "HMAC-SHA256 · id.timestamp.body · base64", header: "webhook-signature", kind: "standard webhooks" },
+  clerk: { scheme: "HMAC-SHA256 · id.timestamp.body · base64", header: "svix-signature", kind: "auth" },
+  resend: { scheme: "HMAC-SHA256 · id.timestamp.body · base64", header: "svix-signature", kind: "email" },
+  openai: { scheme: "HMAC-SHA256 · id.timestamp.body · base64", header: "webhook-signature", kind: "ai" },
+  custom: {
+    scheme: "HMAC-SHA256 · hex · optional",
+    header: "x-webhook-signature",
+    altHeaders: ["x-signature", "x-hub-signature-256"],
+    kind: "custom",
+    optional: true,
+  },
 };
+
+/** The signature header actually present on a request, if any. */
+export function receivedSignature(scheme: Scheme, headers: Record<string, string>): { header: string; value: string } | null {
+  for (const h of scheme.header ? [scheme.header, ...(scheme.altHeaders ?? [])] : []) {
+    const value = headers[h] ?? headers[h.toLowerCase()];
+    if (value) return { header: h, value: String(value) };
+  }
+  return null;
+}

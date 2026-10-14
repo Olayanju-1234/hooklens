@@ -43,6 +43,15 @@ const PROVIDER_LABEL: Record<string, string> = {
   flutterwave: "Flutterwave",
   mono: "Mono",
   bags: "Bags",
+  github: "GitHub",
+  shopify: "Shopify",
+  slack: "Slack",
+  linear: "Linear",
+  twilio: "Twilio",
+  clerk: "Clerk",
+  resend: "Resend",
+  openai: "OpenAI",
+  "standard-webhooks": "Standard Webhooks",
   custom: "Custom",
 };
 
