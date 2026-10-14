@@ -147,7 +147,6 @@ function SealStage({ route, onChange }: { route: RouteData; onChange: (r: RouteD
   const [rotating, setRotating] = useState(false);
   const [secret, setSecret] = useState("");
   const [saving, setSaving] = useState(false);
-  const unsigned = !scheme.header;
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -170,11 +169,11 @@ function SealStage({ route, onChange }: { route: RouteData; onChange: (r: RouteD
     <Stage
       n="02"
       title="Seal"
-      meta={unsigned ? "unsigned" : "verify"}
+      meta={scheme.optional ? "optional" : "verify"}
       tools={
         !rotating && (
           <button type="button" className="chip chip--quiet" onClick={() => setRotating(true)}>
-            {unsigned ? "Set secret" : "Rotate secret"}
+            {scheme.optional ? "Set secret" : "Rotate secret"}
           </button>
         )
       }
@@ -183,9 +182,15 @@ function SealStage({ route, onChange }: { route: RouteData; onChange: (r: RouteD
         <dt>scheme</dt>
         <dd>{scheme.scheme}</dd>
         <dt>header</dt>
-        <dd>{scheme.header ?? "—"}</dd>
+        <dd>{scheme.header ? [scheme.header, ...(scheme.altHeaders ?? [])].join(" · ") : "—"}</dd>
         <dt>invalid</dt>
         <dd>{ep.blockInvalidSignatures ? "blocked at the gate" : "recorded and forwarded, marked ✗"}</dd>
+        {scheme.optional && (
+          <>
+            <dt>missing</dt>
+            <dd>no signature header: recorded as unverified</dd>
+          </>
+        )}
       </dl>
       {rotating && (
         <form className="inline-form stage-form" onSubmit={(e) => void save(e)}>

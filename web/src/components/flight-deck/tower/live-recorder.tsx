@@ -5,7 +5,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { events as eventsApi, timeline as timelineApi, INGRESS_BASE, type TimelineStep, type WebhookEvent } from "@/lib/api";
 import { jsonLines } from "./flight-recorder";
-import { SCHEMES, lanesFromTimeline, liveStatus } from "./live-status";
+import { SCHEMES, lanesFromTimeline, liveStatus, receivedSignature } from "./live-status";
 
 interface Props {
   eventId: string | null;
@@ -120,13 +120,14 @@ export function RecorderView({ event, steps, attempts, maxAttempts, replaying, o
   const provider = event.provider ?? "custom";
   const scheme = SCHEMES[provider] ?? SCHEMES.custom;
   const headers = event.headers ?? {};
-  const received = scheme.header ? headers[scheme.header] ?? headers[scheme.header.toLowerCase()] : undefined;
+  const sig = receivedSignature(scheme, headers);
+  const received = sig?.value;
   const status = liveStatus(event.forwardStatus, attempts, maxAttempts);
   const lanes = lanesFromTimeline(steps, event.receivedAt);
   const span = Math.max(1, ...lanes.flatMap((l) => l.attempts.map((a) => a.at + 0.5)));
   const pct = (s: number) => `${Math.max(0, Math.min(100, (s / span) * 100))}%`;
   const raw = event.rawBody ?? JSON.stringify(event.body ?? {});
-  const sigHeader = scheme.header && received ? ` \\\n  -H ${shellQuote(`${scheme.header}: ${received}`)}` : "";
+  const sigHeader = sig ? ` \\\n  -H ${shellQuote(`${sig.header}: ${sig.value}`)}` : "";
   const curl = `curl -X ${event.method} ${INGRESS_BASE}${event.path} \\\n  -H 'content-type: application/json'${sigHeader} \\\n  -d ${shellQuote(raw)}`;
   const page = variant === "page";
 
@@ -178,11 +179,17 @@ export function RecorderView({ event, steps, attempts, maxAttempts, replaying, o
         <dt>scheme</dt>
         <dd>{scheme.scheme}</dd>
         <dt>header</dt>
-        <dd>{scheme.header ?? "—"}</dd>
+        <dd>{sig?.header ?? scheme.header ?? "—"}</dd>
         <dt>received</dt>
         <dd className="digest">{received ? `${String(received).slice(0, 40)}${String(received).length > 40 ? "…" : ""}` : "—"}</dd>
       </dl>
-      {event.signatureValid === null && <p className="fr-note">Add the provider&apos;s signing secret to this endpoint to verify its events.</p>}
+      {event.signatureValid === null && (
+        <p className="fr-note">
+          {scheme.optional && !sig
+            ? "No signature header was sent, so this event is unverified."
+            : "Add the provider\u2019s signing secret to this endpoint to verify its events."}
+        </p>
+      )}
     </section>
   );
 

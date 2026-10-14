@@ -60,11 +60,21 @@ export function outcomesFromTimeline(steps: TimelineStep[], receivedAt: string):
   });
 }
 
-export const SCHEMES: Record<string, { scheme: string; header: string | null; kind: string }> = {
+export interface Scheme {
+  scheme: string;
+  header: string | null;
+  kind: string;
+  /** Other headers the API accepts for this provider, checked after `header`. */
+  altHeaders?: string[];
+  /** A request without a signature header stays unverified rather than failing. */
+  optional?: boolean;
+}
+
+export const SCHEMES: Record<string, Scheme> = {
   stripe: { scheme: "HMAC-SHA256 · t=,v1= · 5 min tolerance", header: "stripe-signature", kind: "payments" },
   paystack: { scheme: "HMAC-SHA512 · hex", header: "x-paystack-signature", kind: "payments" },
   flutterwave: { scheme: "secret hash", header: "verif-hash", kind: "payments" },
-  mono: { scheme: "HMAC-SHA512", header: "mono-webhook-secret", kind: "open banking" },
+  mono: { scheme: "secret in header", header: "mono-webhook-secret", kind: "open banking" },
   bags: { scheme: "HMAC-SHA256 · hex", header: "x-bags-signature", kind: "on-chain" },
   github: { scheme: "HMAC-SHA256 · sha256= hex", header: "x-hub-signature-256", kind: "code" },
   shopify: { scheme: "HMAC-SHA256 · base64", header: "x-shopify-hmac-sha256", kind: "commerce" },
@@ -72,5 +82,20 @@ export const SCHEMES: Record<string, { scheme: string; header: string | null; ki
   clerk: { scheme: "HMAC-SHA256 · id.timestamp.body · base64", header: "svix-signature", kind: "auth" },
   resend: { scheme: "HMAC-SHA256 · id.timestamp.body · base64", header: "svix-signature", kind: "email" },
   openai: { scheme: "HMAC-SHA256 · id.timestamp.body · base64", header: "webhook-signature", kind: "ai" },
-  custom: { scheme: "no signature scheme", header: null, kind: "custom" },
+  custom: {
+    scheme: "HMAC-SHA256 · hex · optional",
+    header: "x-webhook-signature",
+    altHeaders: ["x-signature", "x-hub-signature-256"],
+    kind: "custom",
+    optional: true,
+  },
 };
+
+/** The signature header actually present on a request, if any. */
+export function receivedSignature(scheme: Scheme, headers: Record<string, string>): { header: string; value: string } | null {
+  for (const h of scheme.header ? [scheme.header, ...(scheme.altHeaders ?? [])] : []) {
+    const value = headers[h] ?? headers[h.toLowerCase()];
+    if (value) return { header: h, value: String(value) };
+  }
+  return null;
+}
