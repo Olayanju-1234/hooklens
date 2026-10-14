@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-github2';
 import { ConfigService } from '@nestjs/config';
+import { OAuthStateStore } from './oauth-state.store.js';
 
 @Injectable()
 export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
@@ -15,6 +16,7 @@ export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
       clientSecret: clientSecret || 'not-configured',
       callbackURL,
       scope: ['user:email'],
+      store: OAuthStateStore.fromConfig('github', configService),
     });
   }
 

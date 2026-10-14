@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, VerifyCallback } from 'passport-google-oauth20';
 import { ConfigService } from '@nestjs/config';
+import { OAuthStateStore } from './oauth-state.store.js';
 
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
@@ -15,6 +16,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       clientSecret: clientSecret || 'not-configured',
       callbackURL,
       scope: ['email', 'profile'],
+      store: OAuthStateStore.fromConfig('google', configService),
     });
   }
 

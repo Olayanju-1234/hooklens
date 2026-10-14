@@ -2,6 +2,7 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  Logger,
   Type,
   mixin,
 } from '@nestjs/common';
@@ -23,6 +24,8 @@ export function isOAuthConfigured(
 export function OAuthGuard(provider: OAuthProvider): Type<CanActivate> {
   @Injectable()
   class MixinOAuthGuard extends AuthGuard(provider) {
+    private readonly logger = new Logger(`OAuthGuard:${provider}`);
+
     constructor(private readonly configService: ConfigService) {
       super();
     }
@@ -33,8 +36,15 @@ export function OAuthGuard(provider: OAuthProvider): Type<CanActivate> {
       return super.canActivate(context);
     }
 
-    // Denied consent or provider errors fall through to the handler instead of a raw 401
-    handleRequest<TUser>(_err: unknown, user: TUser): TUser {
+    // Denied consent, bad state or provider errors fall through to the handler instead of a raw 401
+    handleRequest<TUser>(err: unknown, user: TUser, info: unknown): TUser {
+      if (!user) {
+        const reason =
+          (err as Error | undefined)?.message ??
+          (info as { message?: string } | undefined)?.message ??
+          'no user returned';
+        this.logger.warn(`OAuth ${provider} authentication failed: ${reason}`);
+      }
       return (user || null) as TUser;
     }
   }
