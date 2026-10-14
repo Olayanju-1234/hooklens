@@ -2,7 +2,9 @@
 
 import { useEffect, useState, FormEvent } from "react";
 import Link from "next/link";
-import { endpoints as endpointsApi, Endpoint, ApiError } from "@/lib/api";
+import toast from "react-hot-toast";
+import { endpoints as endpointsApi, Endpoint, ApiError, INGRESS_BASE } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -108,7 +110,15 @@ function getProvider(value: string) {
   return providers.find((p) => p.value === value) ?? providers[providers.length - 1];
 }
 
+function copyIngressUrl(url: string) {
+  navigator.clipboard.writeText(url).then(
+    () => toast.success("Ingress URL copied"),
+    () => toast.error("Couldn't copy to clipboard"),
+  );
+}
+
 export default function EndpointsPage() {
+  const { ingressSlug } = useAuth();
   const [items, setItems] = useState<Endpoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -204,14 +214,22 @@ export default function EndpointsPage() {
     try {
       await endpointsApi.delete(id);
       setItems((prev) => prev.filter((ep) => ep.id !== id));
+      toast.success("Endpoint deleted");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to delete endpoint");
     } finally {
       setDeletingId(null);
     }
   }
 
   async function handleToggle(ep: Endpoint) {
-    const updated = await endpointsApi.update(ep.id, { isActive: !ep.isActive });
-    setItems((prev) => prev.map((e) => (e.id === ep.id ? updated : e)));
+    try {
+      const updated = await endpointsApi.update(ep.id, { isActive: !ep.isActive });
+      setItems((prev) => prev.map((e) => (e.id === ep.id ? updated : e)));
+      toast.success(updated.isActive ? "Endpoint activated" : "Endpoint paused");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to update endpoint");
+    }
   }
 
   return (
@@ -248,6 +266,7 @@ export default function EndpointsPage() {
           <div ref={listRef} className="rounded-xl border border-border-primary overflow-hidden divide-y divide-border-primary">
             {items.map((ep) => {
               const prov = getProvider(ep.provider);
+              const ingressUrl = ingressSlug ? `${INGRESS_BASE}/in/${ingressSlug}/${ep.id}` : null;
               return (
                 <div
                   key={ep.id}
@@ -275,6 +294,23 @@ export default function EndpointsPage() {
                         </>
                       )}
                     </div>
+                    {ingressUrl && (
+                      <div className="flex items-center gap-1.5 mt-1 min-w-0">
+                        <code className="text-[11px] font-mono text-text-accent truncate" title={ingressUrl}>
+                          {ingressUrl}
+                        </code>
+                        <button
+                          onClick={() => copyIngressUrl(ingressUrl)}
+                          className="p-1 rounded text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary transition-colors cursor-pointer shrink-0"
+                          title="Copy ingress URL"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                            <rect x="5" y="5" width="8" height="8" rx="1" />
+                            <path d="M3 11V4a1 1 0 011-1h7" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Retry config — visible on hover only */}

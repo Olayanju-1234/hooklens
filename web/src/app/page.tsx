@@ -9,6 +9,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import DecodeText from "@/components/landing/decode-text";
 import MagneticButton from "@/components/landing/magnetic-button";
+import { INGRESS_BASE } from "@/lib/api";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -512,7 +513,7 @@ export default function LandingPage() {
                 step: "01",
                 title: "Create an endpoint",
                 desc: "Pick your provider, get a unique ingress URL. Configure signature verification, retry policy, and forward destinations.",
-                code: "hookdash-web.vercel.app/in/usr_a3f8c1d9",
+                code: `${INGRESS_BASE.replace(/^https?:\/\//, "")}/in/usr_a3f8c1d9`,
               },
               {
                 step: "02",
@@ -689,7 +690,11 @@ export default function LandingPage() {
 
           <div className="mt-14 pt-6 border-t border-[#111110] flex flex-col sm:flex-row items-center justify-between gap-3">
             <span className="text-[11px] text-[#2a2a28]">&copy; {new Date().getFullYear()} Hookdash. MIT License.</span>
-            <span className="text-[11px] text-[#2a2a28]">Made with intent.</span>
+            <div className="flex items-center gap-5">
+              <Link href="/privacy" className="text-[11px] text-[#4a4a45] hover:text-[#ececea] transition-colors">Privacy</Link>
+              <Link href="/terms" className="text-[11px] text-[#4a4a45] hover:text-[#ececea] transition-colors">Terms</Link>
+              <span className="text-[11px] text-[#2a2a28]">Made with intent.</span>
+            </div>
           </div>
         </div>
       </footer>

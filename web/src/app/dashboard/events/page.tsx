@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import { events as eventsApi, eventExport, WebhookEvent } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -97,6 +98,16 @@ export default function EventsPage() {
     void fetchEvents();
   }, [fetchEvents]);
 
+  function handleExport(format: "csv" | "json") {
+    setShowExport(false);
+    const params: Record<string, string> = {};
+    if (statusFilter) params.forwardStatus = statusFilter;
+    if (search) params.search = search;
+    eventExport[format](params).catch((err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "Export failed");
+    });
+  }
+
   return (
     <div className="px-4 sm:px-6 py-6 mx-auto max-w-6xl w-full">
       {/* Toolbar */}
@@ -162,13 +173,13 @@ export default function EventsPage() {
               <div className="absolute right-0 top-full mt-1 w-36 bg-bg-elevated border border-border-primary rounded-lg shadow-lg z-20 overflow-hidden py-0.5">
                 <button
                   className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors cursor-pointer"
-                  onClick={() => { setShowExport(false); void eventExport.csv(statusFilter ? { forwardStatus: statusFilter } : undefined); }}
+                  onClick={() => handleExport("csv")}
                 >
                   Export CSV
                 </button>
                 <button
                   className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors cursor-pointer"
-                  onClick={() => { setShowExport(false); void eventExport.json(statusFilter ? { forwardStatus: statusFilter } : undefined); }}
+                  onClick={() => handleExport("json")}
                 >
                   Export JSON
                 </button>

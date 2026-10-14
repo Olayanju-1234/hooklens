@@ -7,6 +7,11 @@ import {
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from '../../entities/user.entity.js';
+import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
+import { isTokenCurrent } from '../auth/strategies/jwt.strategy.js';
 
 interface BroadcastPayload {
   id: string;
@@ -36,9 +41,13 @@ export class WebhookGateway
   @WebSocketServer()
   server!: Server;
 
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+  ) {}
 
-  handleConnection(client: Socket) {
+  async handleConnection(client: Socket) {
     try {
       const authToken = (client.handshake.auth as Record<string, unknown>)
         ?.token as string | undefined;
@@ -53,8 +62,16 @@ export class WebhookGateway
         return;
       }
 
-      const payload = this.jwtService.verify(token) as unknown;
-      const userId = (payload as { sub: string }).sub;
+      const payload = this.jwtService.verify<JwtPayload>(token);
+      const user = await this.userRepo.findOne({
+        where: { id: payload.sub },
+        select: { id: true, tokenVersion: true },
+      });
+      if (!isTokenCurrent(payload, user)) {
+        client.disconnect();
+        return;
+      }
+      const userId = payload.sub;
       void client.join(`user:${userId}`);
       this.logger.log(`Client connected: ${client.id} for user ${userId}`);
     } catch {

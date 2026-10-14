@@ -7,7 +7,9 @@ export const envValidationSchema = Joi.object({
     .default('development'),
   PORT: Joi.number().default(3000),
   CORS_ORIGIN: Joi.string().default('http://localhost:3001'),
-  APP_URL: Joi.string().uri().default('https://hookdash-web.onrender.com'),
+  APP_URL: Joi.string().uri().default('http://localhost:3001'),
+  API_URL: Joi.string().uri().default('http://localhost:3000'),
+  ALLOW_PRIVATE_FORWARDING: Joi.boolean().default(false),
 
   // ── Database (either DATABASE_URL or individual fields) ────────────
   DATABASE_URL: Joi.string().uri().optional(),

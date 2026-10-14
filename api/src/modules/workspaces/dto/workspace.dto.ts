@@ -3,15 +3,30 @@ import {
   IsOptional,
   IsEmail,
   IsNumber,
+  IsNotEmpty,
+  MaxLength,
   Min,
   Max,
   IsIn,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export const WORKSPACE_NAME_MAX_LENGTH = 100;
+
+const trim = ({ value }: { value: unknown }): unknown =>
+  typeof value === 'string' ? value.trim() : value;
+
 export class CreateWorkspaceDto {
-  @ApiProperty({ description: 'Workspace name', example: 'My Team Workspace' })
+  @ApiProperty({
+    description: 'Workspace name',
+    example: 'My Team Workspace',
+    maxLength: WORKSPACE_NAME_MAX_LENGTH,
+  })
+  @Transform(trim)
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(WORKSPACE_NAME_MAX_LENGTH)
   name!: string;
 }
 
@@ -19,9 +34,13 @@ export class UpdateWorkspaceDto {
   @ApiPropertyOptional({
     description: 'Updated workspace name',
     example: 'Renamed Workspace',
+    maxLength: WORKSPACE_NAME_MAX_LENGTH,
   })
   @IsOptional()
+  @Transform(trim)
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(WORKSPACE_NAME_MAX_LENGTH)
   name?: string;
 
   @ApiPropertyOptional({

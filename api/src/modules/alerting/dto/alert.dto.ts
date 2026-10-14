@@ -1,5 +1,6 @@
 import {
   IsString,
+  IsUrl,
   IsOptional,
   IsBoolean,
   IsIn,
@@ -17,7 +18,7 @@ export class AlertChannelConfigDto {
     example: 'https://hooks.slack.com/services/xxx',
   })
   @IsOptional()
-  @IsString()
+  @IsUrl({ require_protocol: true, protocols: ['https'] })
   webhookUrl?: string;
 
   @ApiPropertyOptional({

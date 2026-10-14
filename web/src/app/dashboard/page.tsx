@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Onboarding } from "@/components/onboarding";
 import Link from "next/link";
+import toast from "react-hot-toast";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
 const BASE_URL = API_URL.replace(/\/api\/?$/, "");
@@ -96,12 +97,12 @@ export default function DashboardPage() {
   async function sendTestEvent() {
     if (!ingressSlug) return;
     setSending(true);
+    const optimisticId = `optimistic_${Date.now()}`;
     try {
       const payload =
         TEST_PAYLOADS[Math.floor(Math.random() * TEST_PAYLOADS.length)];
 
       // Optimistic: show the event immediately
-      const optimisticId = `optimistic_${Date.now()}`;
       const eventType = (payload.body as Record<string, unknown>)
         .event as string;
       addEvents([
@@ -118,11 +119,12 @@ export default function DashboardPage() {
         },
       ]);
 
-      await fetch(`${BASE_URL}/in/${ingressSlug}`, {
+      const res = await fetch(`${BASE_URL}/in/${ingressSlug}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload.body),
       });
+      if (!res.ok) throw new Error(`Ingress responded with ${res.status}`);
 
       // Replace optimistic event with real data from the server
       setTimeout(async () => {
@@ -146,6 +148,9 @@ export default function DashboardPage() {
           // Non-critical, ignore
         }
       }, 800);
+    } catch (err) {
+      removeEvent(optimisticId);
+      toast.error(err instanceof Error ? `Test event failed: ${err.message}` : "Failed to send test event");
     } finally {
       setSending(false);
     }
@@ -242,8 +247,8 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="space-y-1">
-            {liveEvents.map((event, i) => (
-              <Link key={event.id} href={`/dashboard/events/${event.id}`}>
+            {liveEvents.map((event, i) => {
+              const row = (
                 <div
                   className="animate-slide-in flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 rounded-xl
                     bg-bg-secondary border border-border-primary
@@ -275,8 +280,16 @@ export default function DashboardPage() {
                     </span>
                   </div>
                 </div>
-              </Link>
-            ))}
+              );
+              // Optimistic rows have no server id yet, so their detail page would 400
+              return event.id.startsWith("optimistic_") ? (
+                <div key={event.id}>{row}</div>
+              ) : (
+                <Link key={event.id} href={`/dashboard/events/${event.id}`}>
+                  {row}
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>

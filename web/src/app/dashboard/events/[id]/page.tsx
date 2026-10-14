@@ -9,6 +9,7 @@ import {
   timeline as timelineApi,
   WebhookEvent,
   TimelineStep,
+  INGRESS_BASE,
 } from "@/lib/api";
 import {
   StatusBadge,
@@ -85,7 +86,10 @@ export default function EventDetailPage() {
     setReplaying(true);
     try {
       const replayed = await eventsApi.replay(event.id);
+      toast.success("Event replayed");
       router.push(`/dashboard/events/${replayed.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to replay event");
     } finally {
       setReplaying(false);
     }
@@ -195,7 +199,7 @@ export default function EventDetailPage() {
               variant="ghost"
               size="sm"
               onClick={() => {
-                const curl = `curl -X POST '${window.location.origin.replace("3001", "3000")}/in/${event.path.split("/in/")[1] || "SLUG"}' \\\n  -H 'Content-Type: application/json' \\\n  -d '${JSON.stringify(event.body)}'`;
+                const curl = `curl -X POST '${INGRESS_BASE}/in/${event.path.split("/in/")[1] || "SLUG"}' \\\n  -H 'Content-Type: application/json' \\\n  -d '${JSON.stringify(event.body)}'`;
                 navigator.clipboard.writeText(curl);
                 toast.success("curl command copied");
               }}

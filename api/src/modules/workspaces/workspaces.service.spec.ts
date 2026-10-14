@@ -21,11 +21,13 @@ describe('WorkspacesService', () => {
     findOne: jest.fn(),
     remove: jest.fn(),
   };
+  const WS_ID = '7f1c2a9e-4b3d-4e5f-8a6b-1c2d3e4f5a6b';
   const mockMemberRepo = {
     create: jest.fn(),
     save: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
+    exists: jest.fn(),
     remove: jest.fn(),
     count: jest.fn(),
   };
@@ -37,7 +39,10 @@ describe('WorkspacesService', () => {
     remove: jest.fn(),
   };
   const mockEmailService = {
-    sendInvite: jest.fn().mockResolvedValue(undefined),
+    sendInvite: jest.fn().mockResolvedValue(true),
+    inviteUrl: jest.fn(
+      (token: string) => `https://app.test/invite?token=${token}`,
+    ),
   };
 
   beforeEach(async () => {
@@ -190,20 +195,25 @@ describe('WorkspacesService', () => {
         name: 'My Workspace',
       });
 
-      const result = await service.invite('ws-1', {
-        email: 'new@example.com',
-      });
+      const result = await service.invite(
+        'ws-1',
+        { email: 'New@Example.com' },
+        'owner@example.com',
+      );
 
       expect(result.id).toBe('inv-uuid');
       expect(result.workspaceId).toBe('ws-1');
       expect(result.email).toBe('new@example.com');
       expect(result.role).toBe('member');
       expect(result.token).toBeDefined();
+      expect(result.inviteUrl).toBe(
+        `https://app.test/invite?token=${result.token}`,
+      );
       expect(mockEmailService.sendInvite).toHaveBeenCalledWith(
         'new@example.com',
         'My Workspace',
         expect.any(String),
-        'team@hookdash.dev',
+        'owner@example.com',
       );
     });
 
@@ -211,11 +221,42 @@ describe('WorkspacesService', () => {
       mockInviteRepo.findOne.mockResolvedValue({
         id: 'inv-existing',
         email: 'dup@example.com',
+        expiresAt: new Date(Date.now() + 86_400_000),
       });
 
       await expect(
-        service.invite('ws-1', { email: 'dup@example.com' }),
+        service.invite(
+          'ws-1',
+          { email: 'dup@example.com' },
+          'owner@example.com',
+        ),
       ).rejects.toThrow(ConflictException);
+    });
+
+    it('should replace an expired invite for the same email', async () => {
+      const expired = {
+        id: 'inv-old',
+        email: 'dup@example.com',
+        expiresAt: new Date(Date.now() - 86_400_000),
+      };
+      mockInviteRepo.findOne.mockResolvedValue(expired);
+      mockInviteRepo.remove.mockResolvedValue(expired);
+      mockInviteRepo.create.mockImplementation(
+        (data: Partial<WorkspaceInvite>) => data,
+      );
+      mockInviteRepo.save.mockImplementation(
+        (invite: Partial<WorkspaceInvite>) => ({ ...invite, id: 'inv-new' }),
+      );
+      mockWorkspaceRepo.findOne.mockResolvedValue({ id: 'ws-1', name: 'WS' });
+
+      const result = await service.invite(
+        'ws-1',
+        { email: 'dup@example.com' },
+        'owner@example.com',
+      );
+
+      expect(mockInviteRepo.remove).toHaveBeenCalledWith(expired);
+      expect(result.id).toBe('inv-new');
     });
   });
 
@@ -227,6 +268,7 @@ describe('WorkspacesService', () => {
       const invite = {
         id: 'inv-1',
         workspaceId: 'ws-1',
+        email: 'user2@example.com',
         role: 'member',
         token: 'valid-token',
         expiresAt: futureDate,
@@ -242,7 +284,11 @@ describe('WorkspacesService', () => {
       }));
       mockInviteRepo.remove.mockResolvedValue(invite);
 
-      const result = await service.acceptInvite('valid-token', 'user-2');
+      const result = await service.acceptInvite(
+        'valid-token',
+        'user-2',
+        'User2@example.com',
+      );
 
       expect(result.workspaceId).toBe('ws-1');
       expect(result.userId).toBe('user-2');
@@ -264,7 +310,7 @@ describe('WorkspacesService', () => {
       mockInviteRepo.remove.mockResolvedValue(invite);
 
       await expect(
-        service.acceptInvite('expired-token', 'user-2'),
+        service.acceptInvite('expired-token', 'user-2', 'user2@example.com'),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -275,6 +321,7 @@ describe('WorkspacesService', () => {
       const invite = {
         id: 'inv-1',
         workspaceId: 'ws-1',
+        email: 'user2@example.com',
         token: 'token-abc',
         expiresAt: futureDate,
       };
@@ -286,9 +333,24 @@ describe('WorkspacesService', () => {
       });
       mockInviteRepo.remove.mockResolvedValue(invite);
 
-      await expect(service.acceptInvite('token-abc', 'user-2')).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(
+        service.acceptInvite('token-abc', 'user-2', 'user2@example.com'),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should reject an invite accepted by a different email', async () => {
+      mockInviteRepo.findOne.mockResolvedValue({
+        id: 'inv-1',
+        workspaceId: 'ws-1',
+        email: 'invited@example.com',
+        token: 'token-xyz',
+        expiresAt: new Date(Date.now() + 86_400_000),
+      });
+
+      await expect(
+        service.acceptInvite('token-xyz', 'user-3', 'someone-else@example.com'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockMemberRepo.save).not.toHaveBeenCalled();
     });
   });
 
@@ -350,22 +412,26 @@ describe('WorkspacesService', () => {
 
   describe('assertMembership', () => {
     it('should pass for member', async () => {
-      mockMemberRepo.findOne.mockResolvedValue({
-        id: 'mem-1',
-        role: 'member',
-      });
+      mockMemberRepo.exists.mockResolvedValue(true);
 
       await expect(
-        service.assertMembership('ws-1', 'user-1'),
+        service.assertMembership(WS_ID, 'user-1'),
       ).resolves.toBeUndefined();
     });
 
     it('should throw ForbiddenException for non-member', async () => {
-      mockMemberRepo.findOne.mockResolvedValue(null);
+      mockMemberRepo.exists.mockResolvedValue(false);
 
-      await expect(
-        service.assertMembership('ws-1', 'user-999'),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.assertMembership(WS_ID, 'user-999')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should reject a malformed workspace id without querying', async () => {
+      await expect(service.assertMembership('a, b', 'user-1')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(mockMemberRepo.exists).not.toHaveBeenCalled();
     });
   });
 
@@ -377,7 +443,7 @@ describe('WorkspacesService', () => {
       });
 
       await expect(
-        service.assertOwner('ws-1', 'user-1'),
+        service.assertOwner(WS_ID, 'user-1'),
       ).resolves.toBeUndefined();
     });
 
@@ -387,7 +453,7 @@ describe('WorkspacesService', () => {
         role: 'member',
       });
 
-      await expect(service.assertOwner('ws-1', 'user-1')).rejects.toThrow(
+      await expect(service.assertOwner(WS_ID, 'user-1')).rejects.toThrow(
         ForbiddenException,
       );
     });
@@ -395,7 +461,7 @@ describe('WorkspacesService', () => {
     it('should throw ForbiddenException for non-member', async () => {
       mockMemberRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.assertOwner('ws-1', 'user-999')).rejects.toThrow(
+      await expect(service.assertOwner(WS_ID, 'user-999')).rejects.toThrow(
         ForbiddenException,
       );
     });

@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  ForbiddenException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -13,6 +8,7 @@ import { ForwardResult } from '../../entities/forward-result.entity.js';
 import { EventsQueryDto } from './dto/events-query.dto.js';
 import { ForwardJobData } from '../forward/forward.processor.js';
 import { Endpoint } from '../../entities/endpoint.entity.js';
+import { WorkspacesService } from '../workspaces/workspaces.service.js';
 
 export interface TimelineStep {
   step: string;
@@ -35,6 +31,7 @@ export class EventsService {
     private readonly forwardResultRepo: Repository<ForwardResult>,
     @InjectQueue('webhook-forward')
     private readonly forwardQueue: Queue<ForwardJobData>,
+    private readonly workspacesService: WorkspacesService,
   ) {}
 
   async findAll(userId: string, query: EventsQueryDto, workspaceId?: string) {
@@ -57,12 +54,15 @@ export class EventsService {
         'e.receivedAt',
         'e.createdAt',
       ])
-      .where('e.userId = :userId', { userId })
       .orderBy('e.receivedAt', 'DESC')
       .take(limit + 1); // fetch one extra for cursor
 
+    // Workspace members share the workspace's events; without a workspace, only your own
     if (workspaceId) {
-      qb.andWhere('e.workspaceId = :workspaceId', { workspaceId });
+      await this.workspacesService.assertMembership(workspaceId, userId);
+      qb.where('e.workspaceId = :workspaceId', { workspaceId });
+    } else {
+      qb.where('e.userId = :userId', { userId });
     }
 
     if (query.endpointId) {
@@ -111,8 +111,11 @@ export class EventsService {
 
   async findOne(id: string, userId: string): Promise<WebhookEvent> {
     const event = await this.eventRepo.findOne({ where: { id } });
-    if (!event) throw new NotFoundException('Event not found');
-    if (event.userId !== userId) throw new ForbiddenException();
+    const allowed =
+      event &&
+      (event.userId === userId ||
+        (await this.workspacesService.isMember(event.workspaceId, userId)));
+    if (!event || !allowed) throw new NotFoundException('Event not found');
     return event;
   }
 
@@ -252,11 +255,17 @@ export class EventsService {
     const saved = await this.eventRepo.save(replay);
 
     try {
-      await this.forwardQueue.add('forward', {
-        eventId: saved.id,
-        endpointId: endpoint.id,
-        userId,
-      });
+      await this.forwardQueue.add(
+        'forward',
+        { eventId: saved.id, endpointId: endpoint.id, userId: original.userId },
+        {
+          attempts: endpoint.retryMaxAttempts + 1,
+          backoff: {
+            type: 'exponential',
+            delay: Math.max(endpoint.retryBackoffMs, 1000),
+          },
+        },
+      );
     } catch (err) {
       this.logger.error(
         `Failed to queue replay forward for event ${saved.id}: ${(err as Error).message}`,

@@ -1,7 +1,8 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { Job } from 'bullmq';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
@@ -12,6 +13,9 @@ import { DeadLetterEvent } from '../../entities/dead-letter-event.entity.js';
 import { TransformRule } from '../../entities/transform-rule.entity.js';
 import { WebhookGateway } from '../websocket/webhook.gateway.js';
 import { AlertingService } from '../alerting/alerting.service.js';
+import { applyOperations } from '../transform/transform.service.js';
+import type { TransformOperationDto } from '../transform/dto/transform.dto.js';
+import { outboundRequestOptions } from '../../common/utils/outbound-url.js';
 
 export interface ForwardJobData {
   eventId: string;
@@ -20,17 +24,41 @@ export interface ForwardJobData {
   destinationId?: string;
 }
 
-interface TransformOperation {
-  type: 'rename' | 'remove' | 'set' | 'copy';
-  from?: string;
-  to?: string;
-  path?: string;
-  value?: unknown;
+interface ForwardTarget {
+  destinationId: string | null;
+  url: string;
+  label: string;
 }
 
-@Processor('webhook-forward', { drainDelay: 5000, stalledInterval: 300_000, lockDuration: 60_000 })
+interface TargetResult {
+  target: ForwardTarget;
+  status: 'forwarded' | 'failed';
+  code: number | null;
+  latency: number;
+  error?: string;
+  body?: string;
+}
+
+// Signature headers passed through untouched when the body is forwarded as received
+const PASSTHROUGH_HEADERS = [
+  'stripe-signature',
+  'x-paystack-signature',
+  'verif-hash',
+  'mono-webhook-secret',
+  'x-bags-signature',
+  'x-webhook-signature',
+  'x-signature',
+  'x-hub-signature-256',
+];
+
+@Processor('webhook-forward', {
+  concurrency: 5,
+  drainDelay: 5,
+  lockDuration: 60_000,
+})
 export class ForwardProcessor extends WorkerHost {
   private readonly logger = new Logger(ForwardProcessor.name);
+  private readonly allowPrivate: boolean;
 
   constructor(
     @InjectRepository(WebhookEvent)
@@ -48,12 +76,17 @@ export class ForwardProcessor extends WorkerHost {
     private readonly httpService: HttpService,
     private readonly wsGateway: WebhookGateway,
     private readonly alertingService: AlertingService,
+    configService: ConfigService,
   ) {
     super();
+    this.allowPrivate = configService.get<boolean>(
+      'allowPrivateForwarding',
+      false,
+    );
   }
 
   async process(job: Job<ForwardJobData>): Promise<void> {
-    const { eventId, endpointId, userId } = job.data;
+    const { eventId, endpointId, userId, destinationId } = job.data;
 
     const [event, endpoint] = await Promise.all([
       this.eventRepo.findOne({ where: { id: eventId } }),
@@ -69,7 +102,9 @@ export class ForwardProcessor extends WorkerHost {
 
     const [destinations, transformRules] = await Promise.all([
       this.destinationRepo.find({
-        where: { endpointId, isActive: true },
+        where: destinationId
+          ? { id: destinationId, endpointId }
+          : { endpointId, isActive: true },
       }),
       this.transformRuleRepo.find({
         where: { endpointId, isActive: true },
@@ -77,8 +112,24 @@ export class ForwardProcessor extends WorkerHost {
       }),
     ]);
 
-    // No destinations and no legacy forwardUrl — skip
-    if (destinations.length === 0 && !endpoint.forwardUrl) {
+    const usesDestinations = destinations.length > 0;
+    const targets: ForwardTarget[] = usesDestinations
+      ? destinations.map((d) => ({
+          destinationId: d.id,
+          url: d.url,
+          label: d.label || d.url,
+        }))
+      : endpoint.forwardUrl
+        ? [
+            {
+              destinationId: null,
+              url: endpoint.forwardUrl,
+              label: endpoint.forwardUrl,
+            },
+          ]
+        : [];
+
+    if (targets.length === 0) {
       await this.safeUpdateEvent(eventId, { forwardStatus: 'skipped' });
       this.safeBroadcast(userId, {
         eventId,
@@ -89,335 +140,220 @@ export class ForwardProcessor extends WorkerHost {
       return;
     }
 
-    const results: { status: string; code: number | null; latency: number }[] =
-      [];
+    // Retries only go to targets that haven't accepted this event yet
+    const delivered = usesDestinations
+      ? new Set(
+          (
+            await this.resultRepo.find({
+              where: {
+                eventId,
+                status: 'forwarded',
+                destinationId: In(targets.map((t) => t.destinationId)),
+              },
+              select: { destinationId: true },
+            })
+          ).map((r) => r.destinationId),
+        )
+      : new Set<string | null>();
 
-    // Forward to each destination
-    for (const destination of destinations) {
-      const transformed = this.applyTransforms(
-        structuredClone(event.body),
-        transformRules,
-      );
+    const payload = this.buildPayload(event, transformRules);
+    const attempt = job.attemptsMade + 1;
+    const results: TargetResult[] = [];
 
-      const start = Date.now();
-      try {
-        const stripeSignature = event.headers['stripe-signature'];
-        const response = await this.httpService.axiosRef({
-          method: 'POST',
-          url: destination.url,
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Hookdash-Event-Id': event.id,
-            'X-Hookdash-Original-Signature':
-              event.headers['x-paystack-signature'] ??
-              event.headers['verif-hash'] ??
-              stripeSignature ??
-              '',
-            ...(stripeSignature && { 'stripe-signature': stripeSignature }),
-          },
-          // For Stripe: send raw body to preserve signature verification on the receiving end
-          data: stripeSignature ? event.rawBody : transformed,
-          ...(stripeSignature && { transformRequest: [(data: string) => data] }),
-          timeout: 15_000,
-        });
+    for (const target of targets) {
+      if (delivered.has(target.destinationId)) continue;
+      const result = await this.send(target, event.id, payload);
+      results.push(result);
 
-        const latency = Date.now() - start;
-        const result = this.resultRepo.create({
-          eventId,
-          destinationId: destination.id,
-          status: 'forwarded',
-          responseCode: response.status,
-          responseBody: JSON.stringify(response.data).slice(0, 5000),
-          latency,
-          forwardedAt: new Date(),
-          attempt: (job.attemptsMade || 0) + 1,
-        });
-        await this.resultRepo.save(result);
-
-        results.push({ status: 'forwarded', code: response.status, latency });
-
-        this.logger.log(
-          `Forwarded ${eventId} → ${destination.label || destination.url} (${response.status}, ${latency}ms)`,
+      if (usesDestinations) {
+        await this.resultRepo.save(
+          this.resultRepo.create({
+            eventId,
+            destinationId: target.destinationId!,
+            status: result.status,
+            responseCode: result.code ?? 0,
+            responseBody: result.error ?? result.body ?? null,
+            latency: result.latency,
+            forwardedAt: new Date(),
+            attempt,
+          }),
         );
-      } catch (err: unknown) {
-        const latency = Date.now() - start;
-        const error = err as {
-          response?: { status?: number };
-          message?: string;
-        };
-        const code = error.response?.status ?? 0;
-        const body = (error.message ?? 'Unknown error').slice(0, 5000);
-
-        const result = this.resultRepo.create({
-          eventId,
-          destinationId: destination.id,
-          status: 'failed',
-          responseCode: code,
-          responseBody: body,
-          latency,
-          forwardedAt: new Date(),
-          attempt: (job.attemptsMade || 0) + 1,
-        });
-        await this.resultRepo.save(result);
-
-        results.push({ status: 'failed', code, latency });
-
-        this.logger.warn(
-          `Forward failed ${eventId} → ${destination.label || destination.url} (${code}, ${latency}ms)`,
-        );
-
-        // If retries are configured, throw to let BullMQ retry
-        if (
-          endpoint.retryMaxAttempts > 0 &&
-          job.attemptsMade < (job.opts?.attempts ?? 1) - 1
-        ) {
-          throw err;
-        }
       }
     }
 
-    // Legacy forwardUrl support (if no destinations but forwardUrl is set)
-    if (destinations.length === 0 && endpoint.forwardUrl) {
-      const transformed = this.applyTransforms(
-        structuredClone(event.body),
-        transformRules,
-      );
+    const failed = results.filter((r) => r.status === 'failed');
+    const latencies = results.map((r) => r.latency);
+    const aggregateStatus = failed.length > 0 ? 'failed' : 'forwarded';
+    const code =
+      results.find((r) => r.status === 'forwarded')?.code ??
+      results[0]?.code ??
+      null;
 
-      const start = Date.now();
-      try {
-        const stripeSignature = event.headers['stripe-signature'];
-        const response = await this.httpService.axiosRef({
-          method: 'POST',
-          url: endpoint.forwardUrl,
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Hookdash-Event-Id': event.id,
-            'X-Hookdash-Original-Signature':
-              event.headers['x-paystack-signature'] ??
-              event.headers['verif-hash'] ??
-              stripeSignature ??
-              '',
-            ...(stripeSignature && { 'stripe-signature': stripeSignature }),
-          },
-          data: stripeSignature ? event.rawBody : transformed,
-          ...(stripeSignature && { transformRequest: [(data: string) => data] }),
-          timeout: 15_000,
-        });
-
-        const latency = Date.now() - start;
-        await this.safeUpdateEvent(eventId, {
-          forwardStatus: 'forwarded',
-          forwardCode: response.status,
-          forwardBody: JSON.stringify(response.data).slice(0, 5000),
-          forwardLatency: latency,
-          forwardedAt: new Date(),
-        });
-
-        results.push({
-          status: 'forwarded',
-          code: response.status,
-          latency,
-        });
-
-        this.logger.log(
-          `Forwarded ${eventId} → ${endpoint.forwardUrl} (${response.status}, ${latency}ms)`,
-        );
-      } catch (err: unknown) {
-        const latency = Date.now() - start;
-        const error = err as {
-          response?: { status?: number };
-          message?: string;
-        };
-        const code = error.response?.status ?? 0;
-        const body = (error.message ?? 'Unknown error').slice(0, 5000);
-
-        await this.safeUpdateEvent(eventId, {
-          forwardStatus: 'failed',
-          forwardCode: code,
-          forwardBody: body,
-          forwardLatency: latency,
-          forwardedAt: new Date(),
-        });
-
-        results.push({ status: 'failed', code, latency });
-
-        this.logger.warn(
-          `Forward failed ${eventId} → ${endpoint.forwardUrl} (${code}, ${latency}ms)`,
-        );
-
-        if (
-          endpoint.retryMaxAttempts > 0 &&
-          job.attemptsMade < (job.opts?.attempts ?? 1) - 1
-        ) {
-          throw err;
-        }
-
-        // Trigger alert evaluation on legacy forward failure (fire-and-forget)
-        this.alertingService
-          .evaluateForwardFailure(event.workspaceId, event.id)
-          .catch((evalErr: unknown) => {
-            this.logger.error(
-              `Alert evaluation failed for forward failure on event ${event.id}: ${(evalErr as Error).message}`,
-            );
-          });
-      }
-    }
-
-    // Update aggregate forward status for destination-based forwarding
-    if (destinations.length > 0) {
-      const allForwarded = results.every((r) => r.status === 'forwarded');
-      const anyFailed = results.some((r) => r.status === 'failed');
-      const aggregateStatus = allForwarded
-        ? 'forwarded'
-        : anyFailed
-          ? 'failed'
-          : 'skipped';
-
-      const bestLatency =
-        results.length > 0 ? Math.max(...results.map((r) => r.latency)) : null;
-      const bestCode =
-        results.find((r) => r.status === 'forwarded')?.code ??
-        results[0]?.code ??
-        null;
-
-      await this.safeUpdateEvent(eventId, {
-        forwardStatus: aggregateStatus,
-        forwardCode: bestCode,
-        forwardLatency: bestLatency,
-        forwardedAt: new Date(),
-      });
-
-      // Trigger alert evaluation on forward failure (fire-and-forget)
-      if (aggregateStatus === 'failed') {
-        this.alertingService
-          .evaluateForwardFailure(event.workspaceId, event.id)
-          .catch((err: unknown) => {
-            this.logger.error(
-              `Alert evaluation failed for forward failure on event ${event.id}: ${(err as Error).message}`,
-            );
-          });
-      }
-    }
-
-    // Broadcast aggregate result
-    const finalStatus = results.every((r) => r.status === 'forwarded')
-      ? 'forwarded'
-      : results.some((r) => r.status === 'failed')
-        ? 'failed'
-        : 'skipped';
+    await this.safeUpdateEvent(eventId, {
+      forwardStatus: aggregateStatus,
+      forwardCode: code,
+      forwardLatency: latencies.length > 0 ? Math.max(...latencies) : null,
+      forwardedAt: new Date(),
+      ...(!usesDestinations && {
+        forwardBody: results[0]?.error ?? results[0]?.body ?? null,
+      }),
+    });
 
     this.safeBroadcast(userId, {
       eventId,
-      forwardStatus: finalStatus,
-      forwardCode: results.find((r) => r.code !== null)?.code ?? null,
-      forwardLatency:
-        results.length > 0 ? Math.max(...results.map((r) => r.latency)) : null,
+      forwardStatus: aggregateStatus,
+      forwardCode: code,
+      forwardLatency: latencies.length > 0 ? Math.max(...latencies) : null,
     });
+
+    if (failed.length === 0) return;
+
+    const finalAttempt = attempt >= (job.opts?.attempts ?? 1);
+    if (!finalAttempt) {
+      // Throwing hands the job back to BullMQ for a backoff retry
+      throw new Error(
+        `Forward failed for ${failed.length} target(s): ${failed.map((f) => f.error).join('; ')}`,
+      );
+    }
+
+    await this.writeDeadLetters(eventId, endpointId, attempt, failed);
+    this.alertingService
+      .evaluateForwardFailure(event.workspaceId, event.id)
+      .catch((err: unknown) => {
+        this.logger.error(
+          `Alert evaluation failed for forward failure on event ${event.id}: ${(err as Error).message}`,
+        );
+      });
   }
 
+  // Only reached for unexpected errors on the last attempt; normal failures write dead letters in process()
   @OnWorkerEvent('failed')
   async onFailed(job: Job<ForwardJobData>, error: Error): Promise<void> {
-    // Only create dead letter when all retries are exhausted
     if (job.attemptsMade < (job.opts?.attempts ?? 1)) {
+      return;
+    }
+    if (error.message.startsWith('Forward failed for')) {
       return;
     }
 
     const { eventId, endpointId, destinationId } = job.data;
-
     this.logger.error(
       `Job exhausted all retries for event ${eventId}: ${error.message}`,
     );
+    await this.writeDeadLetters(eventId, endpointId, job.attemptsMade, [
+      {
+        target: { destinationId: destinationId ?? null, url: '', label: '' },
+        status: 'failed',
+        code: null,
+        latency: 0,
+        error: error.message,
+      },
+    ]);
+  }
 
+  private buildPayload(
+    event: WebhookEvent,
+    rules: TransformRule[],
+  ): { data: string; headers: Record<string, string> } {
+    const original = event.headers ?? {};
+    const signature =
+      original['x-paystack-signature'] ??
+      original['verif-hash'] ??
+      original['stripe-signature'] ??
+      '';
+
+    if (rules.length === 0 || !event.body) {
+      // No transforms: forward the exact bytes so the receiver can verify signatures
+      const headers: Record<string, string> = {
+        'Content-Type': original['content-type'] ?? 'application/json',
+        'X-Hookdash-Original-Signature': signature,
+      };
+      for (const name of PASSTHROUGH_HEADERS) {
+        if (original[name]) headers[name] = original[name];
+      }
+      return { data: event.rawBody ?? JSON.stringify(event.body), headers };
+    }
+
+    let body = event.body;
+    for (const rule of rules) {
+      body = applyOperations(rule.operations as TransformOperationDto[], body);
+    }
+    return {
+      data: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Hookdash-Original-Signature': signature,
+      },
+    };
+  }
+
+  private async send(
+    target: ForwardTarget,
+    eventId: string,
+    payload: { data: string; headers: Record<string, string> },
+  ): Promise<TargetResult> {
+    const start = Date.now();
     try {
-      const deadLetter = this.deadLetterRepo.create({
-        eventId,
-        endpointId,
-        destinationId: destinationId ?? null,
-        lastAttempt: job.attemptsMade,
-        lastError: error.message.slice(0, 5000),
-        exhaustedAt: new Date(),
+      const guard = await outboundRequestOptions(target.url, this.allowPrivate);
+      const response = await this.httpService.axiosRef({
+        method: 'POST',
+        url: target.url,
+        headers: { ...payload.headers, 'X-Hookdash-Event-Id': eventId },
+        data: payload.data,
+        transformRequest: [(data: string) => data],
+        timeout: 15_000,
+        ...guard,
       });
-      await this.deadLetterRepo.save(deadLetter);
+      const latency = Date.now() - start;
+      this.logger.log(
+        `Forwarded ${eventId} → ${target.label} (${response.status}, ${latency}ms)`,
+      );
+      return {
+        target,
+        status: 'forwarded',
+        code: response.status,
+        latency,
+        body: JSON.stringify(response.data).slice(0, 5000),
+      };
+    } catch (err: unknown) {
+      const latency = Date.now() - start;
+      const error = err as { response?: { status?: number }; message?: string };
+      const code = error.response?.status ?? null;
+      const message = (error.message ?? 'Unknown error').slice(0, 5000);
+      this.logger.warn(
+        `Forward failed ${eventId} → ${target.label} (${code ?? 'no response'}, ${latency}ms): ${message}`,
+      );
+      return { target, status: 'failed', code, latency, error: message };
+    }
+  }
+
+  private async writeDeadLetters(
+    eventId: string,
+    endpointId: string,
+    attempt: number,
+    failed: TargetResult[],
+  ): Promise<void> {
+    try {
+      await this.deadLetterRepo.save(
+        failed.map((f) =>
+          this.deadLetterRepo.create({
+            eventId,
+            endpointId,
+            destinationId: f.target.destinationId,
+            lastAttempt: attempt,
+            lastError: (f.error ?? `HTTP ${f.code}`).slice(0, 5000),
+            exhaustedAt: new Date(),
+          }),
+        ),
+      );
+      this.logger.warn(
+        `Event ${eventId} dead-lettered after ${attempt} attempt(s) for ${failed.length} target(s)`,
+      );
     } catch (err) {
       this.logger.error(
         `Failed to create dead letter for event ${eventId}: ${(err as Error).message}`,
       );
     }
-  }
-
-  private applyTransforms(
-    body: Record<string, unknown> | null,
-    rules: TransformRule[],
-  ): Record<string, unknown> | null {
-    if (!body || rules.length === 0) return body;
-
-    const result = body;
-    for (const rule of rules) {
-      for (const op of rule.operations as TransformOperation[]) {
-        switch (op.type) {
-          case 'rename':
-            if (op.from && op.to) {
-              const value = this.getByPath(result, op.from);
-              if (value !== undefined) {
-                this.deleteByPath(result, op.from);
-                this.setByPath(result, op.to, value);
-              }
-            }
-            break;
-          case 'remove':
-            if (op.path) {
-              this.deleteByPath(result, op.path);
-            }
-            break;
-          case 'set':
-            if (op.path) {
-              this.setByPath(result, op.path, op.value);
-            }
-            break;
-          case 'copy':
-            if (op.from && op.to) {
-              const value = this.getByPath(result, op.from);
-              if (value !== undefined) {
-                this.setByPath(result, op.to, value);
-              }
-            }
-            break;
-        }
-      }
-    }
-
-    return result;
-  }
-
-  private getByPath(obj: Record<string, unknown>, path: string): unknown {
-    return path
-      .split('.')
-      .reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], obj);
-  }
-
-  private setByPath(
-    obj: Record<string, unknown>,
-    path: string,
-    value: unknown,
-  ): void {
-    const keys = path.split('.');
-    const last = keys.pop()!;
-    const target = keys.reduce<Record<string, unknown>>((o, k) => {
-      if (!(k in o)) o[k] = {};
-      return o[k] as Record<string, unknown>;
-    }, obj);
-    target[last] = value;
-  }
-
-  private deleteByPath(obj: Record<string, unknown>, path: string): void {
-    const keys = path.split('.');
-    const last = keys.pop()!;
-    const target = keys.reduce<unknown>(
-      (o, k) => (o as Record<string, unknown>)?.[k],
-      obj,
-    );
-    if (target && typeof target === 'object')
-      delete (target as Record<string, unknown>)[last];
   }
 
   private async safeUpdateEvent(

@@ -8,9 +8,15 @@ import {
   Res,
   Req,
   UseGuards,
+  Logger,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '@nestjs/passport';
+import {
+  OAuthGuard,
+  isOAuthConfigured,
+  type OAuthProvider,
+} from './guards/oauth.guard.js';
 import type { Response, Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -36,6 +42,8 @@ import type { JwtPayload } from '../../common/decorators/current-user.decorator.
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
@@ -135,69 +143,98 @@ export class AuthController {
     return this.authService.removeAvatar(user.sub);
   }
 
+  @Get('providers')
+  @ApiOperation({ summary: 'List OAuth providers that are configured' })
+  @ApiResponse({ status: 200, description: 'Map of provider to enabled flag' })
+  oauthProviders() {
+    return {
+      google: isOAuthConfigured(this.configService, 'google'),
+      github: isOAuthConfigured(this.configService, 'github'),
+    };
+  }
+
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(OAuthGuard('google'))
   @ApiOperation({ summary: 'Initiate Google OAuth login' })
   @ApiResponse({
-    status: 200,
-    description: 'Redirects to Google OAuth consent screen',
+    status: 302,
+    description: 'Redirects to Google, or back to the app if not configured',
   })
-  googleLogin() {
-    // Passport redirects to Google
+  googleLogin(@Res() res: Response) {
+    // Only reached when Google OAuth is not configured
+    return res.redirect(this.loginErrorUrl('oauth_unavailable'));
   }
 
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(OAuthGuard('google'))
   @ApiOperation({ summary: 'Google OAuth callback' })
   @ApiResponse({
-    status: 200,
+    status: 302,
     description: 'Redirects to app with access token',
   })
-  async googleCallback(@Req() req: Request, @Res() res: Response) {
-    const user = req.user as { email: string };
-    const result = await this.authService.findOrCreateOAuthUser({
-      email: user.email,
-      provider: 'google',
-    });
-    const appUrl = this.configService.get<string>(
-      'appUrl',
-      'https://hookdash-web.onrender.com',
-    );
-    return res.redirect(
-      `${appUrl}/auth/callback?token=${result.accessToken}&slug=${result.ingressSlug}`,
-    );
+  googleCallback(@Req() req: Request, @Res() res: Response) {
+    return this.completeOAuth(req, res, 'google');
   }
 
   @Get('github')
-  @UseGuards(AuthGuard('github'))
+  @UseGuards(OAuthGuard('github'))
   @ApiOperation({ summary: 'Initiate GitHub OAuth login' })
   @ApiResponse({
-    status: 200,
-    description: 'Redirects to GitHub OAuth consent screen',
+    status: 302,
+    description: 'Redirects to GitHub, or back to the app if not configured',
   })
-  githubLogin() {
-    // Passport redirects to GitHub
+  githubLogin(@Res() res: Response) {
+    // Only reached when GitHub OAuth is not configured
+    return res.redirect(this.loginErrorUrl('oauth_unavailable'));
   }
 
   @Get('github/callback')
-  @UseGuards(AuthGuard('github'))
+  @UseGuards(OAuthGuard('github'))
   @ApiOperation({ summary: 'GitHub OAuth callback' })
   @ApiResponse({
-    status: 200,
+    status: 302,
     description: 'Redirects to app with access token',
   })
-  async githubCallback(@Req() req: Request, @Res() res: Response) {
-    const user = req.user as { email: string };
-    const result = await this.authService.findOrCreateOAuthUser({
-      email: user.email,
-      provider: 'github',
-    });
-    const appUrl = this.configService.get<string>(
-      'appUrl',
-      'https://hookdash-web.onrender.com',
-    );
-    return res.redirect(
-      `${appUrl}/auth/callback?token=${result.accessToken}&slug=${result.ingressSlug}`,
-    );
+  githubCallback(@Req() req: Request, @Res() res: Response) {
+    return this.completeOAuth(req, res, 'github');
+  }
+
+  private async completeOAuth(
+    req: Request,
+    res: Response,
+    provider: OAuthProvider,
+  ) {
+    const user = req.user as { email?: string } | null | undefined;
+    if (!user?.email) {
+      return res.redirect(this.loginErrorUrl('oauth_failed'));
+    }
+
+    try {
+      const result = await this.authService.findOrCreateOAuthUser({
+        email: user.email,
+        provider,
+      });
+      // Fragment keeps the token out of server and proxy access logs
+      const params = new URLSearchParams({
+        token: result.accessToken,
+        slug: result.ingressSlug,
+      });
+      return res.redirect(
+        `${this.appUrl()}/auth/callback#${params.toString()}`,
+      );
+    } catch (err: unknown) {
+      this.logger.error(
+        `OAuth ${provider} sign-in failed: ${(err as Error).message}`,
+      );
+      return res.redirect(this.loginErrorUrl('oauth_failed'));
+    }
+  }
+
+  private appUrl(): string {
+    return this.configService.get<string>('appUrl', '');
+  }
+
+  private loginErrorUrl(code: string): string {
+    return `${this.appUrl()}/login?error=${code}`;
   }
 }

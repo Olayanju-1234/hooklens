@@ -4,6 +4,7 @@ import { Request } from 'express';
 export interface JwtPayload {
   sub: string;
   email: string;
+  ver?: number;
 }
 
 export const CurrentUser = createParamDecorator(

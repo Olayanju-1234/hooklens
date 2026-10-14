@@ -1,3 +1,4 @@
+import { AuthModule } from '../auth/auth.module.js';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Endpoint } from '../../entities/endpoint.entity.js';
@@ -9,6 +10,7 @@ import { WorkspacesModule } from '../workspaces/workspaces.module.js';
 
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([Endpoint, ForwardDestination]),
     AuditModule,
     WorkspacesModule,

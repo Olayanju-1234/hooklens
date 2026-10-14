@@ -1,5 +1,5 @@
 import { Controller, Get, Query, Headers, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { CombinedAuthGuard } from '../auth/guards/auth.guard.js';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -13,7 +13,7 @@ import type { JwtPayload } from '../../common/decorators/current-user.decorator.
 @ApiTags('Stats')
 @ApiBearerAuth()
 @Controller('stats')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(CombinedAuthGuard)
 export class StatsController {
   constructor(private readonly statsService: StatsService) {}
 

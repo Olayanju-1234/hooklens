@@ -7,7 +7,7 @@ import {
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { CombinedAuthGuard } from '../auth/guards/auth.guard.js';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -22,7 +22,7 @@ import type { JwtPayload } from '../../common/decorators/current-user.decorator.
 @ApiTags('Dead Letter')
 @ApiBearerAuth()
 @Controller('endpoints/:endpointId/dead-letter')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(CombinedAuthGuard)
 export class DeadLetterController {
   constructor(private readonly deadLetterService: DeadLetterService) {}
 

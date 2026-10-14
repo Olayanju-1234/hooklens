@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { WorkspacesService } from '../workspaces/workspaces.service.js';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
 
 export interface LatencyBucket {
@@ -17,7 +18,18 @@ export class StatsService {
   constructor(
     @InjectRepository(WebhookEvent)
     private readonly eventRepo: Repository<WebhookEvent>,
+    private readonly workspacesService: WorkspacesService,
   ) {}
+
+  // Workspace members share the workspace's stats; without a workspace, only your own
+  private async scope(
+    userId: string,
+    workspaceId?: string,
+  ): Promise<{ clause: string; params: Record<string, string> }> {
+    if (!workspaceId) return { clause: 'userId = :userId', params: { userId } };
+    await this.workspacesService.assertMembership(workspaceId, userId);
+    return { clause: 'workspaceId = :workspaceId', params: { workspaceId } };
+  }
 
   async getStats(
     userId: string,
@@ -34,12 +46,11 @@ export class StatsService {
     const since =
       days !== null ? new Date(Date.now() - days * 86_400_000) : null;
 
+    const scope = await this.scope(userId, workspaceId);
     const baseQuery = (alias: string) => {
       const qb = this.eventRepo
         .createQueryBuilder(alias)
-        .where(`${alias}.userId = :userId`, { userId });
-      if (workspaceId)
-        qb.andWhere(`${alias}.workspaceId = :workspaceId`, { workspaceId });
+        .where(`${alias}.${scope.clause}`, scope.params);
       if (since) qb.andWhere(`${alias}.receivedAt >= :since`, { since });
       return qb;
     };
@@ -114,6 +125,8 @@ export class StatsService {
     const since =
       days !== null ? new Date(Date.now() - days * 86_400_000) : null;
 
+    const scope = await this.scope(userId, workspaceId);
+
     // Overall percentiles
     const percentilesQb = this.eventRepo
       .createQueryBuilder('e')
@@ -122,12 +135,9 @@ export class StatsService {
         'percentile_cont(0.95) WITHIN GROUP (ORDER BY e."forwardLatency") as "p95"',
         'percentile_cont(0.99) WITHIN GROUP (ORDER BY e."forwardLatency") as "p99"',
       ])
-      .where('e.userId = :userId', { userId })
+      .where(`e.${scope.clause}`, scope.params)
       .andWhere('e.forwardLatency IS NOT NULL');
 
-    if (workspaceId) {
-      percentilesQb.andWhere('e.workspaceId = :workspaceId', { workspaceId });
-    }
     if (since) {
       percentilesQb.andWhere('e.receivedAt >= :since', { since });
     }
@@ -143,14 +153,11 @@ export class StatsService {
         'percentile_cont(0.95) WITHIN GROUP (ORDER BY e."forwardLatency") as "p95"',
         'percentile_cont(0.99) WITHIN GROUP (ORDER BY e."forwardLatency") as "p99"',
       ])
-      .where('e.userId = :userId', { userId })
+      .where(`e.${scope.clause}`, scope.params)
       .andWhere('e.forwardLatency IS NOT NULL')
       .groupBy('bucket')
       .orderBy('bucket', 'ASC');
 
-    if (workspaceId) {
-      timeSeriesQb.andWhere('e.workspaceId = :workspaceId', { workspaceId });
-    }
     if (since) {
       timeSeriesQb.andWhere('e.receivedAt >= :since', { since });
     }

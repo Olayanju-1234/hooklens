@@ -1,5 +1,5 @@
 import { Controller, Get, Headers, Query, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { CombinedAuthGuard } from '../auth/guards/auth.guard.js';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -12,7 +12,7 @@ import { WorkspaceGuard } from '../workspaces/guards/workspace.guard.js';
 @ApiTags('Audit')
 @ApiBearerAuth()
 @Controller('audit-logs')
-@UseGuards(AuthGuard('jwt'), WorkspaceGuard)
+@UseGuards(CombinedAuthGuard, WorkspaceGuard)
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 

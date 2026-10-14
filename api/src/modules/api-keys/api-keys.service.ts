@@ -18,7 +18,7 @@ export class ApiKeysService {
     workspaceId: string,
     userId: string,
     dto: CreateApiKeyDto,
-  ): Promise<{ apiKey: ApiKey; rawKey: string }> {
+  ): Promise<{ apiKey: Omit<ApiKey, 'keyHash'>; rawKey: string }> {
     const rawKey = `hd_live_${crypto.randomBytes(24).toString('hex')}`;
     const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
     const keyPrefix = rawKey.slice(0, 12);
@@ -37,7 +37,9 @@ export class ApiKeysService {
       `API key created: ${saved.id} (${keyPrefix}...) in workspace ${workspaceId}`,
     );
 
-    return { apiKey: saved, rawKey };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { keyHash: _hash, ...apiKeyWithoutHash } = saved;
+    return { apiKey: apiKeyWithoutHash, rawKey };
   }
 
   async list(workspaceId: string): Promise<ApiKey[]> {
@@ -47,7 +49,7 @@ export class ApiKeysService {
     });
   }
 
-  async revoke(id: string, workspaceId: string): Promise<void> {
+  async revoke(id: string, workspaceId: string): Promise<{ success: boolean }> {
     const key = await this.apiKeyRepo.findOne({
       where: { id, workspaceId },
     });
@@ -56,9 +58,10 @@ export class ApiKeysService {
     key.isActive = false;
     await this.apiKeyRepo.save(key);
     this.logger.log(`API key revoked: ${id}`);
+    return { success: true };
   }
 
-  async delete(id: string, workspaceId: string): Promise<void> {
+  async delete(id: string, workspaceId: string): Promise<{ success: boolean }> {
     const key = await this.apiKeyRepo.findOne({
       where: { id, workspaceId },
     });
@@ -66,6 +69,7 @@ export class ApiKeysService {
 
     await this.apiKeyRepo.remove(key);
     this.logger.log(`API key deleted: ${id}`);
+    return { success: true };
   }
 
   async validateKey(rawKey: string): Promise<ApiKey | null> {

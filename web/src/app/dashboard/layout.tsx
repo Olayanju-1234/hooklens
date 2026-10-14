@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { TabRail } from "@/components/layout/tab-rail";
 import { WebSocketProvider } from "@/hooks/use-websocket";
@@ -14,6 +14,7 @@ export default function DashboardLayout({
 }) {
   const { token, isLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!isLoading && !token) {
@@ -34,7 +35,7 @@ export default function DashboardLayout({
       <div className="flex flex-col h-screen overflow-hidden bg-bg-primary">
         <TabRail />
         <main className="flex-1 overflow-y-auto">
-          <ErrorBoundary>{children}</ErrorBoundary>
+          <ErrorBoundary key={pathname}>{children}</ErrorBoundary>
         </main>
       </div>
     </WebSocketProvider>

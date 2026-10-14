@@ -1,15 +1,30 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
+  BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Endpoint } from '../../entities/endpoint.entity.js';
 import { ForwardDestination } from '../../entities/forward-destination.entity.js';
 import { CreateEndpointDto, UpdateEndpointDto } from './dto/endpoint.dto.js';
-import { CreateDestinationDto, UpdateDestinationDto } from './dto/destination.dto.js';
+import {
+  CreateDestinationDto,
+  UpdateDestinationDto,
+} from './dto/destination.dto.js';
+import { WorkspacesService } from '../workspaces/workspaces.service.js';
+import {
+  assertPublicUrl,
+  UnsafeUrlError,
+} from '../../common/utils/outbound-url.js';
+
+function definedOnly<T extends object>(dto: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(dto).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;
+}
 
 @Injectable()
 export class EndpointsService {
@@ -20,6 +35,8 @@ export class EndpointsService {
     private readonly endpointRepo: Repository<Endpoint>,
     @InjectRepository(ForwardDestination)
     private readonly destinationRepo: Repository<ForwardDestination>,
+    private readonly workspacesService: WorkspacesService,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(
@@ -27,6 +44,7 @@ export class EndpointsService {
     dto: CreateEndpointDto,
     workspaceId?: string,
   ): Promise<Endpoint> {
+    if (dto.forwardUrl) await this.assertForwardable(dto.forwardUrl);
     const endpoint = this.endpointRepo.create({
       userId,
       workspaceId,
@@ -46,21 +64,26 @@ export class EndpointsService {
     userId: string,
     workspaceId?: string,
   ): Promise<Endpoint[]> {
-    const where: Record<string, string> = { userId };
-    if (workspaceId) where.workspaceId = workspaceId;
+    // WorkspaceGuard has already checked membership, so members share the workspace's endpoints
     return this.endpointRepo.find({
-      where,
+      where: workspaceId ? { workspaceId } : { userId },
       order: { createdAt: 'DESC' },
     });
   }
 
+  /** Loads an endpoint the user created or can reach through workspace membership. */
   async findOne(id: string, userId: string): Promise<Endpoint> {
     const endpoint = await this.endpointRepo.findOne({ where: { id } });
-    if (!endpoint) {
+    const allowed =
+      endpoint &&
+      (endpoint.userId === userId ||
+        (endpoint.workspaceId &&
+          (await this.workspacesService.isMember(
+            endpoint.workspaceId,
+            userId,
+          ))));
+    if (!endpoint || !allowed) {
       throw new NotFoundException('Endpoint not found');
-    }
-    if (endpoint.userId !== userId) {
-      throw new ForbiddenException();
     }
     return endpoint;
   }
@@ -71,8 +94,12 @@ export class EndpointsService {
     dto: UpdateEndpointDto,
   ): Promise<Endpoint> {
     const endpoint = await this.findOne(id, userId);
-    Object.assign(endpoint, dto);
-    return this.endpointRepo.save(endpoint);
+    if (dto.forwardUrl) await this.assertForwardable(dto.forwardUrl);
+    const changes = definedOnly(dto);
+    if (Object.keys(changes).length > 0) {
+      await this.endpointRepo.update(endpoint.id, changes);
+    }
+    return this.findOne(id, userId);
   }
 
   async remove(id: string, userId: string): Promise<void> {
@@ -83,13 +110,24 @@ export class EndpointsService {
 
   // ── Destinations ────────────────────────────────────────────────────────────
 
-  async getDestinations(endpointId: string, userId: string): Promise<ForwardDestination[]> {
-    await this.findOne(endpointId, userId); // ownership check
-    return this.destinationRepo.find({ where: { endpointId }, order: { createdAt: 'ASC' } });
+  async getDestinations(
+    endpointId: string,
+    userId: string,
+  ): Promise<ForwardDestination[]> {
+    await this.findOne(endpointId, userId);
+    return this.destinationRepo.find({
+      where: { endpointId },
+      order: { createdAt: 'ASC' },
+    });
   }
 
-  async addDestination(endpointId: string, userId: string, dto: CreateDestinationDto): Promise<ForwardDestination> {
-    await this.findOne(endpointId, userId); // ownership check
+  async addDestination(
+    endpointId: string,
+    userId: string,
+    dto: CreateDestinationDto,
+  ): Promise<ForwardDestination> {
+    await this.findOne(endpointId, userId);
+    await this.assertForwardable(dto.url);
     const destination = this.destinationRepo.create({
       endpointId,
       url: dto.url,
@@ -99,18 +137,46 @@ export class EndpointsService {
     return this.destinationRepo.save(destination);
   }
 
-  async updateDestination(endpointId: string, destinationId: string, userId: string, dto: UpdateDestinationDto): Promise<ForwardDestination> {
-    await this.findOne(endpointId, userId); // ownership check
-    const destination = await this.destinationRepo.findOne({ where: { id: destinationId, endpointId } });
+  async updateDestination(
+    endpointId: string,
+    destinationId: string,
+    userId: string,
+    dto: UpdateDestinationDto,
+  ): Promise<ForwardDestination> {
+    await this.findOne(endpointId, userId);
+    const destination = await this.destinationRepo.findOne({
+      where: { id: destinationId, endpointId },
+    });
     if (!destination) throw new NotFoundException('Destination not found');
-    Object.assign(destination, dto);
+    if (dto.url) await this.assertForwardable(dto.url);
+    Object.assign(destination, definedOnly(dto));
     return this.destinationRepo.save(destination);
   }
 
-  async removeDestination(endpointId: string, destinationId: string, userId: string): Promise<void> {
-    await this.findOne(endpointId, userId); // ownership check
-    const destination = await this.destinationRepo.findOne({ where: { id: destinationId, endpointId } });
+  async removeDestination(
+    endpointId: string,
+    destinationId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.findOne(endpointId, userId);
+    const destination = await this.destinationRepo.findOne({
+      where: { id: destinationId, endpointId },
+    });
     if (!destination) throw new NotFoundException('Destination not found');
     await this.destinationRepo.remove(destination);
+  }
+
+  private async assertForwardable(url: string): Promise<void> {
+    if (this.configService.get<boolean>('allowPrivateForwarding')) return;
+    try {
+      await assertPublicUrl(url);
+    } catch (err) {
+      if (err instanceof UnsafeUrlError) {
+        throw new BadRequestException(`Forward URL rejected: ${err.message}`);
+      }
+      throw new BadRequestException(
+        `Forward URL rejected: could not resolve ${new URL(url).hostname}`,
+      );
+    }
   }
 }

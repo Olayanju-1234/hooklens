@@ -2,22 +2,21 @@ import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-github2';
 import { ConfigService } from '@nestjs/config';
+import { OAuthStateStore } from './oauth-state.store.js';
 
 @Injectable()
 export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
   constructor(configService: ConfigService) {
     const clientID = configService.get<string>('github.clientId', '');
     const clientSecret = configService.get<string>('github.clientSecret', '');
-    const callbackURL = configService.get<string>(
-      'github.callbackUrl',
-      'https://hookdash-api.onrender.com/api/auth/github/callback',
-    );
+    const callbackURL = configService.get<string>('github.callbackUrl', '');
 
     super({
       clientID: clientID || 'not-configured',
       clientSecret: clientSecret || 'not-configured',
       callbackURL,
       scope: ['user:email'],
+      store: OAuthStateStore.fromConfig('github', configService),
     });
   }
 

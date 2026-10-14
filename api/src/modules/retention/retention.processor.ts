@@ -8,7 +8,7 @@ import { Workspace } from '../../entities/workspace.entity.js';
 
 const BATCH_LIMIT = 1000;
 
-@Processor('retention-cleanup', { drainDelay: 30_000, stalledInterval: 300_000, lockDuration: 60_000 })
+@Processor('retention-cleanup', { drainDelay: 30, lockDuration: 60_000 })
 export class RetentionProcessor extends WorkerHost {
   private readonly logger = new Logger(RetentionProcessor.name);
 

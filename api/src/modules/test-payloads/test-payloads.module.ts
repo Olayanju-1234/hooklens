@@ -1,3 +1,5 @@
+import { Endpoint } from '../../entities/endpoint.entity.js';
+import { AuthModule } from '../auth/auth.module.js';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../../entities/user.entity.js';
@@ -5,7 +7,7 @@ import { TestPayloadsService } from './test-payloads.service.js';
 import { TestPayloadsController } from './test-payloads.controller.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User])],
+  imports: [AuthModule, TypeOrmModule.forFeature([User, Endpoint])],
   controllers: [TestPayloadsController],
   providers: [TestPayloadsService],
 })

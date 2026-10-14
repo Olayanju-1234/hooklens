@@ -131,7 +131,7 @@ export class WorkspacesController {
     @Body() dto: InviteMemberDto,
   ) {
     await this.workspacesService.assertOwner(id, user.sub);
-    const result = await this.workspacesService.invite(id, dto);
+    const result = await this.workspacesService.invite(id, dto, user.email);
     this.auditService
       .log({
         workspaceId: id,
@@ -154,7 +154,7 @@ export class WorkspacesController {
   @ApiResponse({ status: 201, description: 'Invitation accepted successfully' })
   @ApiParam({ name: 'token', type: String })
   acceptInvite(@CurrentUser() user: JwtPayload, @Param('token') token: string) {
-    return this.workspacesService.acceptInvite(token, user.sub);
+    return this.workspacesService.acceptInvite(token, user.sub, user.email);
   }
 
   @Get(':id/invites')

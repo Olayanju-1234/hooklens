@@ -1,14 +1,17 @@
+import { AuthModule } from '../auth/auth.module.js';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { DeadLetterEvent } from '../../entities/dead-letter-event.entity.js';
-import { Endpoint } from '../../entities/endpoint.entity.js';
+import { EndpointsModule } from '../endpoints/endpoints.module.js';
 import { DeadLetterService } from './dead-letter.service.js';
 import { DeadLetterController } from './dead-letter.controller.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([DeadLetterEvent, Endpoint]),
+    AuthModule,
+    TypeOrmModule.forFeature([DeadLetterEvent]),
+    EndpointsModule,
     BullModule.registerQueue({ name: 'webhook-forward' }),
   ],
   controllers: [DeadLetterController],

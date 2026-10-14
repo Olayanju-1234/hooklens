@@ -65,11 +65,12 @@ export class AlertingService {
   }
 
   async updateChannel(
+    workspaceId: string,
     channelId: string,
     dto: UpdateAlertChannelDto,
   ): Promise<AlertChannel> {
     const channel = await this.channelRepo.findOne({
-      where: { id: channelId },
+      where: { id: channelId, workspaceId },
     });
     if (!channel) {
       throw new NotFoundException('Alert channel not found');
@@ -88,20 +89,27 @@ export class AlertingService {
     return saved;
   }
 
-  async deleteChannel(channelId: string): Promise<void> {
+  async deleteChannel(
+    workspaceId: string,
+    channelId: string,
+  ): Promise<{ success: boolean }> {
     const channel = await this.channelRepo.findOne({
-      where: { id: channelId },
+      where: { id: channelId, workspaceId },
     });
     if (!channel) {
       throw new NotFoundException('Alert channel not found');
     }
     await this.channelRepo.remove(channel);
     this.logger.log(`Alert channel deleted: ${channelId}`);
+    return { success: true };
   }
 
-  async testChannel(channelId: string): Promise<{ success: boolean }> {
+  async testChannel(
+    workspaceId: string,
+    channelId: string,
+  ): Promise<{ success: boolean; error?: string }> {
     const channel = await this.channelRepo.findOne({
-      where: { id: channelId },
+      where: { id: channelId, workspaceId },
     });
     if (!channel) {
       throw new NotFoundException('Alert channel not found');
@@ -112,8 +120,8 @@ export class AlertingService {
     try {
       await this.sendNotification(channel, testMessage);
       return { success: true };
-    } catch {
-      return { success: false };
+    } catch (err: unknown) {
+      return { success: false, error: (err as Error).message };
     }
   }
 
@@ -155,11 +163,12 @@ export class AlertingService {
   }
 
   async updateRule(
+    workspaceId: string,
     ruleId: string,
     dto: UpdateAlertRuleDto,
   ): Promise<AlertRule> {
     const rule = await this.ruleRepo.findOne({
-      where: { id: ruleId },
+      where: { id: ruleId, workspaceId },
       relations: ['channels'],
     });
     if (!rule) {
@@ -193,13 +202,19 @@ export class AlertingService {
     return saved;
   }
 
-  async deleteRule(ruleId: string): Promise<void> {
-    const rule = await this.ruleRepo.findOne({ where: { id: ruleId } });
+  async deleteRule(
+    workspaceId: string,
+    ruleId: string,
+  ): Promise<{ success: boolean }> {
+    const rule = await this.ruleRepo.findOne({
+      where: { id: ruleId, workspaceId },
+    });
     if (!rule) {
       throw new NotFoundException('Alert rule not found');
     }
     await this.ruleRepo.remove(rule);
     this.logger.log(`Alert rule deleted: ${ruleId}`);
+    return { success: true };
   }
 
   // ─── Evaluation ────────────────────────────────────────
@@ -273,8 +288,16 @@ export class AlertingService {
 
     for (const rule of rules) {
       const windowMinutes =
-        (rule.config['windowMinutes'] as number | undefined) ?? 60;
+        Number(
+          rule.config['windowMinutes'] ?? rule.config['thresholdMinutes'],
+        ) || 60;
       const since = new Date(Date.now() - windowMinutes * 60 * 1000);
+
+      // One alert per quiet window, not one every 5-minute check
+      const recentlyAlerted = await this.historyRepo.exists({
+        where: { alertRuleId: rule.id, sentAt: MoreThan(since) },
+      });
+      if (recentlyAlerted) continue;
 
       const eventCount = await this.eventRepo.count({
         where: { workspaceId, receivedAt: MoreThan(since) },

@@ -14,8 +14,13 @@ async function bootstrap() {
   // Security headers
   app.use(helmet());
 
+  // nginx on the same host terminates TLS; trust it so req.ip is the real client
+  app.set('trust proxy', 'loopback');
+
   // Limit request body size to 1MB
   app.useBodyParser('json', { limit: '1mb' });
+  // Webhooks can arrive as text, XML or anything else; keep them as raw text
+  app.useBodyParser('text', { type: '*/*', limit: '1mb' });
 
   // Don't expose internal paths via Express
   app.disable('x-powered-by');
@@ -43,7 +48,7 @@ async function bootstrap() {
   app.useGlobalFilters(new GlobalExceptionFilter());
 
   app.setGlobalPrefix('api', {
-    exclude: ['in/:slug'],
+    exclude: ['in/:slug', 'in/:slug/:endpointId'],
   });
 
   // Swagger / OpenAPI docs

@@ -32,10 +32,8 @@ export class ApiKeyGuard implements CanActivate {
         email: '',
       };
 
-      // Set workspace context from the API key
-      if (!request.headers['x-workspace-id']) {
-        request.headers['x-workspace-id'] = apiKey.workspaceId;
-      }
+      // A key only ever acts in its own workspace, whatever header the caller sends
+      request.headers['x-workspace-id'] = apiKey.workspaceId;
 
       return true;
     } catch (err: unknown) {

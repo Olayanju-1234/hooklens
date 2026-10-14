@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsIn, IsUrl, IsBoolean, IsInt, Min } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsIn,
+  IsUrl,
+  IsBoolean,
+  IsInt,
+  Min,
+  Max,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { Provider } from '../../../entities/endpoint.entity.js';
 
@@ -23,7 +32,7 @@ export class CreateEndpointDto {
     example: 'https://api.example.com/webhooks',
   })
   @IsOptional()
-  @IsUrl()
+  @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
   forwardUrl?: string;
 
   @ApiPropertyOptional({
@@ -41,6 +50,7 @@ export class CreateEndpointDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(10)
   retryMaxAttempts?: number;
 
   @ApiPropertyOptional({
@@ -50,6 +60,7 @@ export class CreateEndpointDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(3_600_000)
   retryBackoffMs?: number;
 }
 
@@ -76,7 +87,7 @@ export class UpdateEndpointDto {
     example: 'https://api.example.com/webhooks/v2',
   })
   @IsOptional()
-  @IsUrl()
+  @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
   forwardUrl?: string;
 
   @ApiPropertyOptional({
@@ -102,6 +113,7 @@ export class UpdateEndpointDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(10)
   retryMaxAttempts?: number;
 
   @ApiPropertyOptional({
@@ -111,5 +123,6 @@ export class UpdateEndpointDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(3_600_000)
   retryBackoffMs?: number;
 }

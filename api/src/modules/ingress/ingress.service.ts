@@ -46,51 +46,47 @@ export class IngressService {
 
   async resolveEndpoint(
     slug: string,
+    opts: { endpointId?: string; headers: Record<string, string> },
   ): Promise<{ endpoint: Endpoint; userId: string } | null> {
-    // Try resolving by user ingressSlug first — prefer endpoints that have
-    // destinations configured, then fall back to most-recently-created
-    const user = await this.userRepo.findOne({ where: { ingressSlug: slug } });
-    if (user) {
-      const endpoints = await this.endpointRepo
-        .createQueryBuilder('ep')
-        .addSelect('ep.webhookSecret')
-        .leftJoinAndSelect('ep.destinations', 'dest', 'dest.isActive = :active', { active: true })
-        .where('ep.userId = :userId', { userId: user.id })
-        .andWhere('ep.isActive = :isActive', { isActive: true })
-        .orderBy('ep.createdAt', 'DESC')
-        .getMany();
+    const query = this.endpointRepo
+      .createQueryBuilder('ep')
+      .addSelect('ep.webhookSecret')
+      .leftJoinAndSelect('ep.destinations', 'dest', 'dest.isActive = :active', {
+        active: true,
+      })
+      .where('ep.isActive = :isActive', { isActive: true })
+      .orderBy('ep.createdAt', 'DESC');
 
-      if (endpoints.length > 0) {
-        // Prefer the endpoint that has active destinations
-        const withDest = endpoints.find((ep) => ep.destinations?.length > 0);
-        return { endpoint: withDest ?? endpoints[0], userId: user.id };
-      }
+    if (slug.startsWith('usr_')) {
+      const user = await this.userRepo.findOne({
+        where: { ingressSlug: slug },
+      });
+      if (!user) return null;
+      query.andWhere('ep.userId = :userId', { userId: user.id });
+    } else {
+      const workspace = await this.workspaceRepo.findOne({ where: { slug } });
+      if (!workspace) return null;
+      query.andWhere('ep.workspaceId = :workspaceId', {
+        workspaceId: workspace.id,
+      });
     }
 
-    // Fall back to resolving by workspace slug
-    const workspace = await this.workspaceRepo.findOne({
-      where: { slug },
-    });
-    if (workspace) {
-      const endpoints = await this.endpointRepo
-        .createQueryBuilder('ep')
-        .addSelect('ep.webhookSecret')
-        .leftJoinAndSelect('ep.destinations', 'dest', 'dest.isActive = :active', { active: true })
-        .where('ep.workspaceId = :workspaceId', {
-          workspaceId: workspace.id,
-        })
-        .andWhere('ep.isActive = :isActive', { isActive: true })
-        .orderBy('ep.createdAt', 'DESC')
-        .getMany();
-
-      if (endpoints.length > 0) {
-        const withDest = endpoints.find((ep) => ep.destinations?.length > 0);
-        const endpoint = withDest ?? endpoints[0];
-        return { endpoint, userId: endpoint.userId };
-      }
+    if (opts.endpointId) {
+      query.andWhere('ep.id = :endpointId', { endpointId: opts.endpointId });
     }
 
-    return null;
+    const endpoints = await query.getMany();
+    if (endpoints.length === 0) return null;
+
+    // On the shared URL, send each provider's webhooks to that provider's endpoint
+    const providers = this.signatureService.detectProviders(opts.headers);
+    const candidates =
+      endpoints.filter((ep) => providers.includes(ep.provider)).length > 0
+        ? endpoints.filter((ep) => providers.includes(ep.provider))
+        : endpoints;
+    const endpoint =
+      candidates.find((ep) => ep.destinations?.length > 0) ?? candidates[0];
+    return { endpoint, userId: endpoint.userId };
   }
 
   async capture(params: CaptureParams): Promise<WebhookEvent> {
@@ -147,7 +143,11 @@ export class IngressService {
     return saved;
   }
 
-  async processEvent(event: WebhookEvent, endpoint: Endpoint): Promise<void> {
+  async processEvent(
+    event: WebhookEvent,
+    endpoint: Endpoint,
+    opts: { skipForward?: boolean } = {},
+  ): Promise<void> {
     // Parse event type from body
     const eventType = this.extractEventType(endpoint.provider, event.body);
     const idempotencyKey = this.extractIdempotencyKey(
@@ -176,7 +176,7 @@ export class IngressService {
           signature,
           endpoint.webhookSecret,
         );
-      } else {
+      } else if (endpoint.provider !== 'custom') {
         updates.signatureValid = false;
       }
     }
@@ -228,6 +228,14 @@ export class IngressService {
       );
     }
 
+    if (opts.skipForward) {
+      await this.eventRepo.update(event.id, { forwardStatus: 'skipped' });
+      this.logger.warn(
+        `Event ${event.id} came from Hookdash itself; not forwarding to avoid a loop`,
+      );
+      return;
+    }
+
     // Queue forward with retry config from endpoint
     try {
       const jobData: ForwardJobData = {
@@ -243,7 +251,10 @@ export class IngressService {
         attempts,
         backoff:
           endpoint.retryMaxAttempts > 0
-            ? { type: 'exponential', delay: endpoint.retryBackoffMs }
+            ? {
+                type: 'exponential',
+                delay: Math.max(endpoint.retryBackoffMs, 1000),
+              }
             : undefined,
       });
     } catch (err) {

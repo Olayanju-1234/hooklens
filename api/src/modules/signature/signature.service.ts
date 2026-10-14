@@ -4,6 +4,22 @@ import * as crypto from 'crypto';
 /** Tolerance window for Stripe timestamp validation (5 minutes) */
 const STRIPE_TIMESTAMP_TOLERANCE_SECONDS = 300;
 
+const PROVIDER_SIGNATURE_HEADERS: Record<string, string> = {
+  paystack: 'x-paystack-signature',
+  flutterwave: 'verif-hash',
+  mono: 'mono-webhook-secret',
+  bags: 'x-bags-signature',
+  // Stripe passes a compound header: t=<timestamp>,v1=<hmac_sha256>
+  stripe: 'stripe-signature',
+};
+
+// Generic HMAC-SHA256 headers accepted for custom endpoints
+const CUSTOM_SIGNATURE_HEADERS = [
+  'x-webhook-signature',
+  'x-signature',
+  'x-hub-signature-256',
+];
+
 @Injectable()
 export class SignatureService {
   private readonly logger = new Logger(SignatureService.name);
@@ -18,16 +34,21 @@ export class SignatureService {
       switch (provider) {
         case 'paystack':
           return this.verifyHmac('sha512', secret, rawBody, signature);
+        // Flutterwave and Mono send the configured secret itself, not an HMAC
         case 'flutterwave':
-          return secret === signature;
         case 'mono':
-          return this.verifyHmac('sha512', secret, rawBody, signature);
+          return this.safeEqual(secret, signature);
         case 'bags':
           return this.verifyHmac('sha256', secret, rawBody, signature);
         case 'stripe':
           return this.verifyStripe(secret, rawBody, signature);
         default:
-          return true;
+          return this.verifyHmac(
+            'sha256',
+            secret,
+            rawBody,
+            signature.replace(/^sha256=/, ''),
+          );
       }
     } catch (err) {
       this.logger.warn(
@@ -41,17 +62,25 @@ export class SignatureService {
     provider: string,
     headers: Record<string, string>,
   ): string | null {
-    const headerMap: Record<string, string> = {
-      paystack: 'x-paystack-signature',
-      flutterwave: 'verif-hash',
-      mono: 'mono-webhook-secret',
-      bags: 'x-bags-signature',
-      // Stripe passes a compound header: t=<timestamp>,v1=<hmac_sha256>
-      stripe: 'stripe-signature',
-    };
-    const key = headerMap[provider];
-    if (!key) return null;
-    return headers[key] ?? headers[key.toLowerCase()] ?? null;
+    const key = PROVIDER_SIGNATURE_HEADERS[provider];
+    if (key) return headers[key] ?? null;
+    for (const header of CUSTOM_SIGNATURE_HEADERS) {
+      if (headers[header]) return headers[header];
+    }
+    return null;
+  }
+
+  /** Providers whose signature header is present on the request, most specific first. */
+  detectProviders(headers: Record<string, string>): string[] {
+    return Object.entries(PROVIDER_SIGNATURE_HEADERS)
+      .filter(([, header]) => Boolean(headers[header]))
+      .map(([provider]) => provider);
+  }
+
+  private safeEqual(expected: string, actual: string): boolean {
+    const a = Buffer.from(expected);
+    const b = Buffer.from(actual);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
   }
 
   /**
@@ -76,9 +105,7 @@ export class SignatureService {
   ): boolean {
     const parts = stripeSignatureHeader.split(',');
 
-    const timestamp = parts
-      .find((p) => p.startsWith('t='))
-      ?.slice(2);
+    const timestamp = parts.find((p) => p.startsWith('t='))?.slice(2);
     const v1Signatures = parts
       .filter((p) => p.startsWith('v1='))
       .map((p) => p.slice(3));
