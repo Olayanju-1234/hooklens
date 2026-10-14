@@ -14,6 +14,7 @@ export type VerificationFailure =
   | 'missing-id'
   | 'missing-timestamp'
   | 'stale-timestamp'
+  | 'missing-url'
   | 'mismatch';
 
 export interface VerificationResult {
@@ -29,11 +30,20 @@ export interface EventIdentity {
 
 type Headers = Record<string, string | string[] | undefined>;
 
+export interface InboundRequest {
+  headers: Headers;
+  rawBody: string;
+  /** Public URLs the request may have been sent to, query string included; read by `{url}` recipes. */
+  urls?: string[];
+}
+
 const HEX = /^[0-9a-f]+$/i;
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
-const UNIX_SECONDS = /^\d{1,12}$/;
+const UNIX_TIME = /^\d{1,15}$/;
 const EVENT_TYPE_MAX = 100;
 const DELIVERY_ID_MAX = 255;
+const CHALLENGE_MAX = 256;
+const FORM_CONTENT_TYPE = 'application/x-www-form-urlencoded';
 
 @Injectable()
 export class SignatureService {
@@ -41,13 +51,15 @@ export class SignatureService {
 
   verifyRequest(
     provider: string,
-    headers: Headers,
-    rawBody: string,
+    request: InboundRequest,
     secret: string,
     now: number = Date.now(),
   ): VerificationResult {
     const recipe = getRecipe(provider);
-    const header = firstHeader(headers, recipe.verification.signatureHeaders);
+    const header = firstHeader(
+      request.headers,
+      recipe.verification.signatureHeaders,
+    );
     if (header === null) {
       return recipe.signatureOptional
         ? { valid: null }
@@ -58,14 +70,7 @@ export class SignatureService {
       const result =
         recipe.verification.kind === 'shared-secret'
           ? this.compareSecret(secret, header)
-          : this.verifyHmac(
-              recipe.verification,
-              header,
-              headers,
-              rawBody,
-              secret,
-              now,
-            );
+          : this.verifyHmac(recipe.verification, header, request, secret, now);
       if (!result.valid) {
         this.logger.warn(
           `Signature rejected for ${provider}: ${result.failure ?? 'unknown'}`,
@@ -89,9 +94,51 @@ export class SignatureService {
   ): boolean {
     const [header] = getRecipe(provider).verification.signatureHeaders;
     return (
-      this.verifyRequest(provider, { [header]: signature }, rawBody, secret)
-        .valid === true
+      this.verifyRequest(
+        provider,
+        { headers: { [header]: signature }, rawBody },
+        secret,
+      ).valid === true
     );
+  }
+
+  /** The value to echo back when the request is a signed handshake such as Slack's url_verification. */
+  challengeResponse(
+    provider: string,
+    request: InboundRequest,
+    secret: string | null,
+    now: number = Date.now(),
+  ): string | null {
+    const { challenge } = getRecipe(provider);
+    if (!challenge) return null;
+    const body = parseJson(request.rawBody);
+    if (
+      readField({ body: challenge.when.body }, {}, body) !==
+      challenge.when.equals
+    ) {
+      return null;
+    }
+    const value = readField({ body: challenge.echo }, {}, body);
+    if (!value || value.length > CHALLENGE_MAX) return null;
+    if (
+      secret &&
+      this.verifyRequest(provider, request, secret, now).valid !== true
+    ) {
+      return null;
+    }
+    return value;
+  }
+
+  // Meta's hub.verify_token only proves the subscriber knows the URL; the src_ slug already does,
+  // and deliveries are still checked against the source's secret.
+  subscriptionChallenge(query: Record<string, unknown>): string | null {
+    const challenge = query['hub.challenge'];
+    if (query['hub.mode'] !== 'subscribe' || typeof challenge !== 'string') {
+      return null;
+    }
+    return challenge.length > 0 && challenge.length <= CHALLENGE_MAX
+      ? challenge
+      : null;
   }
 
   extractSignature(provider: string, headers: Headers): string | null {
@@ -112,15 +159,22 @@ export class SignatureService {
       .map(([provider]) => provider);
   }
 
+  /** Form bodies are stored as raw text, so their fields are read from `rawBody`. */
   identify(
     provider: string,
     headers: Headers,
     body: Record<string, unknown> | null,
+    rawBody = '',
   ): EventIdentity {
     const recipe = getRecipe(provider);
+    const fields =
+      body ??
+      (isForm(headers)
+        ? Object.fromEntries(new URLSearchParams(rawBody))
+        : null);
     const first = (locators: FieldLocator[], max: number) => {
       for (const locator of locators) {
-        const value = readField(locator, headers, body);
+        const value = readField(locator, headers, fields);
         if (value) return value.slice(0, max);
       }
       return null;
@@ -134,11 +188,11 @@ export class SignatureService {
   private verifyHmac(
     recipe: HmacVerification,
     header: string,
-    headers: Headers,
-    rawBody: string,
+    request: InboundRequest,
     secret: string,
     now: number,
   ): VerificationResult {
+    const { headers, rawBody } = request;
     let signatures: string[];
     let timestamp: string | null = null;
 
@@ -166,10 +220,21 @@ export class SignatureService {
 
     if (recipe.timestamp) {
       timestamp ??= firstHeader(headers, recipe.timestamp.headers ?? []);
-      if (!timestamp || !UNIX_SECONDS.test(timestamp)) {
+      if (!timestamp && recipe.timestamp.body) {
+        timestamp = readField(
+          { body: recipe.timestamp.body },
+          headers,
+          parseJson(rawBody),
+        );
+      }
+      if (!timestamp || !UNIX_TIME.test(timestamp)) {
         return { valid: false, failure: 'missing-timestamp' };
       }
-      const age = Math.abs(Math.floor(now / 1000) - Number(timestamp));
+      const sent = Number(timestamp);
+      const age =
+        recipe.timestamp.unit === 'milliseconds'
+          ? Math.abs(now - sent) / 1000
+          : Math.abs(Math.floor(now / 1000) - sent);
       if (age > recipe.timestamp.toleranceSeconds) {
         return { valid: false, failure: 'stale-timestamp' };
       }
@@ -182,30 +247,53 @@ export class SignatureService {
       id = found;
     }
 
-    const values: Record<string, string> = {
-      id,
-      timestamp: timestamp ?? '',
-      body: rawBody,
-    };
-    const payload = recipe.signedPayload.replace(
-      /\{(id|timestamp|body)\}/g,
-      (_, key: string) => values[key],
-    );
+    let urls = [''];
+    if (recipe.signedPayload.includes('{url}')) {
+      urls = [...new Set((request.urls ?? []).flatMap(portVariants))];
+      if (urls.length === 0) return { valid: false, failure: 'missing-url' };
+    }
+
+    let params = '';
+    if (recipe.signedPayload.includes('{params}') && isForm(headers)) {
+      params = signedParams(rawBody);
+    } else if (
+      recipe.bodyHashParam &&
+      !bodyHashMatches(request.urls?.[0], recipe.bodyHashParam, rawBody)
+    ) {
+      return { valid: false, failure: 'mismatch' };
+    }
+
     const key =
       recipe.secret.encoding === 'base64'
         ? Buffer.from(stripPrefix(secret, recipe.secret.stripPrefix), 'base64')
         : Buffer.from(secret, 'utf8');
-    const expected = crypto
-      .createHmac(recipe.algorithm, key)
-      .update(payload, 'utf8')
-      .digest();
+    const expected = urls.map((url) => {
+      const values: Record<string, string> = {
+        id,
+        timestamp: timestamp ?? '',
+        body: rawBody,
+        url,
+        params,
+      };
+      const payload = recipe.signedPayload.replace(
+        /\{(id|timestamp|body|url|params)\}/g,
+        (_, name: string) => values[name],
+      );
+      return crypto
+        .createHmac(recipe.algorithm, key)
+        .update(payload, 'utf8')
+        .digest();
+    });
 
     const matched = signatures.some((signature) => {
       const actual = decodeDigest(signature, recipe.encoding);
       return (
         actual !== null &&
-        actual.length === expected.length &&
-        crypto.timingSafeEqual(actual, expected)
+        expected.some(
+          (digest) =>
+            actual.length === digest.length &&
+            crypto.timingSafeEqual(actual, digest),
+        )
       );
     });
     return matched ? { valid: true } : { valid: false, failure: 'mismatch' };
@@ -250,6 +338,58 @@ function decodeDigest(value: string, encoding: DigestEncoding): Buffer | null {
       : null;
   }
   return BASE64.test(value) ? Buffer.from(value, 'base64') : null;
+}
+
+function parseJson(text: string): Record<string, unknown> | null {
+  try {
+    const value: unknown = JSON.parse(text);
+    return value && typeof value === 'object'
+      ? (value as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function isForm(headers: Headers): boolean {
+  const type = firstHeader(headers, ['content-type']);
+  return type?.toLowerCase().startsWith(FORM_CONTENT_TYPE) ?? false;
+}
+
+/** Twilio's form: names sorted, repeated values deduplicated and sorted, each written as name + value. */
+function signedParams(rawBody: string): string {
+  const form = new URLSearchParams(rawBody);
+  return [...new Set(form.keys())]
+    .sort()
+    .flatMap((name) =>
+      [...new Set(form.getAll(name))].sort().map((value) => name + value),
+    )
+    .join('');
+}
+
+// The digest is in the URL the sender signed, so this binds the body to the signature
+function bodyHashMatches(
+  url: string | undefined,
+  param: string,
+  rawBody: string,
+): boolean {
+  if (!url || !URL.canParse(url)) return false;
+  const claimed = new URL(url).searchParams.get(param);
+  const actual = crypto.createHash('sha256').update(rawBody).digest('hex');
+  return claimed?.toLowerCase() === actual;
+}
+
+// Twilio signs with and without the default port, so try the URL as received and both forms
+function portVariants(url: string): string[] {
+  const match = /^(https?):\/\/([^/?#:@]+)(:\d+)?(.*)$/i.exec(url);
+  if (!match) return [url];
+  const [, scheme, host, , rest] = match;
+  const port = scheme.toLowerCase() === 'https' ? ':443' : ':80';
+  return [
+    url,
+    `${scheme}://${host}${rest}`,
+    `${scheme}://${host}${port}${rest}`,
+  ];
 }
 
 function stripPrefix(value: string, prefix?: string): string {

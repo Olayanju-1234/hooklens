@@ -1,11 +1,14 @@
-import { Controller, Post, Param, Req, Res, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Param, Req, Res, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { IngressService } from './ingress.service.js';
+import { SignatureService } from '../signature/signature.service.js';
 
 // Source slugs are src_ + 24 hex; legacy user and workspace slugs usr_/ws_ + 12 hex
 const SLUG_PATTERN = /^(src_[a-f0-9]{24}|(usr|ws)_[a-f0-9]{12})$/;
+const SOURCE_SLUG_PATTERN = /^src_[a-f0-9]{24}$/;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -15,7 +18,41 @@ const UUID_PATTERN =
 export class IngressController {
   private readonly logger = new Logger(IngressController.name);
 
-  constructor(private readonly ingressService: IngressService) {}
+  constructor(
+    private readonly ingressService: IngressService,
+    private readonly signatureService: SignatureService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  @Get(':slug')
+  @ApiOperation({
+    summary:
+      "Answer a provider's subscription check on a src_ slug, e.g. Meta's hub.challenge",
+  })
+  @ApiResponse({ status: 200, description: 'The challenge, as plain text' })
+  @ApiParam({ name: 'slug', type: String })
+  async challenge(
+    @Param('slug') slug: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const challenge = this.signatureService.subscriptionChallenge(
+      req.query as Record<string, unknown>,
+    );
+    if (challenge === null || !SOURCE_SLUG_PATTERN.test(slug)) {
+      return res.status(200).json({ status: 'ok' });
+    }
+    const resolved = await this.ingressService.resolveEndpoint(slug, {
+      headers: {},
+    });
+    if (!resolved) {
+      return res.status(200).json({ status: 'ok' });
+    }
+    this.logger.log(
+      `Answered subscription check for endpoint ${resolved.endpoint.id}`,
+    );
+    return res.status(200).type('text/plain').send(challenge);
+  }
 
   @Post(':slug')
   @ApiOperation({
@@ -71,6 +108,20 @@ export class IngressController {
 
     const { endpoint, userId } = resolved;
     const { rawBody, body } = this.readBody(req);
+    const urls = this.requestUrls(req);
+
+    // Handshakes are answered here and never captured; a failed one falls through so it shows up
+    const challenge = this.signatureService.challengeResponse(
+      endpoint.provider,
+      { headers, rawBody, urls },
+      endpoint.webhookSecret,
+    );
+    if (challenge !== null) {
+      this.logger.log(
+        `Answered ${endpoint.provider} handshake for endpoint ${endpoint.id}`,
+      );
+      return res.status(200).type('text/plain').send(challenge);
+    }
 
     const event = await this.ingressService.capture({
       endpointId: endpoint.id,
@@ -87,7 +138,7 @@ export class IngressController {
     const fromHookdash = Boolean(headers['x-hookdash-event-id']);
 
     void this.ingressService
-      .processEvent(event, endpoint, { skipForward: fromHookdash })
+      .processEvent(event, endpoint, { skipForward: fromHookdash, urls })
       .catch((err: Error) => {
         this.logger.error(
           `Failed to process event ${event.id}: ${err.message}`,
@@ -97,6 +148,14 @@ export class IngressController {
     return res
       .status(endpoint.responseStatusCode ?? 200)
       .json(this.responseBody(endpoint.responseBody));
+  }
+
+  // URL-signing senders (Twilio) sign the URL they were given: normally API_URL, else the host nginx saw
+  private requestUrls(req: Request): string[] {
+    const apiUrl = this.configService.get<string>('apiUrl', '');
+    const urls = [`${req.protocol}://${req.host}${req.originalUrl}`];
+    if (apiUrl) urls.unshift(`${apiUrl}${req.originalUrl}`);
+    return [...new Set(urls)];
   }
 
   private readBody(req: Request): {
