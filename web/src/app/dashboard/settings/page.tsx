@@ -31,7 +31,8 @@ function copyText(text: string, message: string) {
 }
 
 export default function SettingsPage() {
-  const { refreshWorkspaces, switchWorkspace, ingressSlug, currentWorkspaceId } = useAuth();
+  const { refreshWorkspaces, switchWorkspace, replaceToken, ingressSlug, currentWorkspaceId } =
+    useAuth();
   const [workspaceList, setWorkspaceList] = useState<Workspace[]>([]);
   const [workspace, setWorkspace] = useState<
     (Workspace & { members: WorkspaceMember[] }) | null
@@ -128,8 +129,9 @@ export default function SettingsPage() {
     }
     setPwSubmitting(true);
     try {
-      await authApi.changePassword(currentPw, newPw);
-      toast.success("Password changed");
+      const res = await authApi.changePassword(currentPw, newPw);
+      replaceToken(res.accessToken);
+      toast.success("Password changed. Other sessions were signed out.");
       setCurrentPw("");
       setNewPw("");
       setConfirmPw("");

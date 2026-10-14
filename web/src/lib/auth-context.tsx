@@ -25,6 +25,7 @@ interface AuthContextType extends AuthState {
   login: (email: string, password: string, next?: string | null) => Promise<void>;
   signup: (email: string, password: string) => Promise<string>;
   setSession: (token: string, ingressSlug: string) => Promise<void>;
+  replaceToken: (token: string) => void;
   logout: () => void;
   switchWorkspace: (workspaceId: string, redirectTo?: string) => void;
   refreshWorkspaces: () => Promise<Workspace[]>;
@@ -141,6 +142,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Same user, new token (e.g. after a password change revoked the old one)
+  const replaceToken = useCallback((newToken: string) => {
+    Cookies.set("token", newToken, { expires: 7 });
+    loadedForToken.current = newToken;
+    notifySession();
+  }, []);
+
   const login = useCallback(
     async (email: string, password: string, next?: string | null) => {
       const res = await authApi.login(email, password);
@@ -186,6 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         signup,
         setSession,
+        replaceToken,
         logout,
         switchWorkspace,
         refreshWorkspaces,

@@ -109,7 +109,7 @@ export const auth = {
   me: () =>
     request<UserProfile>("/auth/me"),
   changePassword: (currentPassword: string, newPassword: string) =>
-    request<{ success: boolean }>("/auth/change-password", {
+    request<{ success: boolean; accessToken: string }>("/auth/change-password", {
       method: "POST",
       body: { currentPassword, newPassword },
       // API answers 401 for a wrong current password

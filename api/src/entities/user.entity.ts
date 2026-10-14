@@ -39,6 +39,10 @@ export class User {
   @Column({ type: 'timestamptz', nullable: true, select: false })
   resetTokenExpiresAt!: Date | null;
 
+  // Bumped on password reset/change; JWTs carrying an older value are rejected
+  @Column({ type: 'integer', default: 0 })
+  tokenVersion!: number;
+
   @Column({ type: 'varchar', length: 20, nullable: true })
   oauthProvider!: string | null;
 
