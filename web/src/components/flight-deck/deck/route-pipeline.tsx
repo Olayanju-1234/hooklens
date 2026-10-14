@@ -13,7 +13,7 @@ import {
   type TransformRule,
 } from "@/lib/api";
 import { SCHEMES } from "../tower/live-status";
-import { PROVIDER_INFO } from "./endpoint-form";
+import { findProvider } from "@/lib/providers";
 import { PROVIDER_CODE } from "./format";
 
 export interface RouteData {
@@ -64,7 +64,9 @@ export function opText(op: Op) {
 export function RoutePipeline({ route, ingressSlug, highlighted, onChange, onEdit, onDelete, onToggle, confirm }: Props) {
   const { endpoint: ep, destinations } = route;
   const code = PROVIDER_CODE[ep.provider] ?? "CSTM";
-  const ingressUrl = ingressSlug ? `${INGRESS_BASE}/in/${ingressSlug}/${ep.id}` : null;
+  // Per-source slug when the API provides one; older APIs only route by user slug plus endpoint id.
+  const ingressUrl = ep.ingressSlug ? `${INGRESS_BASE}/in/${ep.ingressSlug}` : ingressSlug ? `${INGRESS_BASE}/in/${ingressSlug}/${ep.id}` : null;
+  const provider = findProvider(ep.provider);
   const flowing = ep.isActive && (destinations.some((d) => d.isActive) || (!destinations.length && !!ep.forwardUrl));
 
   return (
@@ -78,7 +80,7 @@ export function RoutePipeline({ route, ingressSlug, highlighted, onChange, onEdi
           <div className="route-title">
             <h2>{ep.name}</h2>
             <span className="label-sm">
-              {PROVIDER_INFO[ep.provider]?.label ?? ep.provider} · {ep.isActive ? "accepting" : "paused, events are not forwarded"}
+              {provider.value === ep.provider ? provider.label : ep.provider} · {ep.isActive ? "accepting" : "paused, events are not forwarded"}
             </span>
           </div>
           <div className="route-actions">
@@ -96,7 +98,7 @@ export function RoutePipeline({ route, ingressSlug, highlighted, onChange, onEdi
 
         <div className="pipe" data-flowing={flowing || undefined}>
           <Stage n="01" title="Source" meta={code}>
-            <p className="stage-lede">{PROVIDER_INFO[ep.provider]?.description ?? "Any sender"}</p>
+            <p className="stage-lede">{provider.value === ep.provider ? provider.description : "Any sender"}</p>
             {ingressUrl && (
               <button type="button" className="ingress-chip stage-url" title="Copy ingress URL" onClick={() => copy(ingressUrl, "Ingress URL")}>
                 <span className="label-sm">POST</span>

@@ -46,10 +46,14 @@ export const PROVIDER_CODE: Record<string, string> = {
   flutterwave: "FLWV",
   mono: "MONO",
   bags: "BAGS",
+  github: "GHUB",
+  shopify: "SHPF",
+  clerk: "CLRK",
+  resend: "RSND",
+  openai: "OPAI",
+  "standard-webhooks": "STDW",
   custom: "CSTM",
 };
-
-export const PROVIDERS = ["stripe", "paystack", "flutterwave", "mono", "bags", "custom"] as const;
 
 /** Runs async jobs with a fixed number in flight, so bulk actions don't flood the API. */
 export async function pool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<PromiseSettledResult<R>[]> {

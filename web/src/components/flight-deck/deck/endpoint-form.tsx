@@ -2,16 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { ApiError, endpoints as endpointsApi, type Endpoint } from "@/lib/api";
-import { PROVIDERS } from "./format";
-
-export const PROVIDER_INFO: Record<string, { label: string; description: string }> = {
-  stripe: { label: "Stripe", description: "Card payments: charges, subscriptions, checkout" },
-  paystack: { label: "Paystack", description: "Payments: charges, transfers, refunds" },
-  flutterwave: { label: "Flutterwave", description: "Pan-African payments: cards, transfers, USSD" },
-  mono: { label: "Mono", description: "Open banking: accounts, statements, direct debit" },
-  bags: { label: "Bags", description: "Solana launchpad: launches, swaps, fee claims" },
-  custom: { label: "Custom", description: "Any sender, no signature scheme" },
-};
+import { PROVIDERS, findProvider } from "@/lib/providers";
 
 interface Props {
   endpoint?: Endpoint;
@@ -71,8 +62,8 @@ export function EndpointForm({ endpoint, onSaved, onCancel }: Props) {
           <span>Source</span>
           <select className="fd-input" value={provider} onChange={(e) => setProvider(e.target.value)}>
             {PROVIDERS.map((p) => (
-              <option key={p} value={p}>
-                {PROVIDER_INFO[p].label}: {PROVIDER_INFO[p].description}
+              <option key={p.value} value={p.value}>
+                {p.label}: {p.description}
               </option>
             ))}
           </select>
@@ -85,7 +76,7 @@ export function EndpointForm({ endpoint, onSaved, onCancel }: Props) {
             autoComplete="off"
             value={webhookSecret}
             onChange={(e) => setWebhookSecret(e.target.value)}
-            placeholder={editing ? "New secret to rotate" : "Provider's webhook signing secret"}
+            placeholder={editing ? "New secret to rotate" : findProvider(provider).secretHint}
           />
         </label>
         <label className="fd-field">

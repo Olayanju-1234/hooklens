@@ -66,5 +66,11 @@ export const SCHEMES: Record<string, { scheme: string; header: string | null; ki
   flutterwave: { scheme: "secret hash", header: "verif-hash", kind: "payments" },
   mono: { scheme: "HMAC-SHA512", header: "mono-webhook-secret", kind: "open banking" },
   bags: { scheme: "HMAC-SHA256 · hex", header: "x-bags-signature", kind: "on-chain" },
+  github: { scheme: "HMAC-SHA256 · sha256= hex", header: "x-hub-signature-256", kind: "code" },
+  shopify: { scheme: "HMAC-SHA256 · base64", header: "x-shopify-hmac-sha256", kind: "commerce" },
+  "standard-webhooks": { scheme: "HMAC-SHA256 · id.timestamp.body · base64", header: "webhook-signature", kind: "standard webhooks" },
+  clerk: { scheme: "HMAC-SHA256 · id.timestamp.body · base64", header: "svix-signature", kind: "auth" },
+  resend: { scheme: "HMAC-SHA256 · id.timestamp.body · base64", header: "svix-signature", kind: "email" },
+  openai: { scheme: "HMAC-SHA256 · id.timestamp.body · base64", header: "webhook-signature", kind: "ai" },
   custom: { scheme: "no signature scheme", header: null, kind: "custom" },
 };

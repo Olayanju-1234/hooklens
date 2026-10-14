@@ -9,7 +9,8 @@ import { Flap } from "@/components/flight-deck/split-flap";
 import { LiveRecorder } from "@/components/flight-deck/tower/live-recorder";
 import { liveStatus } from "@/components/flight-deck/tower/live-status";
 import { useReducedMotion } from "@/components/flight-deck/use-sim";
-import { PROVIDERS, fmtStamp } from "@/components/flight-deck/deck/format";
+import { fmtStamp } from "@/components/flight-deck/deck/format";
+import { PROVIDERS } from "@/lib/providers";
 
 const PAGE_SIZE = 50;
 
@@ -218,7 +219,7 @@ export default function HistoryPage() {
   }, [items, activeSelected, replay, replaying, goTo, page]);
 
   const filtered = filters !== NO_FILTERS && JSON.stringify(filters) !== JSON.stringify(NO_FILTERS);
-  const providerOptions = Array.from(new Set([...endpointList.map((e) => e.provider), ...PROVIDERS]));
+  const providerOptions = Array.from(new Set([...endpointList.map((e) => e.provider), ...PROVIDERS.map((p) => p.value)]));
   const first = page * PAGE_SIZE + 1;
 
   return (
