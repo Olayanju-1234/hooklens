@@ -159,6 +159,7 @@ export interface Endpoint {
   userId: string;
   name: string;
   provider: string;
+  ingressSlug: string;
   forwardUrl: string | null;
   isActive: boolean;
   createdAt: string;
