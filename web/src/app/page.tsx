@@ -690,7 +690,11 @@ export default function LandingPage() {
 
           <div className="mt-14 pt-6 border-t border-[#111110] flex flex-col sm:flex-row items-center justify-between gap-3">
             <span className="text-[11px] text-[#2a2a28]">&copy; {new Date().getFullYear()} Hookdash. MIT License.</span>
-            <span className="text-[11px] text-[#2a2a28]">Made with intent.</span>
+            <div className="flex items-center gap-5">
+              <Link href="/privacy" className="text-[11px] text-[#4a4a45] hover:text-[#ececea] transition-colors">Privacy</Link>
+              <Link href="/terms" className="text-[11px] text-[#4a4a45] hover:text-[#ececea] transition-colors">Terms</Link>
+              <span className="text-[11px] text-[#2a2a28]">Made with intent.</span>
+            </div>
           </div>
         </div>
       </footer>
