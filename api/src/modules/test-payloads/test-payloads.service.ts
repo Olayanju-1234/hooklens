@@ -32,6 +32,78 @@ function timestamp(): string {
   return new Date().toISOString();
 }
 
+const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
+function base62(length: number): string {
+  return Array.from(
+    crypto.randomBytes(length),
+    (byte) => BASE62[byte % BASE62.length],
+  ).join('');
+}
+
+function stripeId(prefix: string, length = 24): string {
+  return `${prefix}_${base62(length)}`;
+}
+
+function unixTime(offsetSeconds = 0): number {
+  return Math.floor(Date.now() / 1000) + offsetSeconds;
+}
+
+const DAY_SECONDS = 24 * 60 * 60;
+
+function stripeEvent(
+  type: string,
+  object: Record<string, unknown>,
+  previousAttributes?: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    id: stripeId('evt'),
+    object: 'event',
+    api_version: '2024-06-20',
+    created: unixTime(),
+    data: previousAttributes
+      ? { object, previous_attributes: previousAttributes }
+      : { object },
+    livemode: false,
+    pending_webhooks: 1,
+    request: { id: stripeId('req', 14), idempotency_key: crypto.randomUUID() },
+    type,
+  };
+}
+
+function stripePaymentIntent(
+  status: string,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const id = stripeId('pi');
+  const amount = randomInt(500, 50000);
+  return {
+    id,
+    object: 'payment_intent',
+    amount,
+    amount_capturable: 0,
+    amount_received: status === 'succeeded' ? amount : 0,
+    automatic_payment_methods: { enabled: true, allow_redirects: 'always' },
+    canceled_at: null,
+    capture_method: 'automatic_async',
+    client_secret: `${id}_secret_${base62(25)}`,
+    confirmation_method: 'automatic',
+    created: unixTime(-30),
+    currency: 'usd',
+    customer: stripeId('cus', 14),
+    description: `Order #${randomInt(1000, 9999)}`,
+    last_payment_error: null,
+    latest_charge: stripeId('ch'),
+    livemode: false,
+    metadata: { order_id: `order_${randomHex(8)}` },
+    payment_method: stripeId('pm'),
+    payment_method_types: ['card'],
+    receipt_email: 'jenny.rosen@example.com',
+    status,
+    ...extra,
+  };
+}
+
 function paystackBase(
   event: string,
   status: string,
@@ -602,6 +674,284 @@ const BAGS_TEMPLATES: PayloadTemplate[] = [
   },
 ];
 
+const STRIPE_TEMPLATES: PayloadTemplate[] = [
+  {
+    eventType: 'payment_intent.succeeded',
+    description: 'PaymentIntent captured successfully',
+    build: () =>
+      stripeEvent('payment_intent.succeeded', stripePaymentIntent('succeeded')),
+  },
+  {
+    eventType: 'payment_intent.payment_failed',
+    description: 'Payment attempt declined',
+    build: () => {
+      const paymentMethod = stripeId('pm');
+      const charge = stripeId('ch');
+      return stripeEvent(
+        'payment_intent.payment_failed',
+        stripePaymentIntent('requires_payment_method', {
+          latest_charge: charge,
+          payment_method: null,
+          last_payment_error: {
+            charge,
+            code: 'card_declined',
+            decline_code: 'insufficient_funds',
+            doc_url: 'https://stripe.com/docs/error-codes/card-declined',
+            message: 'Your card has insufficient funds.',
+            payment_method: {
+              id: paymentMethod,
+              object: 'payment_method',
+              type: 'card',
+              card: {
+                brand: 'visa',
+                country: 'US',
+                exp_month: 12,
+                exp_year: 2030,
+                funding: 'credit',
+                last4: '9995',
+              },
+            },
+            type: 'card_error',
+          },
+        }),
+      );
+    },
+  },
+  {
+    eventType: 'charge.refunded',
+    description: 'Charge fully refunded',
+    build: () => {
+      const amount = randomInt(500, 50000);
+      const id = stripeId('ch');
+      return stripeEvent(
+        'charge.refunded',
+        {
+          id,
+          object: 'charge',
+          amount,
+          amount_captured: amount,
+          amount_refunded: amount,
+          balance_transaction: stripeId('txn'),
+          billing_details: {
+            email: 'jenny.rosen@example.com',
+            name: 'Jenny Rosen',
+            phone: null,
+            address: { country: 'US', postal_code: '94107' },
+          },
+          captured: true,
+          created: unixTime(-3 * DAY_SECONDS),
+          currency: 'usd',
+          customer: stripeId('cus', 14),
+          description: `Order #${randomInt(1000, 9999)}`,
+          disputed: false,
+          failure_code: null,
+          failure_message: null,
+          livemode: false,
+          metadata: { order_id: `order_${randomHex(8)}` },
+          outcome: {
+            network_status: 'approved_by_network',
+            risk_level: 'normal',
+            seller_message: 'Payment complete.',
+            type: 'authorized',
+          },
+          paid: true,
+          payment_intent: stripeId('pi'),
+          payment_method: stripeId('pm'),
+          payment_method_details: {
+            type: 'card',
+            card: {
+              brand: 'visa',
+              country: 'US',
+              exp_month: 12,
+              exp_year: 2030,
+              funding: 'credit',
+              last4: '4242',
+            },
+          },
+          receipt_email: 'jenny.rosen@example.com',
+          receipt_url: `https://pay.stripe.com/receipts/payment/${base62(48)}`,
+          refunded: true,
+          status: 'succeeded',
+        },
+        { amount_refunded: 0, refunded: false },
+      );
+    },
+  },
+  {
+    eventType: 'checkout.session.completed',
+    description: 'Checkout Session paid and completed',
+    build: () => {
+      const amount = randomInt(1000, 100000);
+      return stripeEvent('checkout.session.completed', {
+        id: stripeId('cs_test', 58),
+        object: 'checkout.session',
+        amount_subtotal: amount,
+        amount_total: amount,
+        cancel_url: 'https://example.com/cart',
+        client_reference_id: `cart_${randomHex(8)}`,
+        created: unixTime(-120),
+        currency: 'usd',
+        customer: stripeId('cus', 14),
+        customer_details: {
+          address: {
+            city: 'San Francisco',
+            country: 'US',
+            line1: '510 Townsend St',
+            line2: null,
+            postal_code: '94103',
+            state: 'CA',
+          },
+          email: 'jenny.rosen@example.com',
+          name: 'Jenny Rosen',
+          phone: null,
+        },
+        expires_at: unixTime(DAY_SECONDS),
+        livemode: false,
+        metadata: { order_id: `order_${randomHex(8)}` },
+        mode: 'payment',
+        payment_intent: stripeId('pi'),
+        payment_method_types: ['card'],
+        payment_status: 'paid',
+        status: 'complete',
+        subscription: null,
+        success_url:
+          'https://example.com/success?session_id={CHECKOUT_SESSION_ID}',
+        url: null,
+      });
+    },
+  },
+  {
+    eventType: 'customer.subscription.updated',
+    description: 'Subscription scheduled to cancel at period end',
+    build: () => {
+      const id = stripeId('sub');
+      const periodStart = unixTime(-12 * DAY_SECONDS);
+      const periodEnd = periodStart + 30 * DAY_SECONDS;
+      return stripeEvent(
+        'customer.subscription.updated',
+        {
+          id,
+          object: 'subscription',
+          billing_cycle_anchor: periodStart,
+          cancel_at: periodEnd,
+          cancel_at_period_end: true,
+          canceled_at: unixTime(),
+          cancellation_details: {
+            comment: null,
+            feedback: 'too_expensive',
+            reason: 'cancellation_requested',
+          },
+          collection_method: 'charge_automatically',
+          created: periodStart - 60 * DAY_SECONDS,
+          currency: 'usd',
+          current_period_end: periodEnd,
+          current_period_start: periodStart,
+          customer: stripeId('cus', 14),
+          default_payment_method: stripeId('pm'),
+          items: {
+            object: 'list',
+            data: [
+              {
+                id: stripeId('si', 14),
+                object: 'subscription_item',
+                price: {
+                  id: stripeId('price'),
+                  object: 'price',
+                  active: true,
+                  currency: 'usd',
+                  nickname: 'Pro Monthly',
+                  product: stripeId('prod', 14),
+                  recurring: { interval: 'month', interval_count: 1 },
+                  type: 'recurring',
+                  unit_amount: 4900,
+                },
+                quantity: 1,
+                subscription: id,
+              },
+            ],
+            has_more: false,
+            total_count: 1,
+            url: `/v1/subscription_items?subscription=${id}`,
+          },
+          latest_invoice: stripeId('in'),
+          livemode: false,
+          metadata: {},
+          status: 'active',
+          trial_end: null,
+        },
+        {
+          cancel_at: null,
+          cancel_at_period_end: false,
+          canceled_at: null,
+          cancellation_details: {
+            feedback: null,
+            reason: null,
+          },
+        },
+      );
+    },
+  },
+  {
+    eventType: 'invoice.payment_failed',
+    description: 'Subscription renewal payment failed',
+    build: () => {
+      const id = stripeId('in');
+      const periodStart = unixTime(-30 * DAY_SECONDS);
+      const periodEnd = unixTime();
+      const subscription = stripeId('sub');
+      return stripeEvent('invoice.payment_failed', {
+        id,
+        object: 'invoice',
+        account_country: 'US',
+        amount_due: 4900,
+        amount_paid: 0,
+        amount_remaining: 4900,
+        attempt_count: 1,
+        attempted: true,
+        billing_reason: 'subscription_cycle',
+        charge: stripeId('ch'),
+        collection_method: 'charge_automatically',
+        created: periodEnd - 3600,
+        currency: 'usd',
+        customer: stripeId('cus', 14),
+        customer_email: 'jenny.rosen@example.com',
+        customer_name: 'Jenny Rosen',
+        hosted_invoice_url: `https://invoice.stripe.com/i/acct_${randomHex(16)}/test_${randomHex(24)}`,
+        invoice_pdf: `https://pay.stripe.com/invoice/acct_${randomHex(16)}/test_${randomHex(24)}/pdf`,
+        lines: {
+          object: 'list',
+          data: [
+            {
+              id: stripeId('il'),
+              object: 'line_item',
+              amount: 4900,
+              currency: 'usd',
+              description: '1 × Pro Monthly (at $49.00 / month)',
+              period: { start: periodStart, end: periodEnd },
+              quantity: 1,
+              type: 'subscription',
+            },
+          ],
+          has_more: false,
+          total_count: 1,
+          url: `/v1/invoices/${id}/lines`,
+        },
+        livemode: false,
+        next_payment_attempt: unixTime(3 * DAY_SECONDS),
+        number: `${randomHex(8).toUpperCase()}-0007`,
+        paid: false,
+        payment_intent: stripeId('pi'),
+        period_end: periodEnd,
+        period_start: periodStart,
+        status: 'open',
+        subscription,
+        subtotal: 4900,
+        total: 4900,
+      });
+    },
+  },
+];
+
 const PROVIDER_MAP: Record<
   string,
   { displayName: string; templates: PayloadTemplate[] }
@@ -610,6 +960,7 @@ const PROVIDER_MAP: Record<
   flutterwave: { displayName: 'Flutterwave', templates: FLUTTERWAVE_TEMPLATES },
   mono: { displayName: 'Mono', templates: MONO_TEMPLATES },
   bags: { displayName: 'Bags (Solana)', templates: BAGS_TEMPLATES },
+  stripe: { displayName: 'Stripe', templates: STRIPE_TEMPLATES },
 };
 
 @Injectable()

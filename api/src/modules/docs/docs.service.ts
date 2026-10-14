@@ -815,6 +815,703 @@ const PROVIDERS: ProviderDoc[] = [
       },
     ],
   },
+  {
+    provider: 'stripe',
+    displayName: 'Stripe',
+    description:
+      'Stripe is a global payments platform. Webhooks are POSTed as JSON Event objects with the affected resource under data.object. Amounts are integers in the smallest currency unit (cents for USD). Stripe retries failed deliveries for up to 3 days, so deduplicate on the event id.',
+    signatureHeader: 'stripe-signature',
+    signatureMethod:
+      'HMAC SHA-256 of "{t}.{raw body}" using your endpoint signing secret (whsec_...). The Stripe-Signature header carries t=<timestamp>,v1=<signature>; compare against v1 and reject timestamps older than 5 minutes',
+    events: [
+      {
+        eventType: 'payment_intent.succeeded',
+        description:
+          'Sent when a PaymentIntent completes and funds are captured. This is the primary event for fulfilling orders.',
+        fields: [
+          {
+            path: 'id',
+            type: 'string',
+            description:
+              'Unique event ID (evt_...); use it to deduplicate retries',
+            required: true,
+          },
+          {
+            path: 'object',
+            type: 'string',
+            description: "Always 'event'",
+            required: true,
+          },
+          {
+            path: 'type',
+            type: 'string',
+            description: 'Event type identifier',
+            required: true,
+          },
+          {
+            path: 'api_version',
+            type: 'string',
+            description: 'API version used to render data.object',
+            required: true,
+          },
+          {
+            path: 'created',
+            type: 'number',
+            description: 'Unix timestamp (seconds) when the event was created',
+            required: true,
+          },
+          {
+            path: 'livemode',
+            type: 'boolean',
+            description: 'false for test mode events',
+            required: true,
+          },
+          {
+            path: 'data.object.id',
+            type: 'string',
+            description: 'PaymentIntent ID (pi_...)',
+            required: true,
+          },
+          {
+            path: 'data.object.status',
+            type: 'string',
+            description: 'PaymentIntent status (succeeded)',
+            required: true,
+          },
+          {
+            path: 'data.object.amount',
+            type: 'number',
+            description: 'Amount intended to be collected, in cents',
+            required: true,
+          },
+          {
+            path: 'data.object.amount_received',
+            type: 'number',
+            description: 'Amount actually collected, in cents',
+            required: true,
+          },
+          {
+            path: 'data.object.currency',
+            type: 'string',
+            description:
+              'Three-letter ISO currency code, lowercase (e.g., usd)',
+            required: true,
+          },
+          {
+            path: 'data.object.customer',
+            type: 'string',
+            description: 'Customer ID (cus_...), if attached',
+            required: false,
+          },
+          {
+            path: 'data.object.latest_charge',
+            type: 'string',
+            description: 'ID of the Charge that captured the funds',
+            required: true,
+          },
+          {
+            path: 'data.object.payment_method',
+            type: 'string',
+            description: 'PaymentMethod ID used for the payment',
+            required: true,
+          },
+          {
+            path: 'data.object.receipt_email',
+            type: 'string',
+            description: 'Email the receipt was sent to',
+            required: false,
+          },
+          {
+            path: 'data.object.metadata',
+            type: 'object',
+            description:
+              'Key-value pairs set when the PaymentIntent was created',
+            required: false,
+          },
+          {
+            path: 'data.object.created',
+            type: 'number',
+            description: 'Unix timestamp of PaymentIntent creation',
+            required: true,
+          },
+        ],
+      },
+      {
+        eventType: 'payment_intent.payment_failed',
+        description:
+          'Sent when a payment attempt fails, for example a card decline. The PaymentIntent returns to requires_payment_method so the customer can retry.',
+        fields: [
+          {
+            path: 'id',
+            type: 'string',
+            description:
+              'Unique event ID (evt_...); use it to deduplicate retries',
+            required: true,
+          },
+          {
+            path: 'object',
+            type: 'string',
+            description: "Always 'event'",
+            required: true,
+          },
+          {
+            path: 'type',
+            type: 'string',
+            description: 'Event type identifier',
+            required: true,
+          },
+          {
+            path: 'api_version',
+            type: 'string',
+            description: 'API version used to render data.object',
+            required: true,
+          },
+          {
+            path: 'created',
+            type: 'number',
+            description: 'Unix timestamp (seconds) when the event was created',
+            required: true,
+          },
+          {
+            path: 'livemode',
+            type: 'boolean',
+            description: 'false for test mode events',
+            required: true,
+          },
+          {
+            path: 'data.object.id',
+            type: 'string',
+            description: 'PaymentIntent ID (pi_...)',
+            required: true,
+          },
+          {
+            path: 'data.object.status',
+            type: 'string',
+            description: 'PaymentIntent status (requires_payment_method)',
+            required: true,
+          },
+          {
+            path: 'data.object.amount',
+            type: 'number',
+            description: 'Attempted amount in cents',
+            required: true,
+          },
+          {
+            path: 'data.object.currency',
+            type: 'string',
+            description: 'Three-letter ISO currency code, lowercase',
+            required: true,
+          },
+          {
+            path: 'data.object.last_payment_error.type',
+            type: 'string',
+            description:
+              'Error category (card_error, invalid_request_error, etc.)',
+            required: true,
+          },
+          {
+            path: 'data.object.last_payment_error.code',
+            type: 'string',
+            description: 'Error code (e.g., card_declined)',
+            required: true,
+          },
+          {
+            path: 'data.object.last_payment_error.decline_code',
+            type: 'string',
+            description: 'Issuer decline reason (e.g., insufficient_funds)',
+            required: false,
+          },
+          {
+            path: 'data.object.last_payment_error.message',
+            type: 'string',
+            description: 'Human-readable error message',
+            required: true,
+          },
+          {
+            path: 'data.object.last_payment_error.payment_method.card.last4',
+            type: 'string',
+            description: 'Last 4 digits of the declined card',
+            required: false,
+          },
+          {
+            path: 'data.object.customer',
+            type: 'string',
+            description: 'Customer ID (cus_...), if attached',
+            required: false,
+          },
+          {
+            path: 'data.object.metadata',
+            type: 'object',
+            description:
+              'Key-value pairs set when the PaymentIntent was created',
+            required: false,
+          },
+        ],
+      },
+      {
+        eventType: 'charge.refunded',
+        description:
+          'Sent when a charge is refunded, fully or partially. Compare amount_refunded with amount to tell the two apart.',
+        fields: [
+          {
+            path: 'id',
+            type: 'string',
+            description:
+              'Unique event ID (evt_...); use it to deduplicate retries',
+            required: true,
+          },
+          {
+            path: 'object',
+            type: 'string',
+            description: "Always 'event'",
+            required: true,
+          },
+          {
+            path: 'type',
+            type: 'string',
+            description: 'Event type identifier',
+            required: true,
+          },
+          {
+            path: 'api_version',
+            type: 'string',
+            description: 'API version used to render data.object',
+            required: true,
+          },
+          {
+            path: 'created',
+            type: 'number',
+            description: 'Unix timestamp (seconds) when the event was created',
+            required: true,
+          },
+          {
+            path: 'livemode',
+            type: 'boolean',
+            description: 'false for test mode events',
+            required: true,
+          },
+          {
+            path: 'data.object.id',
+            type: 'string',
+            description: 'Charge ID (ch_...)',
+            required: true,
+          },
+          {
+            path: 'data.object.amount',
+            type: 'number',
+            description: 'Original charge amount in cents',
+            required: true,
+          },
+          {
+            path: 'data.object.amount_refunded',
+            type: 'number',
+            description: 'Total amount refunded so far, in cents',
+            required: true,
+          },
+          {
+            path: 'data.object.refunded',
+            type: 'boolean',
+            description: 'true only when the charge is fully refunded',
+            required: true,
+          },
+          {
+            path: 'data.object.currency',
+            type: 'string',
+            description: 'Three-letter ISO currency code, lowercase',
+            required: true,
+          },
+          {
+            path: 'data.object.payment_intent',
+            type: 'string',
+            description: 'PaymentIntent the charge belongs to',
+            required: false,
+          },
+          {
+            path: 'data.object.customer',
+            type: 'string',
+            description: 'Customer ID (cus_...), if attached',
+            required: false,
+          },
+          {
+            path: 'data.object.payment_method_details.card.last4',
+            type: 'string',
+            description: 'Last 4 digits of the card',
+            required: false,
+          },
+          {
+            path: 'data.object.receipt_url',
+            type: 'string',
+            description: 'URL of the hosted receipt',
+            required: false,
+          },
+          {
+            path: 'data.object.metadata',
+            type: 'object',
+            description: 'Key-value pairs attached to the charge',
+            required: false,
+          },
+          {
+            path: 'data.previous_attributes.amount_refunded',
+            type: 'number',
+            description: 'Refunded amount before this refund',
+            required: false,
+          },
+        ],
+      },
+      {
+        eventType: 'checkout.session.completed',
+        description:
+          'Sent when a customer completes a Checkout Session. For delayed payment methods check payment_status before fulfilling.',
+        fields: [
+          {
+            path: 'id',
+            type: 'string',
+            description:
+              'Unique event ID (evt_...); use it to deduplicate retries',
+            required: true,
+          },
+          {
+            path: 'object',
+            type: 'string',
+            description: "Always 'event'",
+            required: true,
+          },
+          {
+            path: 'type',
+            type: 'string',
+            description: 'Event type identifier',
+            required: true,
+          },
+          {
+            path: 'api_version',
+            type: 'string',
+            description: 'API version used to render data.object',
+            required: true,
+          },
+          {
+            path: 'created',
+            type: 'number',
+            description: 'Unix timestamp (seconds) when the event was created',
+            required: true,
+          },
+          {
+            path: 'livemode',
+            type: 'boolean',
+            description: 'false for test mode events',
+            required: true,
+          },
+          {
+            path: 'data.object.id',
+            type: 'string',
+            description: 'Checkout Session ID (cs_...)',
+            required: true,
+          },
+          {
+            path: 'data.object.mode',
+            type: 'string',
+            description: 'Session mode (payment, subscription or setup)',
+            required: true,
+          },
+          {
+            path: 'data.object.status',
+            type: 'string',
+            description: 'Session status (complete)',
+            required: true,
+          },
+          {
+            path: 'data.object.payment_status',
+            type: 'string',
+            description: 'paid, unpaid or no_payment_required',
+            required: true,
+          },
+          {
+            path: 'data.object.amount_total',
+            type: 'number',
+            description: 'Total amount in cents including tax and discounts',
+            required: true,
+          },
+          {
+            path: 'data.object.currency',
+            type: 'string',
+            description: 'Three-letter ISO currency code, lowercase',
+            required: true,
+          },
+          {
+            path: 'data.object.client_reference_id',
+            type: 'string',
+            description: 'Your reference passed when creating the session',
+            required: false,
+          },
+          {
+            path: 'data.object.customer',
+            type: 'string',
+            description: 'Customer ID (cus_...)',
+            required: false,
+          },
+          {
+            path: 'data.object.customer_details.email',
+            type: 'string',
+            description: 'Email entered by the customer',
+            required: false,
+          },
+          {
+            path: 'data.object.payment_intent',
+            type: 'string',
+            description: 'PaymentIntent ID for payment mode sessions',
+            required: false,
+          },
+          {
+            path: 'data.object.subscription',
+            type: 'string',
+            description: 'Subscription ID for subscription mode sessions',
+            required: false,
+          },
+          {
+            path: 'data.object.metadata',
+            type: 'object',
+            description: 'Key-value pairs set when the session was created',
+            required: false,
+          },
+        ],
+      },
+      {
+        eventType: 'customer.subscription.updated',
+        description:
+          'Sent when a subscription changes: plan or quantity changes, renewals, status transitions, or scheduling a cancellation. data.previous_attributes holds the old values of changed fields.',
+        fields: [
+          {
+            path: 'id',
+            type: 'string',
+            description:
+              'Unique event ID (evt_...); use it to deduplicate retries',
+            required: true,
+          },
+          {
+            path: 'object',
+            type: 'string',
+            description: "Always 'event'",
+            required: true,
+          },
+          {
+            path: 'type',
+            type: 'string',
+            description: 'Event type identifier',
+            required: true,
+          },
+          {
+            path: 'api_version',
+            type: 'string',
+            description: 'API version used to render data.object',
+            required: true,
+          },
+          {
+            path: 'created',
+            type: 'number',
+            description: 'Unix timestamp (seconds) when the event was created',
+            required: true,
+          },
+          {
+            path: 'livemode',
+            type: 'boolean',
+            description: 'false for test mode events',
+            required: true,
+          },
+          {
+            path: 'data.object.id',
+            type: 'string',
+            description: 'Subscription ID (sub_...)',
+            required: true,
+          },
+          {
+            path: 'data.object.status',
+            type: 'string',
+            description:
+              'Subscription status (active, past_due, canceled, etc.)',
+            required: true,
+          },
+          {
+            path: 'data.object.customer',
+            type: 'string',
+            description: 'Customer ID (cus_...)',
+            required: true,
+          },
+          {
+            path: 'data.object.cancel_at_period_end',
+            type: 'boolean',
+            description:
+              'true when the subscription will cancel at the end of the period',
+            required: true,
+          },
+          {
+            path: 'data.object.current_period_start',
+            type: 'number',
+            description: 'Unix timestamp of the current period start',
+            required: true,
+          },
+          {
+            path: 'data.object.current_period_end',
+            type: 'number',
+            description: 'Unix timestamp of the current period end',
+            required: true,
+          },
+          {
+            path: 'data.object.items.data[].price.id',
+            type: 'string',
+            description: 'Price ID of each subscription item',
+            required: true,
+          },
+          {
+            path: 'data.object.items.data[].price.unit_amount',
+            type: 'number',
+            description: 'Price per unit in cents',
+            required: true,
+          },
+          {
+            path: 'data.object.items.data[].quantity',
+            type: 'number',
+            description: 'Quantity of each subscription item',
+            required: true,
+          },
+          {
+            path: 'data.object.latest_invoice',
+            type: 'string',
+            description: 'Most recent invoice ID (in_...)',
+            required: false,
+          },
+          {
+            path: 'data.object.metadata',
+            type: 'object',
+            description: 'Key-value pairs attached to the subscription',
+            required: false,
+          },
+          {
+            path: 'data.previous_attributes',
+            type: 'object',
+            description: 'Previous values of the fields that changed',
+            required: true,
+          },
+        ],
+      },
+      {
+        eventType: 'invoice.payment_failed',
+        description:
+          'Sent when payment for an invoice fails, typically a subscription renewal. Stripe retries according to your Smart Retries settings.',
+        fields: [
+          {
+            path: 'id',
+            type: 'string',
+            description:
+              'Unique event ID (evt_...); use it to deduplicate retries',
+            required: true,
+          },
+          {
+            path: 'object',
+            type: 'string',
+            description: "Always 'event'",
+            required: true,
+          },
+          {
+            path: 'type',
+            type: 'string',
+            description: 'Event type identifier',
+            required: true,
+          },
+          {
+            path: 'api_version',
+            type: 'string',
+            description: 'API version used to render data.object',
+            required: true,
+          },
+          {
+            path: 'created',
+            type: 'number',
+            description: 'Unix timestamp (seconds) when the event was created',
+            required: true,
+          },
+          {
+            path: 'livemode',
+            type: 'boolean',
+            description: 'false for test mode events',
+            required: true,
+          },
+          {
+            path: 'data.object.id',
+            type: 'string',
+            description: 'Invoice ID (in_...)',
+            required: true,
+          },
+          {
+            path: 'data.object.status',
+            type: 'string',
+            description: 'Invoice status (open)',
+            required: true,
+          },
+          {
+            path: 'data.object.billing_reason',
+            type: 'string',
+            description:
+              'Why the invoice was created (subscription_cycle, subscription_create, manual, etc.)',
+            required: true,
+          },
+          {
+            path: 'data.object.amount_due',
+            type: 'number',
+            description: 'Amount due in cents',
+            required: true,
+          },
+          {
+            path: 'data.object.amount_paid',
+            type: 'number',
+            description: 'Amount paid so far in cents',
+            required: true,
+          },
+          {
+            path: 'data.object.currency',
+            type: 'string',
+            description: 'Three-letter ISO currency code, lowercase',
+            required: true,
+          },
+          {
+            path: 'data.object.attempt_count',
+            type: 'number',
+            description: 'Number of payment attempts made',
+            required: true,
+          },
+          {
+            path: 'data.object.next_payment_attempt',
+            type: 'number',
+            description:
+              'Unix timestamp of the next retry, or null when no retry is scheduled',
+            required: false,
+          },
+          {
+            path: 'data.object.customer',
+            type: 'string',
+            description: 'Customer ID (cus_...)',
+            required: true,
+          },
+          {
+            path: 'data.object.customer_email',
+            type: 'string',
+            description: 'Customer email at the time of invoicing',
+            required: false,
+          },
+          {
+            path: 'data.object.subscription',
+            type: 'string',
+            description: 'Subscription ID, for subscription invoices',
+            required: false,
+          },
+          {
+            path: 'data.object.hosted_invoice_url',
+            type: 'string',
+            description: 'URL where the customer can pay the invoice',
+            required: false,
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 @Injectable()
