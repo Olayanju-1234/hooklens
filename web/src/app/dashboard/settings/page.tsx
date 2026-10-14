@@ -8,7 +8,6 @@ import {
   WorkspaceMember,
   WorkspaceInvite,
   UserProfile,
-  NotificationPreferences,
   ApiError,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -24,8 +23,15 @@ import toast from "react-hot-toast";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
 const BASE_URL = API_URL.replace(/\/api\/?$/, "");
 
+function copyText(text: string, message: string) {
+  navigator.clipboard.writeText(text).then(
+    () => toast.success(message),
+    () => toast.error("Couldn't copy to clipboard"),
+  );
+}
+
 export default function SettingsPage() {
-  const { refreshWorkspaces, switchWorkspace, ingressSlug } = useAuth();
+  const { refreshWorkspaces, switchWorkspace, ingressSlug, currentWorkspaceId } = useAuth();
   const [workspaceList, setWorkspaceList] = useState<Workspace[]>([]);
   const [workspace, setWorkspace] = useState<
     (Workspace & { members: WorkspaceMember[] }) | null
@@ -56,6 +62,7 @@ export default function SettingsPage() {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [createdInviteUrl, setCreatedInviteUrl] = useState<string | null>(null);
 
   // Pending invites
   const [pendingInvites, setPendingInvites] = useState<WorkspaceInvite[]>([]);
@@ -79,7 +86,7 @@ export default function SettingsPage() {
 
   const contentRef = useFadeIn<HTMLDivElement>();
 
-  async function fetchAll() {
+  async function fetchAll(preferredWorkspaceId: string | null) {
     setLoading(true);
     setFetchError("");
     try {
@@ -89,10 +96,11 @@ export default function SettingsPage() {
       ]);
       setProfile(prof);
       setWorkspaceList(list);
-      if (list.length > 0) {
+      const target = list.find((w) => w.id === preferredWorkspaceId) ?? list[0];
+      if (target) {
         const [ws, invites] = await Promise.all([
-          workspacesApi.get(list[0].id),
-          workspacesApi.listInvites(list[0].id).catch(() => [] as WorkspaceInvite[]),
+          workspacesApi.get(target.id),
+          workspacesApi.listInvites(target.id).catch(() => [] as WorkspaceInvite[]),
         ]);
         setWorkspace(ws);
         setPendingInvites(invites);
@@ -109,8 +117,8 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
-    void fetchAll();
-  }, []);
+    void fetchAll(currentWorkspaceId);
+  }, [currentWorkspaceId]);
 
   async function handleChangePassword(e: FormEvent) {
     e.preventDefault();
@@ -188,10 +196,11 @@ export default function SettingsPage() {
       const remaining = workspaceList.filter((w) => w.id !== deleteTarget.id);
       setWorkspaceList(remaining);
       toast.success("Workspace deleted");
-      await refreshWorkspaces();
       if (remaining.length > 0) {
         switchWorkspace(remaining[0].id);
       } else {
+        // Clears the workspace cookie when nothing is left
+        await refreshWorkspaces();
         setWorkspace(null);
       }
     } catch (err) {
@@ -228,20 +237,19 @@ export default function SettingsPage() {
     if (!workspace) return;
     setInviteError("");
     setInviteSuccess(false);
+    setCreatedInviteUrl(null);
     setInviting(true);
     try {
-      await workspacesApi.invite(workspace.id, inviteEmail, inviteRole);
+      const invite = await workspacesApi.invite(workspace.id, inviteEmail, inviteRole);
       setInviteSuccess(true);
+      setCreatedInviteUrl(invite.inviteUrl || null);
       setInviteEmail("");
       setInviteRole("member");
-      toast.success("Invite sent");
-      // Refresh invites
-      const invites = await workspacesApi.listInvites(workspace.id).catch(() => []);
+      toast.success("Invite created");
+      const invites = await workspacesApi
+        .listInvites(workspace.id)
+        .catch(() => [] as WorkspaceInvite[]);
       setPendingInvites(invites);
-      setTimeout(() => {
-        setInviteSuccess(false);
-        setInviteOpen(false);
-      }, 1500);
     } catch (err) {
       setInviteError(
         err instanceof ApiError ? err.message : "Failed to send invite",
@@ -295,7 +303,7 @@ export default function SettingsPage() {
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <p className="text-sm text-text-error">{fetchError}</p>
         <button
-          onClick={() => void fetchAll()}
+          onClick={() => void fetchAll(currentWorkspaceId)}
           className="text-xs text-text-accent hover:underline cursor-pointer"
         >
           Retry
@@ -640,7 +648,15 @@ export default function SettingsPage() {
               title="Members"
               description={`${workspace.members.length} member${workspace.members.length !== 1 ? "s" : ""}`}
               action={
-                <Button size="sm" variant="secondary" onClick={() => setInviteOpen(!inviteOpen)}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setInviteOpen(!inviteOpen);
+                    setInviteSuccess(false);
+                    setCreatedInviteUrl(null);
+                  }}
+                >
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                     <path d="M7 2v10M2 7h10" />
                   </svg>
@@ -657,8 +673,21 @@ export default function SettingsPage() {
                   </div>
                 )}
                 {inviteSuccess && (
-                  <div className="mb-3 px-3 py-2 rounded-lg bg-bg-success text-text-success text-sm">
-                    Invite sent
+                  <div className="mb-3 px-3 py-2 rounded-lg bg-bg-success text-text-success text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span>
+                      Invite created.
+                      {createdInviteUrl && " If the email doesn't arrive, share the link directly."}
+                    </span>
+                    {createdInviteUrl && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => copyText(createdInviteUrl, "Invite link copied")}
+                      >
+                        Copy invite link
+                      </Button>
+                    )}
                   </div>
                 )}
                 <form onSubmit={(e) => void handleInvite(e)} className="space-y-3">
@@ -680,8 +709,17 @@ export default function SettingsPage() {
                     ]}
                   />
                   <div className="flex items-center gap-2">
-                    <Button type="button" variant="secondary" size="sm" onClick={() => setInviteOpen(false)}>
-                      Cancel
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setInviteOpen(false);
+                        setInviteSuccess(false);
+                        setCreatedInviteUrl(null);
+                      }}
+                    >
+                      {inviteSuccess ? "Done" : "Cancel"}
                     </Button>
                     <Button type="submit" size="sm" loading={inviting}>
                       Send Invite
@@ -766,6 +804,16 @@ export default function SettingsPage() {
                         {!expired && ` · Expires ${new Date(invite.expiresAt).toLocaleDateString()}`}
                       </p>
                     </div>
+                    {invite.inviteUrl && !expired && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => copyText(invite.inviteUrl, "Invite link copied")}
+                      >
+                        Copy invite link
+                      </Button>
+                    )}
                     <button
                       onClick={() => void handleRevokeInvite(invite.id)}
                       disabled={revokingInviteId === invite.id}

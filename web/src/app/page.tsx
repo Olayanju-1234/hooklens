@@ -9,6 +9,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import DecodeText from "@/components/landing/decode-text";
 import MagneticButton from "@/components/landing/magnetic-button";
+import { INGRESS_BASE } from "@/lib/api";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -512,7 +513,7 @@ export default function LandingPage() {
                 step: "01",
                 title: "Create an endpoint",
                 desc: "Pick your provider, get a unique ingress URL. Configure signature verification, retry policy, and forward destinations.",
-                code: "hookdash-web.vercel.app/in/usr_a3f8c1d9",
+                code: `${INGRESS_BASE.replace(/^https?:\/\//, "")}/in/usr_a3f8c1d9`,
               },
               {
                 step: "02",

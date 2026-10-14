@@ -1,11 +1,14 @@
 import Cookies from "js-cookie";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
+export const INGRESS_BASE = API_URL.replace(/\/api\/?$/, "");
 
 interface ApiOptions {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
+  // Public auth calls: a 401 there means bad credentials, not an expired session
+  skipAuthRedirect?: boolean;
 }
 
 class ApiError extends Error {
@@ -18,36 +21,55 @@ class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password", "/verify-email", "/auth/callback"];
+
+function handleUnauthorized() {
+  Cookies.remove("token");
+  Cookies.remove("ingressSlug");
+  Cookies.remove("workspaceId");
+  if (typeof window === "undefined") return;
+  const { pathname, search } = window.location;
+  if (PUBLIC_PATHS.includes(pathname)) return;
+  const next = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
+  window.location.href = `/login${next}`;
+}
+
+function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
   const token = Cookies.get("token");
   const workspaceId = Cookies.get("workspaceId");
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (workspaceId) headers["x-workspace-id"] = workspaceId;
+  return headers;
+}
+
+async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...authHeaders(),
     ...options.headers,
   };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  if (workspaceId) {
-    headers["x-workspace-id"] = workspaceId;
-  }
 
   const res = await fetch(`${API_URL}${path}`, {
     method: options.method || "GET",
     headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
   if (!res.ok) {
+    if (res.status === 401 && !options.skipAuthRedirect && headers.Authorization) {
+      handleUnauthorized();
+    }
     const data = (await res.json().catch(() => ({}))) as {
-      message?: string;
+      message?: string | string[];
     };
-    throw new ApiError(res.status, data.message || "Something went wrong");
+    const message = Array.isArray(data.message) ? data.message.join(", ") : data.message;
+    throw new ApiError(res.status, message || "Something went wrong");
   }
 
-  return res.json() as Promise<T>;
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 // Auth
@@ -56,33 +78,42 @@ export const auth = {
     request<{ accessToken: string; ingressSlug: string }>("/auth/signup", {
       method: "POST",
       body: { email, password },
+      skipAuthRedirect: true,
     }),
   login: (email: string, password: string) =>
     request<{ accessToken: string; ingressSlug: string }>("/auth/login", {
       method: "POST",
       body: { email, password },
+      skipAuthRedirect: true,
     }),
   forgotPassword: (email: string) =>
     request<{ sent: boolean }>("/auth/forgot-password", {
       method: "POST",
       body: { email },
+      skipAuthRedirect: true,
     }),
   resetPassword: (token: string, newPassword: string) =>
     request<{ success: boolean }>("/auth/reset-password", {
       method: "POST",
       body: { token, newPassword },
+      skipAuthRedirect: true,
     }),
   verifyEmail: (token: string) =>
     request<{ success: boolean }>("/auth/verify-email", {
       method: "POST",
       body: { token },
+      skipAuthRedirect: true,
     }),
+  providers: () =>
+    request<OAuthProviders>("/auth/providers", { skipAuthRedirect: true }),
   me: () =>
     request<UserProfile>("/auth/me"),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<{ success: boolean }>("/auth/change-password", {
       method: "POST",
       body: { currentPassword, newPassword },
+      // API answers 401 for a wrong current password
+      skipAuthRedirect: true,
     }),
   updateAvatar: (avatarUrl: string) =>
     request<{ avatarUrl: string }>("/auth/avatar", {
@@ -99,6 +130,11 @@ export const auth = {
       body: prefs,
     }),
 };
+
+export interface OAuthProviders {
+  google: boolean;
+  github: boolean;
+}
 
 export interface NotificationPreferences {
   emailOnFailedForward: boolean;
@@ -238,12 +274,14 @@ export const workspaces = {
   delete: (id: string) =>
     request<void>(`/workspaces/${id}`, { method: "DELETE" }),
   invite: (id: string, email: string, role?: string) =>
-    request<void>(`/workspaces/${id}/invite`, {
+    request<WorkspaceInvite>(`/workspaces/${id}/invite`, {
       method: "POST",
       body: { email, role },
     }),
   acceptInvite: (token: string) =>
-    request<void>(`/workspaces/accept-invite/${token}`, { method: "POST" }),
+    request<{ workspaceId: string }>(`/workspaces/accept-invite/${token}`, {
+      method: "POST",
+    }),
   removeMember: (workspaceId: string, userId: string) =>
     request<void>(`/workspaces/${workspaceId}/members/${userId}`, {
       method: "DELETE",
@@ -263,6 +301,7 @@ export interface WorkspaceInvite {
   role: string;
   expiresAt: string;
   createdAt: string;
+  inviteUrl: string;
 }
 
 // Forward Destinations
@@ -377,7 +416,9 @@ export const alertChannels = {
   delete: (id: string) =>
     request<void>(`/alert-channels/${id}`, { method: "DELETE" }),
   test: (id: string) =>
-    request<void>(`/alert-channels/${id}/test`, { method: "POST" }),
+    request<{ success: boolean }>(`/alert-channels/${id}/test`, {
+      method: "POST",
+    }),
 };
 
 // Alert Rules
@@ -449,11 +490,7 @@ export const testPayloads = {
   send: (provider: string, eventType: string, customPayload?: Record<string, unknown>) =>
     request<{ status: string }>(
       `/test-payloads/${provider}/${eventType}/send`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: customPayload ? JSON.stringify(customPayload) : undefined,
-      },
+      { method: "POST", body: customPayload },
     ),
 };
 
@@ -601,7 +638,7 @@ export interface BagsStatus {
     totalEventsForwarded: number;
     totalEventsFiltered: number;
     launchesDetected: number;
-    recentTokens: { mint: string; name: string; symbol: string; creator: string; receivedAt: string }[];
+    recentTokens: { mint: string; name: string; symbol: string; creator: string | null; receivedAt: string }[];
   };
 }
 
@@ -618,21 +655,23 @@ export const bags = {
 
 // Event Export — must fetch with auth header, then trigger blob download
 async function downloadExport(format: "csv" | "json", params?: Record<string, string>) {
-  const token = Cookies.get("token");
-  const workspaceId = Cookies.get("workspaceId");
-  const query = params ? "?" + new URLSearchParams(params).toString() : "";
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  if (workspaceId) headers["x-workspace-id"] = workspaceId;
+  const qs = params ? new URLSearchParams(params).toString() : "";
+  const query = qs ? `?${qs}` : "";
+  const headers = authHeaders();
   const res = await fetch(`${API_URL}/events/export/${format}${query}`, { headers });
-  if (!res.ok) throw new ApiError(res.status, await res.text());
+  if (!res.ok) {
+    if (res.status === 401 && headers.Authorization) handleUnauthorized();
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new ApiError(res.status, data.message || "Export failed");
+  }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = `events.${format}`;
   a.click();
-  URL.revokeObjectURL(url);
+  // Revoking synchronously can cancel the download in some browsers
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export const eventExport = {

@@ -133,10 +133,10 @@ export default function BagsPage() {
                             </span>
                           </td>
                           <td className="px-5 py-3 text-[12px] font-mono text-text-secondary">
-                            {t.mint.slice(0, 8)}...{t.mint.slice(-4)}
+                            {t.mint ? `${t.mint.slice(0, 8)}...${t.mint.slice(-4)}` : "—"}
                           </td>
                           <td className="px-5 py-3 text-[12px] font-mono text-text-secondary">
-                            {t.creator.slice(0, 8)}...{t.creator.slice(-4)}
+                            {t.creator ? `${t.creator.slice(0, 8)}...${t.creator.slice(-4)}` : "—"}
                           </td>
                           <td className="px-5 py-3 text-[12px] text-text-tertiary text-right whitespace-nowrap">
                             {new Date(t.receivedAt).toLocaleTimeString()}

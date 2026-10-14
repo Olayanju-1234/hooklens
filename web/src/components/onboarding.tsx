@@ -3,15 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { endpoints as endpointsApi, Endpoint } from "@/lib/api";
+import { endpoints as endpointsApi, Endpoint, INGRESS_BASE } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import toast from "react-hot-toast";
 import gsap from "gsap";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
-const BASE_URL = API_URL.replace(/\/api\/?$/, "");
 
 const PROVIDERS = [
   { value: "stripe", label: "Stripe" },
@@ -79,8 +76,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   }
 
   function handleCopyUrl() {
-    const url = `${BASE_URL}/in/${ingressSlug}`;
-    navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(ingressUrl);
     setCopied(true);
     toast.success("Copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
@@ -101,7 +97,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     router.push("/dashboard/events");
   }
 
-  const ingressUrl = `${BASE_URL}/in/${ingressSlug}`;
+  const ingressUrl = createdEndpoint
+    ? `${INGRESS_BASE}/in/${ingressSlug}/${createdEndpoint.id}`
+    : `${INGRESS_BASE}/in/${ingressSlug}`;
 
   return (
     <div className="flex items-center justify-center min-h-[70vh] px-4">

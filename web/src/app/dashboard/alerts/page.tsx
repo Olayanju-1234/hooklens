@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
+import toast from "react-hot-toast";
 import {
   alertChannels as channelsApi,
   alertRules as rulesApi,
@@ -229,6 +230,9 @@ export default function AlertsPage() {
     try {
       await channelsApi.delete(id);
       setChannels((prev) => prev.filter((c) => c.id !== id));
+      toast.success("Channel deleted");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to delete channel");
     } finally {
       setDeletingChannelId(null);
     }
@@ -237,7 +241,14 @@ export default function AlertsPage() {
   async function handleTestChannel(id: string) {
     setTestingChannelId(id);
     try {
-      await channelsApi.test(id);
+      const res = await channelsApi.test(id);
+      if (res?.success === false) {
+        toast.error("Test notification failed — check the channel configuration");
+      } else {
+        toast.success("Test notification sent");
+      }
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to send test notification");
     } finally {
       setTestingChannelId(null);
     }
@@ -305,10 +316,14 @@ export default function AlertsPage() {
   }
 
   async function handleToggleRule(rule: AlertRule) {
-    const updated = await rulesApi.update(rule.id, {
-      isActive: !rule.isActive,
-    });
-    setRules((prev) => prev.map((r) => (r.id === rule.id ? updated : r)));
+    try {
+      const updated = await rulesApi.update(rule.id, {
+        isActive: !rule.isActive,
+      });
+      setRules((prev) => prev.map((r) => (r.id === rule.id ? updated : r)));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to update rule");
+    }
   }
 
   async function handleDeleteRule(id: string) {
@@ -316,6 +331,9 @@ export default function AlertsPage() {
     try {
       await rulesApi.delete(id);
       setRules((prev) => prev.filter((r) => r.id !== id));
+      toast.success("Rule deleted");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to delete rule");
     } finally {
       setDeletingRuleId(null);
     }

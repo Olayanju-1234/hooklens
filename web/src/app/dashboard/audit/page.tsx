@@ -19,11 +19,13 @@ export default function AuditLogPage() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [page, setPage] = useState(0);
   const [actionFilter, setActionFilter] = useState("");
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
       const res = await auditLogs.list(
         PAGE_SIZE,
@@ -32,8 +34,8 @@ export default function AuditLogPage() {
       );
       setLogs(res.items);
       setTotal(res.total);
-    } catch {
-      // silently fail
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load audit log");
     } finally {
       setLoading(false);
     }
@@ -55,7 +57,7 @@ export default function AuditLogPage() {
         <div>
           <h1 className="text-xl font-bold text-text-primary">Audit Log</h1>
           <p className="text-sm text-text-secondary mt-1">
-            {total} total events
+            {error ? "—" : `${total} total events`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -87,6 +89,16 @@ export default function AuditLogPage() {
 
       {loading ? (
         <ListSkeleton rows={8} />
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center h-64 gap-3">
+          <p className="text-sm text-text-error">{error}</p>
+          <button
+            onClick={() => void fetchLogs()}
+            className="text-xs text-text-accent hover:underline cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
       ) : logs.length === 0 ? (
         <EmptyState
           title="No audit events"
