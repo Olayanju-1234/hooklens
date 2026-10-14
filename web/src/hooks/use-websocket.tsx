@@ -13,7 +13,7 @@ import Cookies from "js-cookie";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:3000";
 
-interface LiveEvent {
+export interface LiveEvent {
   id: string;
   provider: string | null;
   eventType: string | null;
@@ -23,14 +23,21 @@ interface LiveEvent {
   method: string;
   path: string;
   bodyPreview: string;
+  forwardCode?: number | null;
+  forwardLatency?: number | null;
+  attempts?: number;
 }
 
-interface ForwardResult {
+export interface ForwardResult {
   eventId: string;
   forwardStatus: string;
   forwardCode: number | null;
   forwardLatency: number | null;
 }
+
+export type SocketMessage =
+  | { kind: "webhook"; event: LiveEvent }
+  | { kind: "forward_result"; result: ForwardResult };
 
 interface WebSocketContextType {
   connected: boolean;
@@ -38,12 +45,15 @@ interface WebSocketContextType {
   clearEvents: () => void;
   addEvents: (events: LiveEvent[]) => void;
   removeEvent: (id: string) => void;
+  /** Raw socket messages as they arrive, for views that animate per message. */
+  subscribe: (fn: (m: SocketMessage) => void) => () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
+  const listeners = useRef(new Set<(m: SocketMessage) => void>());
   const [connected, setConnected] = useState(false);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
 
@@ -51,7 +61,13 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     setLiveEvents((prev) =>
       prev.map((e) =>
         e.id === result.eventId
-          ? { ...e, forwardStatus: result.forwardStatus }
+          ? {
+              ...e,
+              forwardStatus: result.forwardStatus,
+              forwardCode: result.forwardCode,
+              forwardLatency: result.forwardLatency,
+              attempts: (e.attempts ?? 0) + 1,
+            }
           : e,
       ),
     );
@@ -72,11 +88,13 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     socket.on("disconnect", () => setConnected(false));
 
     socket.on("webhook", (event: LiveEvent) => {
-      setLiveEvents((prev) => [event, ...prev].slice(0, 100));
+      setLiveEvents((prev) => [event, ...prev.filter((e) => e.id !== event.id)].slice(0, 100));
+      listeners.current.forEach((fn) => fn({ kind: "webhook", event }));
     });
 
     socket.on("forward_result", (result: ForwardResult) => {
       updateForwardStatus(result);
+      listeners.current.forEach((fn) => fn({ kind: "forward_result", result }));
     });
 
     socketRef.current = socket;
@@ -101,9 +119,16 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     setLiveEvents((prev) => prev.filter((e) => e.id !== id));
   }, []);
 
+  const subscribe = useCallback((fn: (m: SocketMessage) => void) => {
+    listeners.current.add(fn);
+    return () => {
+      listeners.current.delete(fn);
+    };
+  }, []);
+
   return (
     <WebSocketContext.Provider
-      value={{ connected, liveEvents, clearEvents, addEvents, removeEvent }}
+      value={{ connected, liveEvents, clearEvents, addEvents, removeEvent, subscribe }}
     >
       {children}
     </WebSocketContext.Provider>

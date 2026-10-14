@@ -48,7 +48,7 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60"
+        className="absolute inset-0 bg-[rgba(19,22,25,0.35)]"
         onClick={loading ? undefined : onCancel}
       />
 

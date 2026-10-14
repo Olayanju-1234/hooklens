@@ -11,12 +11,12 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<Variant, string> = {
   primary:
-    "bg-bg-accent text-text-inverse hover:bg-bg-accent-hover active:scale-[0.97]",
+    "bg-bg-accent text-text-inverse border border-bg-accent hover:bg-bg-accent-hover active:scale-[0.98]",
   secondary:
-    "bg-bg-secondary text-text-primary border border-border-primary hover:border-border-secondary hover:bg-bg-hover active:scale-[0.97]",
+    "bg-bg-secondary text-text-primary border border-border-secondary hover:border-text-primary active:scale-[0.98]",
   ghost: "text-text-secondary hover:bg-bg-hover hover:text-text-primary",
   danger:
-    "bg-bg-error text-text-error border border-border-primary hover:bg-red-500/10 active:scale-[0.97]",
+    "bg-bg-secondary text-text-error border border-[color-mix(in_srgb,var(--s-bad)_35%,transparent)] hover:bg-bg-error active:scale-[0.98]",
 };
 
 const sizeStyles: Record<Size, string> = {
@@ -41,7 +41,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
-        className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium
+        className={`inline-flex items-center justify-center gap-2 rounded-sm font-semibold
           transition-all duration-150 cursor-pointer
           disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary

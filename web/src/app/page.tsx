@@ -1,702 +1,543 @@
 "use client";
 
-import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Cookies from "js-cookie";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
-import DecodeText from "@/components/landing/decode-text";
-import MagneticButton from "@/components/landing/magnetic-button";
+import type { ChapterId } from "@/components/flight-deck/hub-scene";
+import { Radar } from "@/components/flight-deck/radar";
+import { simRadarModel } from "@/components/flight-deck/sim-radar";
+import { RecorderBar } from "@/components/flight-deck/recorder-bar";
+import { Flap } from "@/components/flight-deck/split-flap";
+import { HookMark } from "@/components/flight-deck/hook-mark";
+import { createSim, useReducedMotion, useSimReadout, useWebGL } from "@/components/flight-deck/use-sim";
+import { DESTINATIONS, SOURCES } from "@/components/flight-deck/sim/catalog";
 import { INGRESS_BASE } from "@/lib/api";
 
-gsap.registerPlugin(ScrollTrigger);
+const HubScene = dynamic(() => import("@/components/flight-deck/hub-scene"), {
+  ssr: false,
+  loading: () => <p className="noscript-note">Loading chart…</p>,
+});
 
-const ParticleNetwork = dynamic(
-  () => import("@/components/landing/particle-network"),
-  { ssr: false },
-);
+const OUTAGE_TARGET = "billing";
+const REPO = "https://github.com/Olayanju-1234/hooklens";
+const INGRESS_HOST = INGRESS_BASE.replace(/^https?:\/\//, "");
 
-function useScrollReveal() {
-  useEffect(() => {
-    const els = document.querySelectorAll("[data-reveal]");
-    els.forEach((el) => {
-      gsap.fromTo(
-        el,
-        { opacity: 0, y: 32 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.65,
-          ease: "power3.out",
-          scrollTrigger: { trigger: el, start: "top 88%", once: true },
-        },
-      );
-    });
-    return () => ScrollTrigger.getAll().forEach((t) => t.kill());
-  }, []);
+interface BoardRow {
+  label: string;
+  kind: string;
+  scheme: string;
+  header: string;
+  today: boolean;
 }
 
-/* ─── Live event feed ───────────────────────────────────── */
-const WEBHOOK_EVENTS = [
-  { type: "charge.success",      provider: "paystack",    sig: true,  dest: "api.myapp.com",     status: 200, ms: 42  },
-  { type: "transfer.completed",  provider: "paystack",    sig: true,  dest: "staging.myapp.com", status: 200, ms: 127 },
-  { type: "charge.failed",       provider: "paystack",    sig: false, dest: null,                status: null, ms: null },
-  { type: "token_launch",        provider: "bags",        sig: true,  dest: "api.myapp.com",     status: 200, ms: 38  },
-  { type: "payment.successful",  provider: "flutterwave", sig: true,  dest: "partner-api.co",    status: 502, ms: null },
-  { type: "swap",                provider: "bags",        sig: true,  dest: "api.myapp.com",     status: 200, ms: 29  },
-  { type: "invoice.created",     provider: "mono",        sig: true,  dest: "api.myapp.com",     status: 200, ms: 55  },
-  { type: "fee_claim_available", provider: "bags",        sig: true,  dest: "bot.myapp.com",     status: 200, ms: 18  },
+const BOARD: BoardRow[] = [
+  ...SOURCES.slice(0, 3).map((s) => ({ label: s.label, kind: s.kind, scheme: s.scheme, header: s.header, today: true })),
+  { label: "Mono", kind: "open banking", scheme: "HMAC-SHA512", header: "mono-webhook-secret", today: true },
+  ...SOURCES.slice(3).map((s) => ({ label: s.label, kind: s.kind, scheme: s.scheme, header: s.header, today: s.id === "bags" })),
 ];
 
-const PROVIDER_COLORS: Record<string, string> = {
-  paystack:    "#10b981",
-  flutterwave: "#f59e0b",
-  mono:        "#3b82f6",
-  bags:        "#a855f7",
-};
-
-function LiveFeed() {
-  const [feed, setFeed] = useState<typeof WEBHOOK_EVENTS>([]);
-  const idx = useRef(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFeed((prev) => {
-        const next = [WEBHOOK_EVENTS[idx.current % WEBHOOK_EVENTS.length], ...prev].slice(0, 7);
-        idx.current++;
-        return next;
-      });
-    }, 1300);
-    return () => clearInterval(interval);
-  }, []);
-
+function Strip(props: {
+  n: string;
+  code: string;
+  tone: string;
+  eyebrow: string;
+  title: string;
+  children: React.ReactNode;
+  fields?: [string, string][];
+  actions?: React.ReactNode;
+}) {
   return (
-    <div className="space-y-px">
-      {feed.map((evt, i) => (
-        <div
-          key={`${evt.type}-${i}`}
-          className="grid grid-cols-[8px_140px_80px_1fr_52px_48px] items-center gap-3 px-4 py-2 font-mono text-[11px] sm:text-[12px] transition-all"
-          style={{ opacity: Math.max(1 - i * 0.13, 0.15) }}
-        >
-          <span
-            className="w-1.5 h-1.5 rounded-full shrink-0"
-            style={{ background: evt.sig ? (PROVIDER_COLORS[evt.provider] ?? "#2ec4a2") : "#ef4444" }}
-          />
-          <span className="text-[#ececea] truncate">{evt.type}</span>
-          <span className="truncate" style={{ color: PROVIDER_COLORS[evt.provider] ?? "#6b6a65" }}>{evt.provider}</span>
-          {evt.dest ? (
-            <>
-              <span className="text-[#3a3a36] truncate">{evt.dest}</span>
-              <span className={`text-right ${evt.status === 200 ? "text-[#2ec4a2]" : "text-yellow-400"}`}>{evt.status}</span>
-              <span className="text-[#2a2a28] text-right">{evt.ms ? `${evt.ms}ms` : "—"}</span>
-            </>
-          ) : (
-            <>
-              <span className="text-red-400/50 col-span-2">blocked — invalid signature</span>
-              <span />
-            </>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ─── Bags event feed ───────────────────────────────────── */
-const BAGS_EVENTS = [
-  { type: "token_launch",        mint: "7xKq...f4Rp", name: "MOON",   ms: 12  },
-  { type: "swap",                mint: "3mPz...w9Vc", name: "DOGE2",  ms: 8   },
-  { type: "fee_claim_available", mint: "9aLn...k2Qx", name: "PEPE",   ms: 5   },
-  { type: "token_launch",        mint: "2bYt...r7Md", name: "BONK2",  ms: 21  },
-  { type: "swap",                mint: "5jNw...p1Zs", name: "WIF",    ms: 9   },
-];
-
-function BagsFeed() {
-  const [feed, setFeed] = useState<typeof BAGS_EVENTS>([]);
-  const idx = useRef(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFeed((prev) => {
-        const next = [BAGS_EVENTS[idx.current % BAGS_EVENTS.length], ...prev].slice(0, 5);
-        idx.current++;
-        return next;
-      });
-    }, 1600);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="space-y-px">
-      {feed.map((evt, i) => (
-        <div
-          key={`${evt.type}-${i}`}
-          className="flex items-center gap-4 px-4 py-2.5 font-mono text-[12px]"
-          style={{ opacity: Math.max(1 - i * 0.18, 0.15) }}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
-          <span className="text-purple-300 w-28 shrink-0">{evt.type}</span>
-          <span className="text-[#ececea] w-16 shrink-0">${evt.name}</span>
-          <span className="text-[#4a4a45] flex-1 truncate">{evt.mint}</span>
-          <span className="text-purple-500/60">{evt.ms}ms</span>
-          <span className="text-emerald-500/80 text-[10px]">200</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ─── Typed code block ──────────────────────────────────── */
-const TYPED_CODE_LINES = [
-  { text: "import { Hookdash } from 'hookdash-sdk'", delay: 0 },
-  { text: "", delay: 200 },
-  { text: "const hd = new Hookdash({", delay: 400 },
-  { text: "  apiKey: process.env.HOOKDASH_KEY", delay: 600 },
-  { text: "})", delay: 800 },
-  { text: "", delay: 1000 },
-  { text: "const events = await hd.events.list({", delay: 1200 },
-  { text: "  provider: 'paystack',", delay: 1400 },
-  { text: "  status: 'failed'", delay: 1600 },
-  { text: "})", delay: 1800 },
-  { text: "", delay: 2000 },
-  { text: "// Replay all failed events", delay: 2200 },
-  { text: "for (const evt of events.data) {", delay: 2400 },
-  { text: "  await hd.events.replay(evt.id)", delay: 2600 },
-  { text: "}", delay: 2800 },
-];
-
-function TypedCode() {
-  const [visibleCount, setVisibleCount] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          TYPED_CODE_LINES.forEach((_, i) => {
-            setTimeout(() => setVisibleCount((p) => Math.max(p, i + 1)), TYPED_CODE_LINES[i].delay);
-          });
-          observer.unobserve(el);
-        }
-      },
-      { threshold: 0.3 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  const highlight = (line: string) =>
-    line
-      .replace(/(import|from|const|await|for|of|new)/g, '<span class="text-[#c4b5fd]">$1</span>')
-      .replace(/'([^']*)'/g, "'<span class=\"text-[#f5d78a]\">$1</span>'")
-      .replace(/(\/\/.*)/g, '<span class="text-[#4a4a45]">$1</span>')
-      .replace(/(\{|\}|\(|\))/g, '<span class="text-[#6b6a65]">$1</span>');
-
-  return (
-    <div ref={ref} className="relative">
-      <div className="absolute -inset-px rounded-2xl bg-gradient-to-b from-[#2ec4a2]/15 via-transparent to-transparent" />
-      <div className="relative rounded-2xl bg-[#0a0a09] border border-[#1e1e1c] overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[#1e1e1c]">
-          <span className="text-[11px] text-[#4a4a45] font-mono">replay-failed.ts</span>
-          <span className="text-[10px] text-[#2ec4a2] font-mono">hookdash-sdk</span>
-        </div>
-        <div className="p-5 font-mono text-[12px] sm:text-[13px] leading-7 min-h-[300px]">
-          {TYPED_CODE_LINES.slice(0, visibleCount).map((line, i) => (
-            <div key={i} className="flex gap-4 animate-[fadeSlideIn_0.3s_ease-out]">
-              <span className="text-[#2a2a28] select-none w-5 text-right shrink-0 text-[11px]">{i + 1}</span>
-              {line.text ? (
-                <span className="text-[#9c9b96]" dangerouslySetInnerHTML={{ __html: highlight(line.text) }} />
-              ) : <span>&nbsp;</span>}
-            </div>
-          ))}
-          <div className="flex gap-4">
-            <span className="text-[#2a2a28] select-none w-5 text-right shrink-0 text-[11px]">{visibleCount + 1}</span>
-            <span className="text-[#2ec4a2] animate-pulse">|</span>
-          </div>
-        </div>
+    <article className="strip" data-tone={props.tone}>
+      <div className="strip-code" aria-hidden>
+        <b>{props.code}</b>
+        <span>{props.n}</span>
       </div>
-    </div>
+      <div className="strip-body">
+        <div className="strip-eyebrow">{props.eyebrow}</div>
+        <h2>{props.title}</h2>
+        {props.children}
+        {props.fields && (
+          <dl className="strip-fields">
+            {props.fields.map(([k, v]) => (
+              <div key={k}>
+                <dt>{k}</dt>
+                <dd>{v}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {props.actions && <div className="strip-actions">{props.actions}</div>}
+      </div>
+    </article>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════
-   MAIN PAGE
-   ═══════════════════════════════════════════════════════════ */
 export default function LandingPage() {
   const router = useRouter();
-  const heroRef = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
+  const webgl = useWebGL();
+  const [sim] = useState(() => createSim(7));
+  const readout = useSimReadout(sim);
+  const [radarModel] = useState(() => simRadarModel(sim));
+  const [chapter, setChapter] = useState<ChapterId>("hero");
+  const [stageActive, setStageActive] = useState(true);
+  const [pinned, setPinned] = useState(true);
+  const [motionOptIn, setMotionOptIn] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const autoOutage = useRef(false);
+  const [boardVisible, setBoardVisible] = useState(false);
+  const boardRef = useRef<HTMLDivElement>(null);
+
+  const { stats, offset, mode } = readout;
+  const rewound = offset < -0.05;
+  const frozen = reduced && !motionOptIn;
 
   useEffect(() => {
-    const token = Cookies.get("token");
-    if (token) router.replace("/dashboard");
+    if (Cookies.get("token")) router.replace("/dashboard");
   }, [router]);
 
   useEffect(() => {
-    if (!heroRef.current) return;
-    gsap.fromTo(
-      "[data-hero]",
-      { opacity: 0, y: 40 },
-      { opacity: 1, y: 0, duration: 0.8, stagger: 0.12, ease: "power4.out" },
+    sim.clock.setFrozen(frozen);
+  }, [sim, frozen]);
+
+  useEffect(() => {
+    const sections = Array.from(document.querySelectorAll<HTMLElement>("[data-chapter]"));
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) if (e.isIntersecting) setChapter(e.target.getAttribute("data-chapter") as ChapterId);
+      },
+      { rootMargin: "-45% 0px -45% 0px" },
     );
+    sections.forEach((s) => io.observe(s));
+    const wrap = wrapRef.current;
+    const stageIo = new IntersectionObserver(([e]) => setStageActive(e.isIntersecting), { threshold: 0 });
+    if (wrap) stageIo.observe(wrap);
+    const board = boardRef.current;
+    const boardIo = new IntersectionObserver(([e]) => e.isIntersecting && setBoardVisible(true), { threshold: 0.3 });
+    if (board) boardIo.observe(board);
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (wrap) setPinned(wrap.getBoundingClientRect().bottom > window.innerHeight - 2);
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      io.disconnect();
+      stageIo.disconnect();
+      boardIo.disconnect();
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+    };
   }, []);
 
-  useScrollReveal();
+  const act = useCallback(
+    (type: "forge" | "burst" | "replay-dead") => {
+      if (sim.clock.rewound) return;
+      sim.world.act(type, sim.clock.live);
+    },
+    [sim],
+  );
+
+  const toggleDest = useCallback(
+    (id: string) => {
+      if (sim.clock.rewound) return;
+      const down = sim.world.isDown(id, sim.clock.live);
+      sim.world.act(down ? "restore" : "outage", sim.clock.live, { dest: id });
+    },
+    [sim],
+  );
+
+  const restoreAndReplay = useCallback(() => {
+    if (sim.clock.rewound) return;
+    const t = sim.clock.live;
+    for (const d of DESTINATIONS) if (sim.world.isDown(d.id, t)) sim.world.act("restore", t, { dest: d.id });
+    sim.world.act("replay-dead", t + 0.6);
+  }, [sim]);
+
+  useEffect(() => {
+    if (chapter !== "holding" || autoOutage.current || sim.clock.rewound) return;
+    autoOutage.current = true;
+    if (!sim.world.isDown(OUTAGE_TARGET, sim.clock.live)) sim.world.act("outage", sim.clock.live, { dest: OUTAGE_TARGET });
+  }, [chapter, sim]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!stageActive || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement;
+      if (el.closest("input, textarea, select, [contenteditable]")) return;
+      if (e.key === "ArrowLeft") sim.clock.step(-5);
+      else if (e.key === "ArrowRight") sim.clock.step(5);
+      else if (e.key.toLowerCase() === "l") sim.clock.goLive();
+      else if (e.key.toLowerCase() === "f") act("forge");
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sim, stageActive, act]);
+
+  const billingDown = !!stats?.dests[OUTAGE_TARGET]?.down;
+  const anyDown = stats ? Object.values(stats.dests).some((d) => d.down) : false;
+  const lockTitle = rewound ? "Return to live to change the simulation" : undefined;
+  const billing = DESTINATIONS.find((d) => d.id === OUTAGE_TARGET)!;
 
   return (
-    <div data-theme="dark" className="min-h-screen bg-[#0a0a09] text-[#ececea] overflow-x-hidden">
+    <div className="fd-root">
+      <header className="fd-top">
+        <Link href="/" className="fd-mark" aria-label="Hookdash home">
+          <HookMark />
+          hookdash
+        </Link>
+        <nav className="fd-nav" aria-label="Site">
+          <a href="#sources">Sources</a>
+          <Link href="/demo">Live demo</Link>
+          <a href={REPO} target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+          <Link href="/login">Log in</Link>
+        </nav>
+        <Link href="/signup" className="btn">
+          Get an ingress URL
+        </Link>
+      </header>
 
-      {/* ── Nav ─────────────────────────────────────────── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-[#0a0a09]/80 border-b border-white/[0.04]">
-        <div className="flex items-center justify-between px-6 sm:px-10 py-4 max-w-7xl mx-auto">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-[#2ec4a2] flex items-center justify-center">
-              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                <path d="M2 7h3l2-4 2 8 2-4h3" stroke="#0a0a09" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <span className="text-sm font-semibold tracking-tight">Hookdash</span>
-          </Link>
-          <div className="flex items-center gap-6">
-            <a
-              href="https://github.com/Olayanju-1234/hooklens"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-1.5 text-xs text-[#6b6a65] hover:text-[#ececea] transition-colors"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" />
-              </svg>
-              GitHub
-            </a>
-            <Link href="/login" className="text-xs text-[#6b6a65] hover:text-[#ececea] transition-colors">Log in</Link>
-            <MagneticButton
-              href="/signup"
-              className="px-4 py-2 rounded-lg text-xs font-medium bg-[#2ec4a2] text-[#0a0a09] hover:bg-[#44d4b4] transition-colors"
-            >
-              Get started
-            </MagneticButton>
-          </div>
-        </div>
-      </nav>
-
-      {/* ── Hero ────────────────────────────────────────── */}
-      <section ref={heroRef} className="relative min-h-screen flex items-center justify-center pt-16">
-        <ParticleNetwork />
-        <div className="relative z-10 max-w-5xl mx-auto px-6 sm:px-10 text-center">
-
-          <div data-hero className="opacity-0 mb-8">
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#2ec4a2]/20 bg-[#2ec4a2]/5 text-[11px] text-[#2ec4a2] font-mono">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-[#2ec4a2] animate-ping opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#2ec4a2]" />
-              </span>
-              Open source &middot; Self-hostable &middot; Bags ecosystem
-            </span>
-          </div>
-
-          <h1 data-hero className="opacity-0 text-5xl sm:text-7xl lg:text-[5.5rem] font-bold leading-[0.95] tracking-tighter">
-            <span className="block">Stop debugging</span>
-            <span className="block mt-2 text-[#2ec4a2]">webhooks</span>
-            <span className="block mt-2 text-[#3a3a36]">blindly.</span>
-          </h1>
-
-          <p data-hero className="opacity-0 mt-8 text-base sm:text-lg text-[#6b6a65] leading-relaxed max-w-xl mx-auto">
-            One ingress URL. Your providers point at it — Hookdash handles the rest.
-            HMAC verification, exponential backoff, dead letter queuing, one-click replay.
-            Every event. Every header. Every byte.
-          </p>
-
-          <div data-hero className="opacity-0 mt-12 flex flex-wrap items-center justify-center gap-4">
-            <MagneticButton
-              href="/signup"
-              className="group px-8 py-4 rounded-xl text-sm font-semibold bg-[#2ec4a2] text-[#0a0a09] hover:bg-[#44d4b4] transition-all hover:shadow-[0_0_40px_rgba(46,196,162,0.3)] active:scale-[0.97]"
-              strength={0.2}
-            >
-              Start for free
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="inline ml-2 transition-transform group-hover:translate-x-1">
-                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </MagneticButton>
-            <MagneticButton
-              href="https://github.com/Olayanju-1234/hooklens"
-              className="px-8 py-4 rounded-xl text-sm font-medium border border-[#222220] text-[#9c9b96] hover:text-[#ececea] hover:border-[#333330] transition-all"
-              strength={0.15}
-            >
-              View source
-            </MagneticButton>
-          </div>
-
-          <div data-hero className="opacity-0 mt-10 flex items-center justify-center gap-5 text-[11px] text-[#3a3a36] font-mono">
-            {["Paystack", "Flutterwave", "Mono", "Bags", "+ any webhook"].map((p) => (
-              <span key={p} className={`hover:text-[#6b6a65] transition-colors cursor-default ${p === "Bags" ? "text-purple-600 hover:text-purple-400" : ""}`}>{p}</span>
-            ))}
-          </div>
+      <div className="stage-wrap" ref={wrapRef}>
+        <div className="stage">
+          {webgl === true && (
+            <HubScene
+              world={sim.world}
+              clock={sim.clock}
+              stats={stats}
+              chapter={chapter}
+              reducedMotion={reduced}
+              onToggleDest={toggleDest}
+              active={stageActive}
+            />
+          )}
+          {webgl === false && (
+            <Radar
+              className="stage-2d"
+              model={radarModel}
+              reducedMotion={frozen}
+              onToggleDest={toggleDest}
+              label="Top-down chart of simulated webhook traffic"
+            />
+          )}
         </div>
 
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-          <span className="text-[10px] text-[#2a2a28] font-mono tracking-wider uppercase">scroll</span>
-          <div className="w-px h-8 bg-gradient-to-b from-[#2a2a28] to-transparent" />
-        </div>
-      </section>
-
-      {/* ── Full-width live feed ─────────────────────────── */}
-      <section className="border-y border-[#111110] bg-[#080807]">
-        <div className="max-w-6xl mx-auto px-6 sm:px-10 py-6">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[10px] text-[#3a3a36] font-mono uppercase tracking-wider">Example event stream</span>
-            <span className="text-[10px] text-[#3a3a36] font-mono">simulated</span>
-          </div>
-          <div className="border border-[#141413] rounded-xl overflow-hidden divide-y divide-[#0f0f0e]">
-            <div className="grid grid-cols-[8px_140px_80px_1fr_52px_48px] gap-3 px-4 py-2 bg-[#0c0c0b]">
-              {["", "event", "provider", "destination", "status", "lat"].map((h, i) => (
-                <span key={i} className="text-[9px] uppercase tracking-widest text-[#2a2a28] font-medium">{h}</span>
-              ))}
-            </div>
-            <LiveFeed />
-          </div>
-        </div>
-      </section>
-
-      {/* ── Feature 1: Real-time capture ─────────────────── */}
-      <section className="border-b border-[#111110]">
-        <div className="max-w-6xl mx-auto px-6 sm:px-10 py-28">
-          <div className="grid lg:grid-cols-2 gap-20 items-center">
-            <div data-reveal>
-              <span className="text-[10px] text-[#2ec4a2] font-mono uppercase tracking-wider">Real-time capture</span>
-              <DecodeText
-                text="Every header. Every byte."
-                as="h2"
-                className="mt-4 text-3xl sm:text-4xl font-bold tracking-tight leading-tight"
-                speed={25}
-              />
-              <p className="mt-6 text-sm text-[#6b6a65] leading-relaxed">
-                When Paystack fires a webhook and your handler returns a 500, you&apos;re stuck reading server logs and guessing. Hookdash streams every event the moment it arrives — method, headers, body, signature check, forward result, and timing.
+        <main className="chapters">
+          <section className="chapter" data-chapter="hero" aria-labelledby="hero-title">
+            <div className="hero-copy">
+              <div className="hero-kicker">Hookdash · open-source event gateway</div>
+              <h1 className="hero-title" id="hero-title">
+                Every event,
+                <br />
+                in flight<span className="dot">.</span>
+              </h1>
+              <p className="hero-lede">
+                One ingress URL for your webhooks. Hookdash checks every signature, delivers each event to every
+                destination on its route, retries with backoff when one fails, and keeps a record you can replay.
               </p>
-              <div className="mt-8 space-y-3">
-                {[
-                  "WebSocket-powered. Events appear before your server processes them",
-                  "HMAC-SHA512 · SHA-256 · custom — automatic per-provider detection",
-                  "Forward to multiple destinations simultaneously",
-                ].map((item) => (
-                  <div key={item} className="flex items-start gap-3 text-sm text-[#6b6a65]">
-                    <span className="w-1 h-1 rounded-full bg-[#2ec4a2] shrink-0 mt-2" />
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div data-reveal className="relative">
-              <div className="absolute -inset-4 rounded-3xl bg-gradient-to-b from-[#2ec4a2]/5 to-transparent blur-xl" />
-              <div className="relative rounded-2xl border border-[#1a1a18] bg-[#0c0c0b] overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a18]">
-                  <span className="text-[10px] text-[#4a4a45] font-mono uppercase tracking-wider">incoming events</span>
-                  <span className="text-[10px] text-[#3a3a36] font-mono">simulated</span>
-                </div>
-                <div className="py-2">
-                  <LiveFeed />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Bags section ─────────────────────────────────── */}
-      <section className="relative border-b border-[#1a1218] bg-[#0d0a10] overflow-hidden">
-        {/* Purple glow */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-purple-900/20 blur-[80px] rounded-full" />
-          <div className="absolute bottom-0 right-0 w-[400px] h-[200px] bg-purple-800/10 blur-[60px] rounded-full" />
-        </div>
-
-        <div className="relative max-w-6xl mx-auto px-6 sm:px-10 py-28">
-          <div className="grid lg:grid-cols-2 gap-20 items-center">
-            <div data-reveal className="relative rounded-2xl border border-purple-900/40 bg-[#0a080d] overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-purple-900/30">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                  <span className="text-[10px] text-purple-500 font-mono uppercase tracking-wider">bags restream</span>
-                </div>
-                <span className="text-[10px] text-purple-600 font-mono">wss://restream.bags.fm/ws</span>
-              </div>
-              <div className="py-2">
-                <BagsFeed />
-              </div>
-              <div className="px-4 py-3 border-t border-purple-900/20 flex items-center justify-between">
-                <span className="text-[10px] font-mono text-purple-700">HMAC-SHA256 verified</span>
-                <span className="text-[10px] font-mono text-purple-700">forwarded → your endpoint</span>
-              </div>
-            </div>
-
-            <div data-reveal>
-              <span className="text-[10px] text-purple-400 font-mono uppercase tracking-wider">Solana integration</span>
-              <h2 className="mt-4 text-3xl sm:text-4xl font-bold tracking-tight leading-tight">
-                Bags Restream,<br />
-                <span className="text-purple-400">delivered.</span>
-              </h2>
-              <p className="mt-6 text-sm text-[#6b6a65] leading-relaxed">
-                Hookdash bridges the Bags WebSocket into your existing HTTP infrastructure. Token launches, swaps, and fee claims — all converted to signed webhooks and forwarded to your endpoints automatically.
-              </p>
-              <div className="mt-8 space-y-3">
-                {[
-                  "Token launch events with creator, mint, and initial buy data",
-                  "Fee claim alerts when your LP positions are ready to collect",
-                  "Per-endpoint launch filters — creators watchlist, min buy, symbol patterns",
-                  "Slack & Discord alert templates built for Bags events",
-                ].map((item) => (
-                  <div key={item} className="flex items-start gap-3 text-sm text-[#6b6a65]">
-                    <span className="w-1 h-1 rounded-full bg-purple-500 shrink-0 mt-2" />
-                    {item}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-8">
-                <Link
-                  href="/signup"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium border border-purple-800/60 text-purple-300 hover:bg-purple-900/30 hover:border-purple-700 transition-all"
-                >
-                  Connect Bags
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 8h10M9 4l4 4-4 4" />
-                  </svg>
+              <div className="hero-cta">
+                <Link href="/signup" className="btn">
+                  Get an ingress URL
                 </Link>
+                <code>POST {INGRESS_HOST}/in/usr_…</code>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Feature 2: SDK + replay ──────────────────────── */}
-      <section className="border-b border-[#111110]">
-        <div className="max-w-6xl mx-auto px-6 sm:px-10 py-28">
-          <div className="grid lg:grid-cols-[1fr_1.2fr] gap-20 items-center">
-            <div data-reveal>
-              <span className="text-[10px] text-[#2ec4a2] font-mono uppercase tracking-wider">Developer SDK</span>
-              <h2 className="mt-4 text-3xl sm:text-4xl font-bold tracking-tight leading-tight">
-                Integrate in<br />minutes, not days.
-              </h2>
-              <p className="mt-6 text-sm text-[#6b6a65] leading-relaxed">
-                Official Node.js SDK. Zero dependencies. Manage webhooks programmatically, verify signatures with timing-safe comparison, and replay failures without touching your provider dashboard.
+              <p className="hero-hint">
+                Everything moving here is simulated traffic. Click a destination to take it down. ← → rewinds.
               </p>
-              <div className="mt-8 space-y-3">
-                <code className="inline-flex items-center gap-3 px-4 py-2.5 rounded-lg bg-[#111110] border border-[#1e1e1c] text-[13px] font-mono text-[#9c9b96] w-fit">
-                  <span className="text-[#3a3a36]">$</span>
-                  npm install hookdash-sdk
-                </code>
-                <div className="flex gap-5 text-[11px] font-mono text-[#3a3a36]">
-                  <span>TypeScript-first</span>
-                  <span>ESM + CJS</span>
-                  <span>0 deps</span>
-                </div>
-              </div>
             </div>
-            <div data-reveal>
-              <TypedCode />
-            </div>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      {/* ── How it works ─────────────────────────────────── */}
-      <section className="border-b border-[#111110] bg-[#0c0c0b]">
-        <div className="max-w-4xl mx-auto px-6 sm:px-10 py-28">
-          <div data-reveal className="mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">Three steps. That&apos;s it.</h2>
-          </div>
-          <div className="space-y-0">
-            {[
-              {
-                step: "01",
-                title: "Create an endpoint",
-                desc: "Pick your provider, get a unique ingress URL. Configure signature verification, retry policy, and forward destinations.",
-                code: `${INGRESS_BASE.replace(/^https?:\/\//, "")}/in/usr_a3f8c1d9`,
-              },
-              {
-                step: "02",
-                title: "Paste in your provider dashboard",
-                desc: "Go to Paystack → Settings → Webhooks → paste your Hookdash URL. Same for Flutterwave, Mono, Bags, or any custom provider.",
-                code: null,
-              },
-              {
-                step: "03",
-                title: "Watch events stream in",
-                desc: "Every webhook hits Hookdash first. Verified against the provider's signature scheme, transformed if needed, forwarded to your servers.",
-                code: null,
-              },
-            ].map((item) => (
-              <div key={item.step} data-reveal className="group flex gap-8 py-10 border-b border-[#111110] last:border-0">
-                <span className="text-4xl font-bold text-[#161614] group-hover:text-[#2ec4a2]/15 transition-colors font-mono shrink-0 tabular-nums">
-                  {item.step}
-                </span>
-                <div>
-                  <h3 className="text-lg font-semibold">{item.title}</h3>
-                  <p className="text-sm text-[#6b6a65] mt-2 leading-relaxed">{item.desc}</p>
-                  {item.code && (
-                    <code className="inline-block mt-3 px-3 py-1.5 rounded bg-[#111110] border border-[#1e1e1c] text-[11px] font-mono text-[#2ec4a2]">
-                      {item.code}
-                    </code>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Providers ────────────────────────────────────── */}
-      <section className="border-b border-[#111110]">
-        <div className="max-w-6xl mx-auto px-6 sm:px-10 py-20">
-          <div data-reveal className="mb-10">
-            <span className="text-[10px] text-[#3a3a36] font-mono uppercase tracking-wider">Supported providers</span>
-            <h2 className="mt-3 text-2xl font-bold tracking-tight">First-class support for the providers you actually use.</h2>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px bg-[#111110] border border-[#111110] rounded-xl overflow-hidden">
-            {[
-              { name: "Paystack",    scheme: "HMAC-SHA512",    events: "12 test events", color: "#10b981" },
-              { name: "Flutterwave", scheme: "SHA-256 hash",   events: "10 test events", color: "#f59e0b" },
-              { name: "Mono",        scheme: "Signature header", events: "8 test events",  color: "#3b82f6" },
-              { name: "Bags",        scheme: "HMAC-SHA256",    events: "3 test events",  color: "#a855f7" },
-              { name: "Custom",      scheme: "Bring your own", events: "Any HTTP webhook", color: "#71717a" },
-            ].map((p) => (
-              <div key={p.name} data-reveal className="group bg-[#0c0c0b] p-6 hover:bg-[#0f0f0e] transition-colors">
-                <div className="w-1.5 h-1.5 rounded-full mb-4 transition-all group-hover:scale-150" style={{ background: p.color }} />
-                <h3 className="text-sm font-semibold mb-3">{p.name}</h3>
-                <div className="space-y-1.5 text-[11px] text-[#4a4a45]">
-                  <div>{p.scheme}</div>
-                  <div>{p.events}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Open source ──────────────────────────────────── */}
-      <section className="border-b border-[#111110]">
-        <div className="max-w-6xl mx-auto px-6 sm:px-10 py-28">
-          <div data-reveal className="relative rounded-2xl border border-[#1a1a18] overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#2ec4a2]/8 via-transparent to-[#c4b5fd]/4 pointer-events-none" />
-            <div className="relative p-10 sm:p-16 grid lg:grid-cols-[1.2fr_auto] gap-10 items-center">
-              <div>
-                <div className="flex items-center gap-2 mb-5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#2ec4a2]" />
-                  <span className="text-[11px] text-[#2ec4a2] font-mono uppercase tracking-wider">MIT Licensed</span>
-                </div>
-                <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
-                  Your infrastructure.<br />Your data.
-                </h2>
-                <p className="mt-5 text-sm text-[#6b6a65] leading-relaxed max-w-md">
-                  Hookdash is fully open source. Deploy on your own servers with Docker, one-click deploy on Render, or use our hosted version. Your webhook data never leaves your control.
-                </p>
-              </div>
-              <div className="flex flex-col gap-3">
-                <MagneticButton
-                  href="https://github.com/Olayanju-1234/hooklens"
-                  className="flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl text-sm font-medium border border-[#222220] text-[#ececea] hover:border-[#333330] hover:bg-[#111110] transition-all text-center"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" />
-                  </svg>
-                  View on GitHub
-                </MagneticButton>
-                <MagneticButton
-                  href="/signup"
-                  className="px-8 py-3.5 rounded-xl text-sm font-semibold bg-[#2ec4a2] text-[#0a0a09] hover:bg-[#44d4b4] transition-all hover:shadow-[0_0_30px_rgba(46,196,162,0.25)] text-center"
-                >
-                  Use hosted version
-                </MagneticButton>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── CTA ──────────────────────────────────────────── */}
-      <section>
-        <div className="max-w-4xl mx-auto px-6 sm:px-10 py-40 text-center">
-          <div data-reveal>
-            <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tighter leading-[0.95]">
-              <span className="block">Stop guessing.</span>
-              <span className="block mt-2 text-[#3a3a36]">Start seeing.</span>
-            </h2>
-            <p className="mt-8 text-sm text-[#3a3a36]">Free forever for open source. No credit card required.</p>
-            <MagneticButton
-              href="/signup"
-              className="inline-flex items-center mt-12 px-10 py-4 rounded-xl text-sm font-semibold bg-[#2ec4a2] text-[#0a0a09] hover:bg-[#44d4b4] transition-all hover:shadow-[0_0_60px_rgba(46,196,162,0.3)] active:scale-[0.97]"
-              strength={0.2}
+          <section className="chapter" data-chapter="arrivals" aria-label="Arrivals">
+            <Strip
+              n="01"
+              code="ARR"
+              tone="white"
+              eyebrow="Arrivals"
+              title="Payments today. Everything else next."
+              fields={[
+                ["verified today", "5 providers"],
+                ["on the board", `${BOARD.length} sources`],
+                ["next", "Std Webhooks"],
+              ]}
             >
-              Create free account
-            </MagneticButton>
+              <p>
+                Point Stripe, Paystack, Flutterwave, Mono or Bags at your ingress URL and events land with their
+                headers, raw body and event type intact. GitHub, Shopify, Clerk, Twilio and other Standard Webhooks
+                senders are on the roadmap.
+              </p>
+            </Strip>
+          </section>
+
+          <section className="chapter" data-chapter="seal" aria-label="Signature verification">
+            <Strip
+              n="02"
+              code="SIG"
+              tone="cyan"
+              eyebrow="The seal"
+              title="Proven before it’s trusted."
+              fields={[
+                ["sealed", stats ? `${stats.sealedPct.toFixed(1)}%` : "—"],
+                ["rejected", stats ? `${stats.rejected} / min` : "—"],
+                ["compare", "timing-safe"],
+              ]}
+              actions={
+                <button type="button" className="chip" data-tone="red" onClick={() => act("forge")} disabled={rewound}>
+                  Forge one
+                </button>
+              }
+            >
+              <p>
+                Every event passes the gate before anything trusts it: HMAC-SHA512 for Paystack, Stripe&apos;s
+                timestamped HMAC-SHA256 with replay protection, and each provider&apos;s own scheme. You can block
+                forged events outright. The rose turns one tick per verified event.
+              </p>
+            </Strip>
+          </section>
+
+          <section className="chapter" data-chapter="departures" aria-label="Fan-out">
+            <Strip
+              n="03"
+              code="DEP"
+              tone="green"
+              eyebrow="Departures"
+              title="Distance is latency."
+              fields={[
+                ["destinations", "per endpoint"],
+                ["p50", stats?.p50 ? `${stats.p50} ms` : "—"],
+                ["rings", "10ms · 100ms · 1s"],
+              ]}
+            >
+              <p>
+                Verified events fan out to every destination on the endpoint, with transforms applied on the way.
+                On this chart each destination sits at its median latency, so a slow service is literally far away.
+                Green rings mark a 2xx landing.
+              </p>
+            </Strip>
+          </section>
+
+          <section className="chapter" data-chapter="holding" aria-label="Retries">
+            <Strip
+              n="04"
+              code="HLD"
+              tone="amber"
+              eyebrow="Holding pattern"
+              title="Backoff you can see."
+              fields={[
+                ["holding", stats ? `${stats.holding}` : "—"],
+                ["retries", "per endpoint"],
+                ["backoff", "exponential"],
+              ]}
+              actions={
+                <button
+                  type="button"
+                  className="chip"
+                  data-tone="amber"
+                  aria-pressed={billingDown}
+                  onClick={() => toggleDest(OUTAGE_TARGET)}
+                  disabled={rewound}
+                >
+                  {billingDown ? `Restore ${billing.host}` : `Take ${billing.host} down`}
+                </button>
+              }
+            >
+              <p>
+                When a destination fails, Hookdash retries with exponential backoff and only re-sends to the
+                destinations that haven&apos;t succeeded yet. Here each retry climbs one level of the holding stack.{" "}
+                {billingDown ? `${billing.host} is down right now. Watch the stack build.` : "Take a destination down to watch it build."}
+              </p>
+            </Strip>
+          </section>
+
+          <section className="chapter" data-chapter="recorder" aria-label="Dead letters and replay">
+            <Strip
+              n="05"
+              code="REC"
+              tone="orange"
+              eyebrow="The recorder"
+              title="Nothing is lost."
+              fields={[
+                ["dead letters", stats ? `${stats.dead}` : "—"],
+                ["replay", "one click"],
+                ["export", "CSV · JSON"],
+              ]}
+              actions={
+                <>
+                  <button type="button" className="chip" data-tone="magenta" onClick={restoreAndReplay} disabled={rewound}>
+                    Restore &amp; replay
+                  </button>
+                  <button type="button" className="chip chip--quiet" onClick={() => sim.clock.step(-20)}>
+                    Rewind 20s
+                  </button>
+                </>
+              }
+            >
+              <p>
+                Deliveries that run out of retries land in the dead-letter queue, drawn in flight-recorder orange
+                because they&apos;re meant to be found. Fix the destination, then retry them or replay any event.
+                Replays fly the magenta line.
+              </p>
+            </Strip>
+          </section>
+        </main>
+      </div>
+
+      <div className="hud-layer" data-show={pinned}>
+        <dl className="hud-readout" aria-label="Simulated traffic, last 60 seconds">
+          <div className="hud-cell">
+            <dt>arr / min</dt>
+            <dd>{stats ? stats.perMin : "—"}</dd>
           </div>
+          <div className="hud-cell">
+            <dt>sealed</dt>
+            <dd className={stats && stats.rejected ? "tone-red" : undefined}>{stats ? `${stats.sealedPct.toFixed(1)}%` : "—"}</dd>
+          </div>
+          <div className="hud-cell">
+            <dt>holding</dt>
+            <dd className={stats && stats.holding ? "tone-amber" : undefined}>{stats ? stats.holding : "—"}</dd>
+          </div>
+          <div className="hud-cell">
+            <dt>dead letters</dt>
+            <dd className={stats && stats.dead ? "tone-orange" : undefined}>{stats ? stats.dead : "—"}</dd>
+          </div>
+          <div className="hud-cell">
+            <dt>p50</dt>
+            <dd>{stats?.p50 ? `${stats.p50}ms` : "—"}</dd>
+          </div>
+        </dl>
+
+        <div className="hud-bottom">
+          <div className="hud-actions">
+            {frozen && (
+              <button type="button" className="chip" data-tone="cyan" onClick={() => setMotionOptIn(true)}>
+                Play traffic
+              </button>
+            )}
+            <button type="button" className="chip" data-tone="red" onClick={() => act("forge")} disabled={rewound} title={lockTitle}>
+              Forge a signature
+            </button>
+            <button type="button" className="chip" data-tone="cyan" onClick={() => act("burst")} disabled={rewound} title={lockTitle}>
+              Burst ×24
+            </button>
+            <button
+              type="button"
+              className="chip"
+              data-tone="amber"
+              aria-pressed={billingDown}
+              onClick={() => toggleDest(OUTAGE_TARGET)}
+              disabled={rewound}
+              title={lockTitle}
+            >
+              {billingDown ? `Restore ${billing.host}` : `Take ${billing.host} down`}
+            </button>
+            <button
+              type="button"
+              className="chip"
+              data-tone="magenta"
+              onClick={() => act("replay-dead")}
+              disabled={rewound || !stats?.dead}
+              title={lockTitle ?? (anyDown ? "A destination is still down, so replays to it will fail again" : undefined)}
+            >
+              Replay dead letters{stats?.dead ? ` (${stats.dead})` : ""}
+            </button>
+          </div>
+          <RecorderBar sim={sim} offset={offset} mode={mode} />
+        </div>
+      </div>
+
+      <section className="fd-section" id="sources" aria-labelledby="sources-title">
+        <div className="fd-section-inner">
+          <div className="section-head">
+            <span className="eyebrow">Sources board</span>
+            <h2 id="sources-title">Not just payments.</h2>
+          </div>
+          <div className="fids-wrap" ref={boardRef}>
+            <table className="fids">
+              <thead>
+                <tr>
+                  <th scope="col">SOURCE</th>
+                  <th scope="col">KIND</th>
+                  <th scope="col">SIGNATURE</th>
+                  <th scope="col">HEADER</th>
+                  <th scope="col">STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {BOARD.map((s) => {
+                  const text = (v: string) => (boardVisible ? v : "".padEnd(v.length, " "));
+                  return (
+                    <tr key={s.label}>
+                      <td>
+                        <Flap text={text(s.label)} width={12} reduced={reduced} />
+                      </td>
+                      <td className="t-src">{s.kind}</td>
+                      <td>{s.scheme}</td>
+                      <td className="t-src">{s.header}</td>
+                      <td className="fids-status" data-s={s.today ? "today" : "next"}>
+                        <Flap text={text(s.today ? "ON TIME" : "BOARDING")} width={8} reduced={reduced} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="hero-hint">
+            ON TIME = verified by Hookdash today. BOARDING = on the roadmap. A Standard Webhooks recipe alone covers
+            Clerk, OpenAI and every other Svix-style sender.
+          </p>
         </div>
       </section>
 
-      {/* ── Footer ───────────────────────────────────────── */}
-      <footer className="border-t border-[#111110]">
-        <div className="max-w-6xl mx-auto px-6 sm:px-10 py-16">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-10">
-            <div className="col-span-2 sm:col-span-1">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-6 h-6 rounded bg-[#2ec4a2] flex items-center justify-center">
-                  <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
-                    <path d="M2 7h3l2-4 2 8 2-4h3" stroke="#0a0a09" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <span className="text-sm font-semibold">Hookdash</span>
-              </div>
-              <p className="text-xs text-[#3a3a36] leading-relaxed mb-4">Open source webhook infrastructure for developers.</p>
-              <div className="flex items-center gap-1.5 text-[11px] text-[#3a3a36]">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#2ec4a2]" />
-                Built in Lagos
-              </div>
+      <section className="fd-section" aria-labelledby="tower-title">
+        <div className="fd-section-inner split">
+          <div>
+            <div className="section-head" style={{ gridTemplateColumns: "1fr", marginBottom: 20 }}>
+              <span className="eyebrow">The Tower</span>
+              <h2 id="tower-title">The dashboard is the same chart.</h2>
             </div>
-
-            <div>
-              <div className="text-[10px] text-[#2a2a28] uppercase tracking-wider font-medium mb-4">Product</div>
-              <div className="space-y-2.5">
-                <Link href="/signup" className="block text-xs text-[#4a4a45] hover:text-[#ececea] transition-colors">Get started</Link>
-                <Link href="/login" className="block text-xs text-[#4a4a45] hover:text-[#ececea] transition-colors">Log in</Link>
-                <span className="block text-xs text-[#2a2a28]">Changelog</span>
-              </div>
-            </div>
-
-            <div>
-              <div className="text-[10px] text-[#2a2a28] uppercase tracking-wider font-medium mb-4">Integrations</div>
-              <div className="space-y-2.5">
-                {["Paystack", "Flutterwave", "Mono", "Bags (Solana)", "Custom"].map((p) => (
-                  <span key={p} className={`block text-xs ${p === "Bags (Solana)" ? "text-purple-700" : "text-[#2a2a28]"}`}>{p}</span>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="text-[10px] text-[#2a2a28] uppercase tracking-wider font-medium mb-4">Community</div>
-              <div className="space-y-2.5">
-                <a href="https://github.com/Olayanju-1234/hooklens" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-[#4a4a45] hover:text-[#ececea] transition-colors">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-                  GitHub
-                </a>
-                <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-[#4a4a45] hover:text-[#ececea] transition-colors">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                  Twitter / X
-                </a>
-              </div>
+            <p>
+              Traffic opens on a radar of your routes, an arrivals board that flips as each delivery changes state,
+              and a flight recorder for whichever event you click: signature, every attempt per destination, payload
+              and replay.
+            </p>
+            <p>It runs on Canvas 2D, so it works on any machine.</p>
+            <div className="hero-cta">
+              <Link href="/demo" className="btn btn--ghost">
+                Try the live demo →
+              </Link>
             </div>
           </div>
-
-          <div className="mt-14 pt-6 border-t border-[#111110] flex flex-col sm:flex-row items-center justify-between gap-3">
-            <span className="text-[11px] text-[#2a2a28]">&copy; {new Date().getFullYear()} Hookdash. MIT License.</span>
-            <div className="flex items-center gap-5">
-              <Link href="/privacy" className="text-[11px] text-[#4a4a45] hover:text-[#ececea] transition-colors">Privacy</Link>
-              <Link href="/terms" className="text-[11px] text-[#4a4a45] hover:text-[#ececea] transition-colors">Terms</Link>
-              <span className="text-[11px] text-[#2a2a28]">Made with intent.</span>
-            </div>
-          </div>
+          <pre className="term" aria-label="Example webhook delivery">
+            <span className="p">$ </span>curl -X POST https://{INGRESS_HOST}/in/usr_3fa9c1d2e7b4 \{"\n"}
+            <span className="p">    </span>-H &apos;x-paystack-signature: 9c1f…e04a&apos; \{"\n"}
+            <span className="p">    </span>-d &apos;{"{"}&quot;event&quot;:&quot;charge.success&quot;, …{"}"}&apos;{"\n"}
+            <span className="ok">200 OK</span>{"\n\n"}
+            <span className="p">  </span>
+            <span className="ok">✓</span> sealed   charge.success   → api.acme.dev      <span className="ok">200</span> 41ms{"\n"}
+            <span className="p">  </span>
+            <span className="warn">↻</span> retry 2  charge.success   → billing.internal  <span className="warn">503</span>{"\n"}
+            <span className="p">  </span>
+            <span className="ok">✓</span> sealed   charge.success   → billing.internal  <span className="ok">200</span> 118ms
+          </pre>
         </div>
+      </section>
+
+      <footer className="fd-foot">
+        <span>© {new Date().getFullYear()} Hookdash · MIT · built in Lagos</span>
+        <span className="fd-foot-links">
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/terms">Terms</Link>
+          <a href={REPO} target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+        </span>
       </footer>
     </div>
   );
