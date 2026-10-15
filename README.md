@@ -1,6 +1,19 @@
 # Hookdash
 
-Webhook debugging platform for payment and on-chain event providers. Inspect, replay, transform, and forward events in real time.
+**Webhook gateway for payment providers.** One ingress URL for all your webhooks. Hookdash verifies every provider's signature, delivers each event to every destination on its route with its own retries and dead letters, re-signs it with Standard Webhooks headers, and keeps a record you can replay.
+
+**[Live app](https://hookdash.ojusentinel.com)** · **[Demo with simulated traffic](https://hookdash.ojusentinel.com/demo)** · API: `https://api.hookdash.ojusentinel.com`
+
+![Hookdash demo: in-flight events on the radar, the arrivals list and the flight recorder for a verified Flutterwave transfer](docs/assets/hookdash-demo.png)
+
+NestJS 11 · PostgreSQL · BullMQ/Redis · Socket.io · Next.js 16. Verifies Stripe, Paystack, Flutterwave, Mono, GitHub, Shopify, Slack, Linear, Twilio and any Standard Webhooks sender out of the box. Self-hosted on a VPS behind nginx with TLS.
+
+<details>
+<summary>Landing page</summary>
+
+![Hookdash landing page: "Every event, in flight." with a live simulation of providers, the signature gate and destinations](docs/assets/hookdash-landing.png)
+
+</details>
 
 ## What it does
 
@@ -27,6 +40,9 @@ No more `ngrok` + `console.log` guesswork.
 | Bags.fm | HMAC-SHA256 hex (WebSocket stream for Solana token launch events) |
 | GitHub | HMAC-SHA256 hex in `X-Hub-Signature-256` (`sha256=`); event from `X-GitHub-Event` |
 | Shopify | HMAC-SHA256 base64 in `X-Shopify-Hmac-Sha256`; topic from `X-Shopify-Topic` |
+| Slack | HMAC-SHA256 hex over `v0:timestamp:body` in `X-Slack-Signature`, 5 min tolerance; answers `url_verification` challenges |
+| Linear | HMAC-SHA256 hex in `Linear-Signature`; `webhookTimestamp` within 60 s |
+| Twilio | HMAC-SHA1 base64 over URL + sorted params in `X-Twilio-Signature`; `bodySHA256` check for JSON bodies |
 | Standard Webhooks (Clerk, Resend, OpenAI, any Svix sender) | HMAC-SHA256 base64 over `id.timestamp.body`, `whsec_` secret, `webhook-*` or `svix-*` headers, 5 min tolerance |
 | Custom | HMAC-SHA256 hex in `X-Webhook-Signature` if sent, otherwise unverified |
 
