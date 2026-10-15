@@ -598,7 +598,72 @@ function DestinationsStage({ route, onChange, confirm }: { route: RouteData; onC
           }}
         />
       )}
+      <SigningSecret endpointId={ep.id} confirm={confirm} />
     </Stage>
+  );
+}
+
+function SigningSecret({ endpointId, confirm }: { endpointId: string; confirm: (req: ConfirmRequest) => void }) {
+  const [secret, setSecret] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function reveal() {
+    setLoading(true);
+    try {
+      setSecret((await endpointsApi.signingSecret(endpointId)).signingSecret);
+    } catch (err) {
+      toast.error(errText(err, "Failed to load signing secret"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function rotate() {
+    confirm({
+      title: "Rotate signing secret",
+      description: "Receivers verifying with the current secret will reject forwarded requests until you give them the new one.",
+      label: "Rotate",
+      run: async () => {
+        try {
+          setSecret((await endpointsApi.rotateSigningSecret(endpointId)).signingSecret);
+          toast.success("Signing secret rotated");
+        } catch (err) {
+          toast.error(errText(err, "Failed to rotate signing secret"));
+        }
+      },
+    });
+  }
+
+  return (
+    <div className="signing-secret">
+      <div className="dest-head">
+        <b>Signing secret</b>
+        <span className="grow" />
+        <span className="label-sm">Standard Webhooks</span>
+      </div>
+      <p className="stage-lede">
+        Every forwarded request carries <code>webhook-id</code>, <code>webhook-timestamp</code> and <code>webhook-signature</code>. Verify them with this secret, for example with <code>verify.hookdash()</code> from the SDK.
+      </p>
+      {secret ? (
+        <code className="dest-url" title="Outbound signing secret">
+          {secret}
+        </code>
+      ) : null}
+      <div className="row-actions">
+        {secret ? (
+          <button type="button" className="link-btn" onClick={() => copy(secret, "Signing secret")}>
+            Copy
+          </button>
+        ) : (
+          <button type="button" className="link-btn" onClick={() => void reveal()} disabled={loading}>
+            {loading ? "Loading…" : "Show"}
+          </button>
+        )}
+        <button type="button" className="link-btn" onClick={rotate}>
+          Rotate
+        </button>
+      </div>
+    </div>
   );
 }
 

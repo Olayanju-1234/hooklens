@@ -20,6 +20,7 @@ import {
   assertPublicUrl,
   UnsafeUrlError,
 } from '../../common/utils/outbound-url.js';
+import { generateSigningSecret } from '../../common/utils/standard-webhooks.js';
 
 function definedOnly<T extends object>(dto: T): Partial<T> {
   return Object.fromEntries(
@@ -44,7 +45,7 @@ export class EndpointsService {
     userId: string,
     dto: CreateEndpointDto,
     workspaceId?: string,
-  ): Promise<Endpoint> {
+  ): Promise<Omit<Endpoint, 'signingSecret'>> {
     if (dto.forwardUrl) await this.assertForwardable(dto.forwardUrl);
     const endpoint = this.endpointRepo.create({
       userId,
@@ -54,12 +55,16 @@ export class EndpointsService {
       provider: dto.provider,
       forwardUrl: dto.forwardUrl ?? null,
       webhookSecret: dto.webhookSecret ?? null,
+      signingSecret: generateSigningSecret(),
       retryMaxAttempts: dto.retryMaxAttempts ?? 3,
       retryBackoffMs: dto.retryBackoffMs ?? 5000,
     });
     const saved = await this.endpointRepo.save(endpoint);
     this.logger.log(`Endpoint created: ${saved.id} for user ${userId}`);
-    return saved;
+    // Like reads, creation never returns the secret; it has its own endpoint
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { signingSecret: _secret, ...created } = saved;
+    return created;
   }
 
   async findAllByUser(
@@ -102,6 +107,30 @@ export class EndpointsService {
       await this.endpointRepo.update(endpoint.id, changes);
     }
     return this.findOne(id, userId);
+  }
+
+  async getSigningSecret(
+    id: string,
+    userId: string,
+  ): Promise<{ signingSecret: string }> {
+    await this.findOne(id, userId);
+    const endpoint = await this.endpointRepo
+      .createQueryBuilder('ep')
+      .addSelect('ep.signingSecret')
+      .where('ep.id = :id', { id })
+      .getOneOrFail();
+    return { signingSecret: endpoint.signingSecret };
+  }
+
+  async rotateSigningSecret(
+    id: string,
+    userId: string,
+  ): Promise<{ signingSecret: string }> {
+    await this.findOne(id, userId);
+    const signingSecret = generateSigningSecret();
+    await this.endpointRepo.update(id, { signingSecret });
+    this.logger.log(`Signing secret rotated for endpoint ${id}`);
+    return { signingSecret };
   }
 
   async remove(id: string, userId: string): Promise<void> {

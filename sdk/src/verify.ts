@@ -38,11 +38,11 @@ export const verify = {
   },
 
   /**
-   * Verify a Mono webhook signature.
-   * Mono uses HMAC-SHA512 in the `mono-webhook-secret` header.
+   * Verify a Mono webhook.
+   * Mono sends your webhook secret itself in the `mono-webhook-secret` header, not an HMAC.
    */
-  mono(rawBody: string, signature: string, secret: string): boolean {
-    return hmacVerify('sha512', rawBody, signature, secret);
+  mono(_rawBody: string, headerSecret: string, secret: string): boolean {
+    return constantTimeEqual(headerSecret, secret);
   },
 
   /**
@@ -51,6 +51,58 @@ export const verify = {
    */
   bags(rawBody: string, signature: string, secret: string): boolean {
     return hmacVerify('sha256', rawBody, signature, secret);
+  },
+
+  /**
+   * Verify that a request forwarded by Hookdash really came from Hookdash.
+   *
+   * Hookdash signs every forwarded request with Standard Webhooks headers
+   * (`webhook-id`, `webhook-timestamp`, `webhook-signature`) using your route's
+   * `whsec_` signing secret. Pass the raw body exactly as received.
+   *
+   * @example
+   * ```ts
+   * app.post('/webhooks', express.raw({ type: '*\/*' }), (req, res) => {
+   *   if (!verify.hookdash(req.body.toString(), req.headers, process.env.HOOKDASH_SIGNING_SECRET!)) {
+   *     return res.status(401).send('Invalid signature');
+   *   }
+   *   // handle the webhook...
+   * });
+   * ```
+   */
+  hookdash(
+    rawBody: string,
+    headers: Record<string, string | string[] | undefined>,
+    secret: string,
+    options: { toleranceSeconds?: number; now?: Date } = {},
+  ): boolean {
+    const id = headerValue(headers, 'webhook-id');
+    const timestamp = headerValue(headers, 'webhook-timestamp');
+    const signatures = headerValue(headers, 'webhook-signature');
+    if (!id || !timestamp || !signatures || !/^\d+$/.test(timestamp)) {
+      return false;
+    }
+
+    // Reject stale or future-dated requests so a captured request can't be replayed later
+    const now = Math.floor((options.now ?? new Date()).getTime() / 1000);
+    if (Math.abs(now - Number(timestamp)) > (options.toleranceSeconds ?? 300)) {
+      return false;
+    }
+
+    const key = Buffer.from(
+      secret.startsWith('whsec_') ? secret.slice('whsec_'.length) : secret,
+      'base64',
+    );
+    const expected = createHmac('sha256', key)
+      .update(`${id}.${timestamp}.${rawBody}`, 'utf8')
+      .digest();
+
+    return signatures.split(' ').some((entry) => {
+      const [version, value] = entry.split(',');
+      if (version !== 'v1' || !value) return false;
+      const given = Buffer.from(value, 'base64');
+      return given.length === expected.length && timingSafeEqual(given, expected);
+    });
   },
 
   /**
@@ -74,10 +126,7 @@ export const verify = {
     headers: Record<string, string | string[] | undefined>,
     secret: string,
   ): { provider: WebhookProvider | 'unknown'; valid: boolean } {
-    const get = (key: string) => {
-      const val = headers[key] ?? headers[key.toLowerCase()];
-      return Array.isArray(val) ? val[0] : val;
-    };
+    const get = (key: string) => headerValue(headers, key);
 
     const paystackSig = get('x-paystack-signature');
     if (paystackSig) {
@@ -104,6 +153,22 @@ export const verify = {
 };
 
 // ── Internals ────────────────────────────────────────────────────────
+
+function headerValue(
+  headers: Record<string, string | string[] | undefined>,
+  name: string,
+): string | undefined {
+  const value =
+    headers[name] ??
+    Object.entries(headers).find(([k]) => k.toLowerCase() === name)?.[1];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
 
 function hmacVerify(
   algorithm: string,

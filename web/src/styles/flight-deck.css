@@ -1041,6 +1041,8 @@ textarea.fd-input { height: auto; padding: 8px 9px; line-height: 1.6; resize: ve
 
 .rule-list, .dest-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .rule, .dest { display: grid; gap: 6px; padding: 8px 9px; border: 1px solid var(--line); background: var(--bg); }
+.signing-secret { display: grid; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.signing-secret .dest-url { word-break: break-all; }
 .rule[data-off], .dest[data-off] { border-style: dashed; }
 .rule[data-off] b, .dest[data-off] b, .rule[data-off] .op-list { color: var(--ink-mute); }
 .rule-head, .dest-head { display: flex; align-items: center; gap: 8px; min-width: 0; }

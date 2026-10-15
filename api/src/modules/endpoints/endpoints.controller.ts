@@ -122,6 +122,51 @@ export class EndpointsController {
     return endpoint;
   }
 
+  @Get(':id/signing-secret')
+  @ApiOperation({
+    summary: 'Get the secret Hookdash signs forwarded requests with',
+  })
+  @ApiResponse({ status: 200, description: 'Returns { signingSecret }' })
+  @ApiParam({ name: 'id', type: String })
+  getSigningSecret(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.endpointsService.getSigningSecret(id, user.sub);
+  }
+
+  @Post(':id/signing-secret/rotate')
+  @ApiOperation({ summary: 'Rotate the outbound signing secret' })
+  @ApiResponse({
+    status: 201,
+    description: 'Returns the new { signingSecret }',
+  })
+  @ApiParam({ name: 'id', type: String })
+  async rotateSigningSecret(
+    @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const result = await this.endpointsService.rotateSigningSecret(
+      id,
+      user.sub,
+    );
+    this.auditService
+      .log({
+        workspaceId,
+        userId: user.sub,
+        action: 'endpoint.signing_secret.rotate',
+        resource: 'endpoint',
+        resourceId: id,
+      })
+      .catch((err: unknown) => {
+        this.logger.error(
+          `Audit log failed for endpoint.signing_secret.rotate: ${(err as Error).message}`,
+        );
+      });
+    return result;
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Delete an endpoint' })
   @ApiResponse({ status: 200, description: 'Endpoint deleted successfully' })
