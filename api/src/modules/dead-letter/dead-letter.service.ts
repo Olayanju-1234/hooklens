@@ -4,7 +4,10 @@ import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DeadLetterEvent } from '../../entities/dead-letter-event.entity.js';
-import { ForwardJobData } from '../forward/forward.processor.js';
+import {
+  DeliverJobData,
+  deliveryJobOptions,
+} from '../forward/forward.processor.js';
 import { EndpointsService } from '../endpoints/endpoints.service.js';
 
 @Injectable()
@@ -16,7 +19,7 @@ export class DeadLetterService {
     private readonly deadLetterRepo: Repository<DeadLetterEvent>,
     private readonly endpointsService: EndpointsService,
     @InjectQueue('webhook-forward')
-    private readonly forwardQueue: Queue<ForwardJobData>,
+    private readonly forwardQueue: Queue<DeliverJobData>,
   ) {}
 
   async list(endpointId: string, userId: string): Promise<DeadLetterEvent[]> {
@@ -40,21 +43,16 @@ export class DeadLetterService {
     });
     if (!deadLetter) throw new NotFoundException('Dead letter entry not found');
 
+    // Straight to a delivery job for the one target that failed
     await this.forwardQueue.add(
-      'forward',
+      'deliver',
       {
         eventId: deadLetter.eventId,
         endpointId,
         userId: endpoint.userId,
-        destinationId: deadLetter.destinationId ?? undefined,
+        destinationId: deadLetter.destinationId ?? null,
       },
-      {
-        attempts: endpoint.retryMaxAttempts + 1,
-        backoff: {
-          type: 'exponential',
-          delay: Math.max(endpoint.retryBackoffMs, 1000),
-        },
-      },
+      deliveryJobOptions(endpoint),
     );
 
     await this.deadLetterRepo.remove(deadLetter);

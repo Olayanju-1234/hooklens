@@ -5,6 +5,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
 import { Endpoint } from '../../entities/endpoint.entity.js';
 import { ForwardResult } from '../../entities/forward-result.entity.js';
+import { DeadLetterEvent } from '../../entities/dead-letter-event.entity.js';
 import { EventsService } from './events.service.js';
 import { EventsController } from './events.controller.js';
 import { WorkspacesModule } from '../workspaces/workspaces.module.js';
@@ -12,7 +13,12 @@ import { WorkspacesModule } from '../workspaces/workspaces.module.js';
 @Module({
   imports: [
     AuthModule,
-    TypeOrmModule.forFeature([WebhookEvent, Endpoint, ForwardResult]),
+    TypeOrmModule.forFeature([
+      WebhookEvent,
+      Endpoint,
+      ForwardResult,
+      DeadLetterEvent,
+    ]),
     BullModule.registerQueue({ name: 'webhook-forward' }),
     WorkspacesModule,
   ],

@@ -19,8 +19,9 @@ export class ForwardResult {
   @Column({ type: 'uuid' })
   eventId!: string;
 
-  @Column({ type: 'uuid' })
-  destinationId!: string;
+  // Null for attempts to the endpoint's fallback forward URL
+  @Column({ type: 'uuid', nullable: true })
+  destinationId!: string | null;
 
   @Column({ type: 'varchar', length: 20, default: 'pending' })
   status!: string;
@@ -33,6 +34,9 @@ export class ForwardResult {
 
   @Column({ type: 'integer', nullable: true })
   latency!: number | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  startedAt!: Date | null;
 
   @Column({ type: 'timestamptz', nullable: true })
   forwardedAt!: Date | null;
@@ -53,5 +57,5 @@ export class ForwardResult {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'destinationId' })
-  destination!: ForwardDestination;
+  destination!: ForwardDestination | null;
 }

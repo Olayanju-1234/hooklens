@@ -61,7 +61,8 @@ hookdash/
 - **Multi-provider signature verification** — each provider's exact spec, including Stripe's timestamp + replay attack prevention
 - **Bags.fm integration** — WebSocket stream for Solana token launch events, filterable by creator, initial buy amount, and symbol pattern
 - **Payload transforms** — configurable rules to mutate or reshape webhook bodies before forwarding
-- **Dead letter queue** — failed forwards are captured and retryable
+- **Per-destination delivery** — each destination is its own job with its own retries and backoff, so a slow or failing receiver never delays the others; attempts record real stage timings (parsed, queued, sent, responded)
+- **Dead letter queue** — failed forwards are captured per destination and retryable
 - **Alerting** — Slack, Discord, and Email notifications
 - **Workspace management** — multi-tenant, team-friendly
 - **API keys** — key-based auth alongside JWT
