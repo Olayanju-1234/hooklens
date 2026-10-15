@@ -4,10 +4,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../../entities/user.entity.js';
 import { WebhookGateway } from './webhook.gateway.js';
+import { ApiKeysModule } from '../api-keys/api-keys.module.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
+    ApiKeysModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

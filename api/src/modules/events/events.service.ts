@@ -7,6 +7,7 @@ import { WebhookEvent } from '../../entities/webhook-event.entity.js';
 import { ForwardResult } from '../../entities/forward-result.entity.js';
 import { DeadLetterEvent } from '../../entities/dead-letter-event.entity.js';
 import { EventsQueryDto } from './dto/events-query.dto.js';
+import { LocalDeliveryDto } from './dto/local-delivery.dto.js';
 import {
   ForwardJobData,
   FAN_OUT_JOB_OPTIONS,
@@ -205,14 +206,14 @@ export class EventsService {
             : result.status === 'pending'
               ? 'pending'
               : 'error',
-        detail: `${label(result.destination)} → ${result.responseCode || result.status}`,
+        detail: `${result.target ?? label(result.destination)} → ${result.responseCode || result.status}`,
       });
     }
 
     // A dead target always has attempts, so its destination comes from those results
     const destinations = new Map(
       forwardResults
-        .filter((r) => r.destinationId && r.destination)
+        .filter((r) => r.destinationId && r.destination && !r.target)
         .map((r) => [r.destinationId, r.destination]),
     );
     for (const dead of deadLetters) {
@@ -226,7 +227,10 @@ export class EventsService {
     }
 
     // Events from before per-attempt results were recorded only have the aggregate fields
-    if (forwardResults.length === 0 && event.forwardStatus !== 'pending') {
+    if (
+      !forwardResults.some((r) => !r.target) &&
+      event.forwardStatus !== 'pending'
+    ) {
       steps.push({
         step: 'forwarded',
         timestamp:
@@ -246,6 +250,34 @@ export class EventsService {
     }
 
     return { eventId, steps };
+  }
+
+  /** Records a delivery made outside Hookdash, such as `hookdash listen` to localhost. */
+  async recordLocalDelivery(
+    id: string,
+    userId: string,
+    dto: LocalDeliveryDto,
+  ): Promise<ForwardResult> {
+    await this.findOne(id, userId);
+    const target = `cli · ${dto.target}`;
+    const previous = await this.forwardResultRepo.count({
+      where: { eventId: id, target },
+    });
+    const now = new Date();
+    return this.forwardResultRepo.save(
+      this.forwardResultRepo.create({
+        eventId: id,
+        destinationId: null,
+        target,
+        status: dto.status,
+        responseCode: dto.responseCode ?? 0,
+        responseBody: dto.error ?? null,
+        latency: dto.latencyMs,
+        startedAt: new Date(now.getTime() - dto.latencyMs),
+        forwardedAt: now,
+        attempt: previous + 1,
+      }),
+    );
   }
 
   async diff(id1: string, id2: string, userId: string) {

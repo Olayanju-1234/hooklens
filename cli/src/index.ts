@@ -14,21 +14,26 @@ const program = new Command();
 
 program
   .name('hookdash')
-  .description('CLI tunnel for Hookdash webhook debugger')
-  .version('0.1.0');
+  .description('Forward Hookdash webhooks to localhost and manage your endpoints')
+  .version('0.2.0');
 
 program
   .command('login')
-  .description('Authenticate with Hookdash')
-  .action(async () => {
-    await loginCommand();
+  .description('Authenticate with Hookdash (email and password, or an API key)')
+  .option('--api-key <key>', 'Log in with an API key (for Google or GitHub accounts, and CI)')
+  .option('--api-url <url>', 'Hookdash API URL, e.g. http://localhost:3000/api')
+  .action(async (options) => {
+    await loginCommand(options);
   });
 
 program
   .command('listen')
-  .description('Start forwarding webhooks to your local server')
+  .description('Forward live webhooks to your local server and report results back')
   .requiredOption('-p, --port <number>', 'Local port to forward webhooks to', '3000')
-  .option('--path <string>', 'Local path prefix (e.g., /webhooks)')
+  .option('--path <string>', 'Local path (e.g., /webhooks)')
+  .option('--forward-to <url>', 'Full URL to forward to instead of localhost:<port><path>')
+  .option('--endpoint <id>', 'Only forward events for this endpoint')
+  .option('--since <duration>', 'First catch up on events from this long ago (e.g. 10m, 2h)')
   .option('--api-url <string>', 'Override Hookdash API URL')
   .option('--ws-url <string>', 'Override Hookdash WebSocket URL')
   .action(async (options) => {
@@ -56,6 +61,7 @@ program
   .option('--provider <string>', 'Filter by provider')
   .option('--status <string>', 'Filter by forward status')
   .option('--type <string>', 'Filter by event type')
+  .option('--endpoint <id>', 'Filter by endpoint')
   .action(async (options) => {
     await eventsCommand(options);
   });

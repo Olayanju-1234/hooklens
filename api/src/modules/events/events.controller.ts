@@ -4,6 +4,7 @@ import {
   Post,
   Delete,
   Param,
+  Body,
   Query,
   Res,
   Headers,
@@ -23,6 +24,7 @@ import {
 import { EventsService } from './events.service.js';
 import type { WebhookEvent } from '../../entities/webhook-event.entity.js';
 import { EventsQueryDto } from './dto/events-query.dto.js';
+import { LocalDeliveryDto } from './dto/local-delivery.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
 
@@ -155,6 +157,21 @@ export class EventsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.eventsService.replay(id, user.sub);
+  }
+
+  @Post(':id/local-deliveries')
+  @ApiOperation({
+    summary:
+      'Report a delivery made outside Hookdash (e.g. `hookdash listen` to localhost)',
+  })
+  @ApiResponse({ status: 201, description: 'Delivery recorded' })
+  @ApiParam({ name: 'id', type: String })
+  recordLocalDelivery(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: LocalDeliveryDto,
+  ) {
+    return this.eventsService.recordLocalDelivery(id, user.sub, dto);
   }
 
   @Delete(':id')
