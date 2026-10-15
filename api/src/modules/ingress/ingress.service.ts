@@ -10,7 +10,10 @@ import { WebhookEvent } from '../../entities/webhook-event.entity.js';
 import { Workspace } from '../../entities/workspace.entity.js';
 import { SignatureService } from '../signature/signature.service.js';
 import { WebhookGateway } from '../websocket/webhook.gateway.js';
-import { ForwardJobData } from '../forward/forward.processor.js';
+import {
+  ForwardJobData,
+  FAN_OUT_JOB_OPTIONS,
+} from '../forward/forward.processor.js';
 import { AlertingService } from '../alerting/alerting.service.js';
 
 interface CaptureParams {
@@ -159,6 +162,7 @@ export class IngressService {
     const updates: Record<string, unknown> = {
       provider: endpoint.provider,
       eventType,
+      processedAt: new Date(),
     };
 
     if (deliveryId) {
@@ -235,27 +239,14 @@ export class IngressService {
       return;
     }
 
-    // Queue forward with retry config from endpoint
+    // Fan-out job; each destination's delivery job carries the endpoint's retry policy
     try {
       const jobData: ForwardJobData = {
         eventId: event.id,
         endpointId: endpoint.id,
         userId: event.userId,
       };
-
-      const attempts =
-        endpoint.retryMaxAttempts > 0 ? endpoint.retryMaxAttempts + 1 : 1;
-
-      await this.forwardQueue.add('forward', jobData, {
-        attempts,
-        backoff:
-          endpoint.retryMaxAttempts > 0
-            ? {
-                type: 'exponential',
-                delay: Math.max(endpoint.retryBackoffMs, 1000),
-              }
-            : undefined,
-      });
+      await this.forwardQueue.add('forward', jobData, FAN_OUT_JOB_OPTIONS);
     } catch (err) {
       this.logger.error(
         `Failed to queue forward for event ${event.id}: ${(err as Error).message}`,

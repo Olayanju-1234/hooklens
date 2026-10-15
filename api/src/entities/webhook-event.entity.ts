@@ -57,6 +57,17 @@ export class WebhookEvent {
   @Column({ type: 'timestamptz', default: () => 'NOW()' })
   receivedAt!: Date;
 
+  // Stage timings: verified and parsed, then handed to the delivery queue
+  @Column({ type: 'timestamptz', nullable: true })
+  processedAt!: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  queuedAt!: Date | null;
+
+  // Delivery targets at fan-out time, so the aggregate status knows when every one has resolved
+  @Column({ type: 'int', nullable: true })
+  targetCount!: number | null;
+
   // Parsed
   @Column({ type: 'varchar', length: 20, nullable: true })
   provider!: string | null;

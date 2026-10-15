@@ -103,7 +103,7 @@ describe('DeadLetterService', () => {
       await service.retry('ep-1', 'dl-1', 'user-1');
 
       expect(mockForwardQueue.add).toHaveBeenCalledWith(
-        'forward',
+        'deliver',
         {
           eventId: 'evt-1',
           endpointId: 'ep-1',
@@ -115,7 +115,7 @@ describe('DeadLetterService', () => {
       expect(mockDeadLetterRepo.remove).toHaveBeenCalledWith(deadLetter);
     });
 
-    it('should pass undefined destinationId when null', async () => {
+    it('should re-deliver to the fallback forward URL when destinationId is null', async () => {
       const deadLetter = {
         id: 'dl-1',
         eventId: 'evt-1',
@@ -130,8 +130,8 @@ describe('DeadLetterService', () => {
       await service.retry('ep-1', 'dl-1', 'user-1');
 
       expect(mockForwardQueue.add).toHaveBeenCalledWith(
-        'forward',
-        expect.objectContaining({ destinationId: undefined }),
+        'deliver',
+        expect.objectContaining({ destinationId: null }),
         expect.any(Object),
       );
     });

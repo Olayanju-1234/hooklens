@@ -5,8 +5,12 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
 import { ForwardResult } from '../../entities/forward-result.entity.js';
+import { DeadLetterEvent } from '../../entities/dead-letter-event.entity.js';
 import { EventsQueryDto } from './dto/events-query.dto.js';
-import { ForwardJobData } from '../forward/forward.processor.js';
+import {
+  ForwardJobData,
+  FAN_OUT_JOB_OPTIONS,
+} from '../forward/forward.processor.js';
 import { Endpoint } from '../../entities/endpoint.entity.js';
 import { WorkspacesService } from '../workspaces/workspaces.service.js';
 
@@ -29,6 +33,8 @@ export class EventsService {
     private readonly endpointRepo: Repository<Endpoint>,
     @InjectRepository(ForwardResult)
     private readonly forwardResultRepo: Repository<ForwardResult>,
+    @InjectRepository(DeadLetterEvent)
+    private readonly deadLetterRepo: Repository<DeadLetterEvent>,
     @InjectQueue('webhook-forward')
     private readonly forwardQueue: Queue<ForwardJobData>,
     private readonly workspacesService: WorkspacesService,
@@ -122,15 +128,24 @@ export class EventsService {
   async getTimeline(eventId: string, userId: string) {
     const event = await this.findOne(eventId, userId);
 
-    const forwardResults = await this.forwardResultRepo.find({
-      where: { eventId },
-      order: { attempt: 'ASC' },
-      relations: ['destination'],
-    });
+    const [forwardResults, deadLetters] = await Promise.all([
+      this.forwardResultRepo.find({
+        where: { eventId },
+        relations: ['destination'],
+      }),
+      this.deadLetterRepo.find({
+        where: { eventId },
+        order: { exhaustedAt: 'ASC' },
+      }),
+    ]);
 
     const steps: TimelineStep[] = [];
+    const since = (to: Date | null, from: Date | null) =>
+      to && from ? Math.max(0, to.getTime() - from.getTime()) : null;
+    // "<label> → <outcome>" is what the dashboard parses into per-destination lanes
+    const label = (dest: { label: string | null; url: string } | null) =>
+      dest ? dest.label || dest.url : 'forward URL';
 
-    // Step 1: Received
     steps.push({
       step: 'received',
       timestamp: event.receivedAt.toISOString(),
@@ -139,34 +154,50 @@ export class EventsService {
       detail: `${event.method} webhook received`,
     });
 
-    // Step 2: Parsed
+    const processedAt = event.processedAt ?? event.receivedAt;
     steps.push({
       step: 'parsed',
-      timestamp: event.receivedAt.toISOString(),
-      latencyMs: null,
+      timestamp: processedAt.toISOString(),
+      latencyMs: since(event.processedAt, event.receivedAt),
       status: event.eventType ? 'success' : 'warning',
       detail: event.eventType
         ? `Event type: ${event.eventType}`
         : 'Could not parse event type',
     });
 
-    // Step 3: Signature verified
     if (event.signatureValid !== null) {
       steps.push({
         step: 'verified',
-        timestamp: event.receivedAt.toISOString(),
+        timestamp: processedAt.toISOString(),
         latencyMs: null,
         status: event.signatureValid ? 'success' : 'error',
         detail: event.signatureValid ? 'Signature valid' : 'Signature invalid',
       });
     }
 
-    // Step 4+: Forward results
-    for (const result of forwardResults) {
+    if (event.queuedAt) {
+      steps.push({
+        step: 'queued',
+        timestamp: event.queuedAt.toISOString(),
+        latencyMs: since(event.queuedAt, processedAt),
+        status: 'success',
+        detail: `Queued for ${event.targetCount ?? 1} destination${event.targetCount === 1 ? '' : 's'}`,
+      });
+    }
+
+    const attempts = [...forwardResults].sort(
+      (a, b) =>
+        (a.startedAt ?? a.forwardedAt ?? a.createdAt).getTime() -
+        (b.startedAt ?? b.forwardedAt ?? b.createdAt).getTime(),
+    );
+    for (const result of attempts) {
       steps.push({
         step: result.attempt > 1 ? 'retried' : 'forwarded',
-        timestamp:
-          result.forwardedAt?.toISOString() ?? result.createdAt.toISOString(),
+        timestamp: (
+          result.startedAt ??
+          result.forwardedAt ??
+          result.createdAt
+        ).toISOString(),
         latencyMs: result.latency,
         status:
           result.status === 'forwarded'
@@ -174,13 +205,27 @@ export class EventsService {
             : result.status === 'pending'
               ? 'pending'
               : 'error',
-        detail: result.destination
-          ? `${result.destination.label || result.destination.url} → ${result.responseCode || result.status}`
-          : `Attempt ${result.attempt}: ${result.status}`,
+        detail: `${label(result.destination)} → ${result.responseCode || result.status}`,
       });
     }
 
-    // If no forward results, use legacy fields
+    // A dead target always has attempts, so its destination comes from those results
+    const destinations = new Map(
+      forwardResults
+        .filter((r) => r.destinationId && r.destination)
+        .map((r) => [r.destinationId, r.destination]),
+    );
+    for (const dead of deadLetters) {
+      steps.push({
+        step: 'dead',
+        timestamp: dead.exhaustedAt.toISOString(),
+        latencyMs: null,
+        status: 'error',
+        detail: `${label(destinations.get(dead.destinationId) ?? null)} → dead after ${dead.lastAttempt} attempt${dead.lastAttempt === 1 ? '' : 's'}`,
+      });
+    }
+
+    // Events from before per-attempt results were recorded only have the aggregate fields
     if (forwardResults.length === 0 && event.forwardStatus !== 'pending') {
       steps.push({
         step: 'forwarded',
@@ -258,13 +303,7 @@ export class EventsService {
       await this.forwardQueue.add(
         'forward',
         { eventId: saved.id, endpointId: endpoint.id, userId: original.userId },
-        {
-          attempts: endpoint.retryMaxAttempts + 1,
-          backoff: {
-            type: 'exponential',
-            delay: Math.max(endpoint.retryBackoffMs, 1000),
-          },
-        },
+        FAN_OUT_JOB_OPTIONS,
       );
     } catch (err) {
       this.logger.error(

@@ -6,6 +6,7 @@ import { EventsService } from './events.service.js';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
 import { Endpoint } from '../../entities/endpoint.entity.js';
 import { ForwardResult } from '../../entities/forward-result.entity.js';
+import { DeadLetterEvent } from '../../entities/dead-letter-event.entity.js';
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -39,6 +40,10 @@ describe('EventsService', () => {
         {
           provide: getRepositoryToken(ForwardResult),
           useValue: mockForwardResultRepo,
+        },
+        {
+          provide: getRepositoryToken(DeadLetterEvent),
+          useValue: { find: jest.fn().mockResolvedValue([]) },
         },
         { provide: 'BullQueue_webhook-forward', useValue: mockForwardQueue },
         { provide: WorkspacesService, useValue: mockWorkspacesService },
@@ -161,7 +166,7 @@ describe('EventsService', () => {
       expect(mockForwardQueue.add).toHaveBeenCalledWith(
         'forward',
         { eventId: 'evt-replay-1', endpointId: 'ep-1', userId: 'user-1' },
-        { attempts: 4, backoff: { type: 'exponential', delay: 1000 } },
+        { attempts: 3, backoff: { type: 'fixed', delay: 2000 } },
       );
     });
   });
