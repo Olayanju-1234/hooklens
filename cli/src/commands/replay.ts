@@ -1,37 +1,12 @@
 import chalk from 'chalk';
-import { loadConfig } from '../config/store.js';
+import { apiRequest, failWith, requireAuth } from '../config/http.js';
 
 export async function replayCommand(eventId: string): Promise<void> {
-  const config = loadConfig();
-
-  if (!config.token) {
-    console.log(chalk.red('\n  Not authenticated. Run `hookdash login` first.\n'));
-    process.exit(1);
-  }
-
-  if (!eventId.trim()) {
-    console.log(chalk.red('\n  Event ID is required.\n'));
-    process.exit(1);
-  }
-
+  const config = requireAuth();
   try {
-    const res = await fetch(`${config.apiUrl}/events/${eventId}/replay`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${config.token}` },
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => null) as { message?: string } | null;
-      const message = body?.message || `HTTP ${res.status}`;
-      console.log(chalk.red(`\n  Replay failed: ${message}\n`));
-      process.exit(1);
-    }
-
-    console.log(chalk.green(`\n  Event ${chalk.bold(eventId)} replayed successfully.\n`));
+    const replay = await apiRequest<{ id: string }>(`/events/${eventId}/replay`, { method: 'POST', config });
+    console.log(chalk.green(`\n  Replayed ${eventId} as ${replay.id}.\n`));
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.log(chalk.red(`\n  Connection failed: ${message}`));
-    console.log(chalk.dim('  Is the Hookdash API reachable?\n'));
-    process.exit(1);
+    failWith(err, 'replay event');
   }
 }

@@ -7,7 +7,7 @@ import {
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { Job, JobsOptions, Queue } from 'bullmq';
 import {
@@ -303,8 +303,9 @@ export class ForwardProcessor extends WorkerHost {
         if (!event) return null;
 
         const [results, deadLetters] = await Promise.all([
+          // Locally reported deliveries (target set) don't count towards the event's status
           m.find(ForwardResult, {
-            where: { eventId },
+            where: { eventId, target: IsNull() },
             order: { createdAt: 'ASC' },
           }),
           m.find(DeadLetterEvent, { where: { eventId } }),

@@ -12,6 +12,7 @@ import { Repository } from 'typeorm';
 import { User } from '../../entities/user.entity.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
 import { isTokenCurrent } from '../auth/strategies/jwt.strategy.js';
+import { ApiKeysService } from '../api-keys/api-keys.service.js';
 
 interface BroadcastPayload {
   id: string;
@@ -45,38 +46,45 @@ export class WebhookGateway
     private readonly jwtService: JwtService,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    private readonly apiKeysService: ApiKeysService,
   ) {}
 
   async handleConnection(client: Socket) {
     try {
-      const authToken = (client.handshake.auth as Record<string, unknown>)
-        ?.token as string | undefined;
-      const headerToken = client.handshake.headers?.authorization?.replace(
-        'Bearer ',
-        '',
-      );
-      const token = authToken ?? headerToken;
-
-      if (!token) {
+      const userId = await this.authenticate(client);
+      if (!userId) {
         client.disconnect();
         return;
       }
-
-      const payload = this.jwtService.verify<JwtPayload>(token);
-      const user = await this.userRepo.findOne({
-        where: { id: payload.sub },
-        select: { id: true, tokenVersion: true },
-      });
-      if (!isTokenCurrent(payload, user)) {
-        client.disconnect();
-        return;
-      }
-      const userId = payload.sub;
       void client.join(`user:${userId}`);
       this.logger.log(`Client connected: ${client.id} for user ${userId}`);
     } catch {
       client.disconnect();
     }
+  }
+
+  /** JWT from the dashboard, or an API key from the CLI and other tools. */
+  private async authenticate(client: Socket): Promise<string | null> {
+    const auth = client.handshake.auth as Record<string, unknown>;
+    const apiKey =
+      (auth?.apiKey as string | undefined) ??
+      (client.handshake.headers?.['x-api-key'] as string | undefined);
+    if (apiKey) {
+      const key = await this.apiKeysService.validateKey(apiKey);
+      return key?.createdByUserId ?? null;
+    }
+
+    const token =
+      (auth?.token as string | undefined) ??
+      client.handshake.headers?.authorization?.replace('Bearer ', '');
+    if (!token) return null;
+
+    const payload = this.jwtService.verify<JwtPayload>(token);
+    const user = await this.userRepo.findOne({
+      where: { id: payload.sub },
+      select: { id: true, tokenVersion: true },
+    });
+    return isTokenCurrent(payload, user) ? payload.sub : null;
   }
 
   handleDisconnect(client: Socket) {

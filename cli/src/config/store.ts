@@ -6,22 +6,26 @@ export interface HookdashConfig {
   apiUrl: string;
   wsUrl: string;
   token: string | null;
+  apiKey: string | null;
   ingressSlug: string | null;
+  workspaceId: string | null;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), '.hookdash');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 const DEFAULT_CONFIG: HookdashConfig = {
-  apiUrl: 'https://hookdash-api.onrender.com/api',
-  wsUrl: 'https://hookdash-api.onrender.com',
+  apiUrl: 'https://api.hookdash.ojusentinel.com/api',
+  wsUrl: 'https://api.hookdash.ojusentinel.com',
   token: null,
+  apiKey: null,
   ingressSlug: null,
+  workspaceId: null,
 };
 
 function ensureConfigDir(): void {
   if (!fs.existsSync(CONFIG_DIR)) {
-    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   }
 }
 
@@ -35,23 +39,41 @@ export function loadConfig(): HookdashConfig {
   try {
     const raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
     const stored = JSON.parse(raw) as Partial<HookdashConfig>;
-    return { ...DEFAULT_CONFIG, ...stored };
+    const config = { ...DEFAULT_CONFIG, ...stored };
+    // Configs written before the move off Render still point at the old host
+    if (config.apiUrl.includes('onrender.com')) {
+      config.apiUrl = DEFAULT_CONFIG.apiUrl;
+      config.wsUrl = DEFAULT_CONFIG.wsUrl;
+    }
+    return config;
   } catch {
     return { ...DEFAULT_CONFIG };
   }
 }
 
-export function saveConfig(partial: Partial<HookdashConfig>): void {
+function writeConfig(config: HookdashConfig): void {
   ensureConfigDir();
+  // The file holds a token or API key, so keep it private to this user
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), {
+    encoding: 'utf-8',
+    mode: 0o600,
+  });
+  fs.chmodSync(CONFIG_FILE, 0o600);
+}
 
-  const current = loadConfig();
-  const merged = { ...current, ...partial };
-
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2), 'utf-8');
+export function saveConfig(partial: Partial<HookdashConfig>): void {
+  writeConfig({ ...loadConfig(), ...partial });
 }
 
 export function clearConfig(): void {
-  ensureConfigDir();
+  const { apiUrl, wsUrl } = loadConfig();
+  writeConfig({ ...DEFAULT_CONFIG, apiUrl, wsUrl });
+}
 
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf-8');
+export function isAuthenticated(config: HookdashConfig): boolean {
+  return Boolean(config.token || config.apiKey);
+}
+
+export function ingressBase(config: HookdashConfig): string {
+  return config.apiUrl.replace(/\/api\/?$/, '');
 }

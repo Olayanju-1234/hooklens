@@ -71,6 +71,22 @@ hookdash/
 - **Retention policies** — configurable event TTL
 - **SDK & CLI** — programmatic and terminal access
 
+## CLI
+
+Forward live webhooks to your machine while you develop:
+
+```bash
+cd cli && npm install && npm run build && npm link
+
+hookdash login                     # email and password
+hookdash login --api-key hd_live_… # Google/GitHub accounts and CI (create a key in Settings)
+hookdash listen --port 3000 --path /webhooks
+```
+
+`listen` delivers the exact bytes Hookdash received, with the provider's own headers, so your local signature checks pass. Each result is reported back and shows in the dashboard's flight recorder as `cli · localhost:3000/webhooks`. After a dropped connection it catches up on anything it missed, and `--since 10m` replays the last ten minutes on start. `--endpoint <id>` limits it to one endpoint, and `--forward-to <url>` sends somewhere other than localhost.
+
+Also: `hookdash endpoints`, `hookdash events [--status failed]`, `hookdash replay <event-id>`, `hookdash whoami`.
+
 ## Tech stack
 
 | Layer | Tech |
