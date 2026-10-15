@@ -59,6 +59,10 @@ export class Endpoint {
   @Column({ type: 'varchar', length: 255, nullable: true, select: false })
   webhookSecret!: string | null;
 
+  // Hookdash signs forwarded requests with this (Standard Webhooks, whsec_ format)
+  @Column({ type: 'varchar', length: 64, select: false })
+  signingSecret!: string;
+
   @Column({ type: 'text', nullable: true })
   forwardUrl!: string | null;
 

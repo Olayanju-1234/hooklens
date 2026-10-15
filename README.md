@@ -10,6 +10,7 @@ Hookdash generates a unique ingress URL per workspace. Point your provider's web
 - **Verified** — provider-specific signature validation (see supported providers below)
 - **Transformed** — configurable rules to mutate or reshape the payload before forwarding
 - **Forwarded** — relayed to your local or staging server via a BullMQ queue with dead-letter capture for failed deliveries
+- **Signed** — every forwarded request carries Standard Webhooks headers (`webhook-id`, `webhook-timestamp`, `webhook-signature`) from your route's `whsec_` secret, so your server verifies one scheme whatever the provider (`verify.hookdash()` in the SDK)
 - **Streamed** — pushed to the dashboard over WebSocket in real time
 - **Alerted** — Slack, Discord, or Email notifications on matching events
 

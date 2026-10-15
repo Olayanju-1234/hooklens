@@ -137,11 +137,27 @@ console.log(result.status) // 200
 
 ## Signature Verification
 
-Verify webhook signatures in your own server. Supports Paystack, Flutterwave, and Mono out of the box.
+Verify webhook signatures in your own server. Supports requests forwarded by Hookdash, plus Paystack, Flutterwave and Mono directly.
 
 ```ts
 import { verify } from 'hookdash-sdk/verify'
 ```
+
+### Requests forwarded by Hookdash
+
+Hookdash signs every request it forwards with [Standard Webhooks](https://www.standardwebhooks.com) headers (`webhook-id`, `webhook-timestamp`, `webhook-signature`), using your route's `whsec_` signing secret. You'll find it in the dashboard under Routes → Destinations, or at `GET /api/endpoints/:id/signing-secret`. You verify one scheme whatever the original provider was.
+
+```ts
+app.post('/webhooks', express.raw({ type: '*/*' }), (req, res) => {
+  const raw = req.body.toString('utf8')
+  if (!verify.hookdash(raw, req.headers, process.env.HOOKDASH_SIGNING_SECRET!)) {
+    return res.status(401).send('Invalid signature')
+  }
+  // handle the webhook...
+})
+```
+
+Requests older than 5 minutes are rejected. Pass `{ toleranceSeconds }` to change that. The original provider headers are forwarded too. Any `webhook-*` headers the provider sent arrive as `x-original-webhook-*`.
 
 ### Paystack
 
@@ -169,8 +185,9 @@ const valid = verify.flutterwave(hash, process.env.FLW_SECRET!)
 ### Mono
 
 ```ts
-const sig = req.headers['mono-webhook-secret'] as string
-const valid = verify.mono(JSON.stringify(req.body), sig, process.env.MONO_SECRET!)
+// Mono sends your secret itself in this header
+const headerSecret = req.headers['mono-webhook-secret'] as string
+const valid = verify.mono(JSON.stringify(req.body), headerSecret, process.env.MONO_SECRET!)
 ```
 
 ### Auto-detect Provider

@@ -16,6 +16,10 @@ import { AlertingService } from '../alerting/alerting.service.js';
 import { applyOperations } from '../transform/transform.service.js';
 import type { TransformOperationDto } from '../transform/dto/transform.dto.js';
 import { outboundRequestOptions } from '../../common/utils/outbound-url.js';
+import {
+  forwardableHeaders,
+  hookdashSignatureHeaders,
+} from './outbound-headers.js';
 
 export interface ForwardJobData {
   eventId: string;
@@ -38,18 +42,6 @@ interface TargetResult {
   error?: string;
   body?: string;
 }
-
-// Signature headers passed through untouched when the body is forwarded as received
-const PASSTHROUGH_HEADERS = [
-  'stripe-signature',
-  'x-paystack-signature',
-  'verif-hash',
-  'mono-webhook-secret',
-  'x-bags-signature',
-  'x-webhook-signature',
-  'x-signature',
-  'x-hub-signature-256',
-];
 
 @Processor('webhook-forward', {
   concurrency: 5,
@@ -90,7 +82,11 @@ export class ForwardProcessor extends WorkerHost {
 
     const [event, endpoint] = await Promise.all([
       this.eventRepo.findOne({ where: { id: eventId } }),
-      this.endpointRepo.findOne({ where: { id: endpointId } }),
+      this.endpointRepo
+        .createQueryBuilder('ep')
+        .addSelect('ep.signingSecret')
+        .where('ep.id = :endpointId', { endpointId })
+        .getOne(),
     ]);
 
     if (!event || !endpoint) {
@@ -162,7 +158,12 @@ export class ForwardProcessor extends WorkerHost {
 
     for (const target of targets) {
       if (delivered.has(target.destinationId)) continue;
-      const result = await this.send(target, event.id, payload);
+      const result = await this.send(
+        target,
+        event.id,
+        payload,
+        endpoint.signingSecret,
+      );
       results.push(result);
 
       if (usesDestinations) {
@@ -263,15 +264,15 @@ export class ForwardProcessor extends WorkerHost {
       '';
 
     if (rules.length === 0 || !event.body) {
-      // No transforms: forward the exact bytes so the receiver can verify signatures
-      const headers: Record<string, string> = {
-        'Content-Type': original['content-type'] ?? 'application/json',
-        'X-Hookdash-Original-Signature': signature,
+      // No transforms: forward the exact bytes and headers so the provider signature still verifies
+      return {
+        data: event.rawBody ?? JSON.stringify(event.body),
+        headers: {
+          ...forwardableHeaders(original, { bodyTransformed: false }),
+          'content-type': original['content-type'] ?? 'application/json',
+          'x-hookdash-original-signature': signature,
+        },
       };
-      for (const name of PASSTHROUGH_HEADERS) {
-        if (original[name]) headers[name] = original[name];
-      }
-      return { data: event.rawBody ?? JSON.stringify(event.body), headers };
     }
 
     let body = event.body;
@@ -281,8 +282,9 @@ export class ForwardProcessor extends WorkerHost {
     return {
       data: JSON.stringify(body),
       headers: {
-        'Content-Type': 'application/json',
-        'X-Hookdash-Original-Signature': signature,
+        ...forwardableHeaders(original, { bodyTransformed: true }),
+        'content-type': 'application/json',
+        'x-hookdash-original-signature': signature,
       },
     };
   }
@@ -291,14 +293,23 @@ export class ForwardProcessor extends WorkerHost {
     target: ForwardTarget,
     eventId: string,
     payload: { data: string; headers: Record<string, string> },
+    signingSecret: string | undefined,
   ): Promise<TargetResult> {
     const start = Date.now();
     try {
       const guard = await outboundRequestOptions(target.url, this.allowPrivate);
+      // Signed per attempt so the timestamp stays inside the receiver's tolerance on retries
+      const signature = signingSecret
+        ? hookdashSignatureHeaders(signingSecret, eventId, payload.data)
+        : {};
       const response = await this.httpService.axiosRef({
         method: 'POST',
         url: target.url,
-        headers: { ...payload.headers, 'X-Hookdash-Event-Id': eventId },
+        headers: {
+          ...payload.headers,
+          ...signature,
+          'x-hookdash-event-id': eventId,
+        },
         data: payload.data,
         transformRequest: [(data: string) => data],
         timeout: 15_000,

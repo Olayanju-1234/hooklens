@@ -181,6 +181,10 @@ export const endpoints = {
     request<Endpoint>(`/endpoints/${id}`, { method: "PATCH", body: data }),
   delete: (id: string) =>
     request<void>(`/endpoints/${id}`, { method: "DELETE" }),
+  signingSecret: (id: string) =>
+    request<{ signingSecret: string }>(`/endpoints/${id}/signing-secret`),
+  rotateSigningSecret: (id: string) =>
+    request<{ signingSecret: string }>(`/endpoints/${id}/signing-secret/rotate`, { method: "POST" }),
 };
 
 // Events
