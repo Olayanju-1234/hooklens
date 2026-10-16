@@ -187,4 +187,4 @@ NODE_ENV=development
 
 ## License
 
-UNLICENSED — private project.
+[MIT](LICENSE) © 2026 Joseph Olayanju
