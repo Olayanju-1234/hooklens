@@ -4,7 +4,7 @@
   "description": "Payment webhook debugger for African PSPs",
   "author": "Joseph Olayanju",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

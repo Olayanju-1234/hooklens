@@ -1,6 +1,7 @@
 {
   "name": "hookdash",
   "version": "0.2.0",
+  "license": "MIT",
   "type": "module",
   "description": "CLI tunnel for Hookdash webhook debugger",
   "bin": {
