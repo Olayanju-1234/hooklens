@@ -34,9 +34,9 @@ export function EndpointForm({ endpoint, onSaved, onCancel }: Props) {
     }
     setSubmitting(true);
     try {
-      const retries = parseInt(retryMaxAttempts) || 3;
-      const backoff = parseInt(retryBackoffMs) || 1000;
-      const replyStatus = parseInt(responseStatusCode) || 200;
+      const retries = intOr(retryMaxAttempts, 3);
+      const backoff = intOr(retryBackoffMs, 1000);
+      const replyStatus = intOr(responseStatusCode, 200);
       let saved: Endpoint;
       if (!endpoint) {
         saved = await endpointsApi.create({
@@ -159,6 +159,12 @@ export function BlockInvalidToggle({ checked, onChange, disabled, compact }: { c
       </span>
     </label>
   );
+}
+
+// Only a blank or non-numeric field takes the default; a deliberate 0 is kept
+function intOr(text: string, fallback: number): number {
+  const value = parseInt(text);
+  return Number.isNaN(value) ? fallback : value;
 }
 
 function isJsonObject(text: string): boolean {
