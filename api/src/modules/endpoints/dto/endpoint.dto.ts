@@ -63,6 +63,16 @@ export class CreateEndpointDto {
   @Min(0)
   @Max(3_600_000)
   retryBackoffMs?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Block webhooks whose signature fails verification instead of forwarding them. Needs webhookSecret. Defaults to false',
+    example: true,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  blockInvalidSignatures?: boolean;
 }
 
 export class UpdateEndpointDto {
@@ -126,4 +136,13 @@ export class UpdateEndpointDto {
   @Min(0)
   @Max(3_600_000)
   retryBackoffMs?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Block webhooks whose signature fails verification instead of forwarding them. Omit to keep the current setting',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  blockInvalidSignatures?: boolean;
 }

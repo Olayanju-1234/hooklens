@@ -15,6 +15,7 @@ import {
 import { SCHEMES } from "../tower/live-status";
 import { findProvider } from "@/lib/providers";
 import { PROVIDER_CODE } from "./format";
+import { BlockInvalidToggle } from "./endpoint-form";
 
 export interface RouteData {
   endpoint: Endpoint;
@@ -147,6 +148,20 @@ function SealStage({ route, onChange }: { route: RouteData; onChange: (r: RouteD
   const [rotating, setRotating] = useState(false);
   const [secret, setSecret] = useState("");
   const [saving, setSaving] = useState(false);
+  const [blocking, setBlocking] = useState(false);
+
+  async function setBlock(next: boolean) {
+    setBlocking(true);
+    try {
+      const updated = await endpointsApi.update(ep.id, { blockInvalidSignatures: next });
+      onChange({ ...route, endpoint: updated });
+      toast.success(next ? "Invalid signatures are now blocked at the gate" : "Invalid signatures are now forwarded, marked ✗");
+    } catch (err) {
+      toast.error(errText(err, "Failed to update blocking"));
+    } finally {
+      setBlocking(false);
+    }
+  }
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -183,8 +198,6 @@ function SealStage({ route, onChange }: { route: RouteData; onChange: (r: RouteD
         <dd>{scheme.scheme}</dd>
         <dt>header</dt>
         <dd>{scheme.header ? [scheme.header, ...(scheme.altHeaders ?? [])].join(" · ") : "—"}</dd>
-        <dt>invalid</dt>
-        <dd>{ep.blockInvalidSignatures ? "blocked at the gate" : "recorded and forwarded, marked ✗"}</dd>
         {scheme.optional && (
           <>
             <dt>missing</dt>
@@ -192,6 +205,7 @@ function SealStage({ route, onChange }: { route: RouteData; onChange: (r: RouteD
           </>
         )}
       </dl>
+      <BlockInvalidToggle compact checked={!!ep.blockInvalidSignatures} disabled={blocking} onChange={(next) => void setBlock(next)} />
       {rotating && (
         <form className="inline-form stage-form" onSubmit={(e) => void save(e)}>
           <input
