@@ -83,7 +83,7 @@ jobs:
           NEXT_PUBLIC_API_URL: http://localhost:3000/api
 
   sdk:
-    name: SDK – Build
+    name: SDK – Lint & Build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -98,6 +98,7 @@ jobs:
           cache-dependency-path: sdk/package-lock.json
 
       - run: npm ci
+      - run: npm run lint
       - run: npm run build
 
   cli:
