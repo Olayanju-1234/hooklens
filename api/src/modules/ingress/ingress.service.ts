@@ -204,12 +204,13 @@ export class IngressService {
     }
 
     // Block forwarding if signature is invalid and enforcement is on
-    if (endpoint.blockInvalidSignatures && updates.signatureValid === false) {
+    const blocked =
+      endpoint.blockInvalidSignatures && updates.signatureValid === false;
+    if (blocked) {
       await this.eventRepo.update(event.id, { forwardStatus: 'blocked' });
       this.logger.warn(
         `Event ${event.id} blocked — invalid signature (enforcement enabled)`,
       );
-      return;
     }
 
     // Broadcast to WebSocket — non-critical, don't let it block
@@ -220,7 +221,7 @@ export class IngressService {
         eventType,
         signatureValid: (updates.signatureValid as boolean) ?? null,
         receivedAt: event.receivedAt,
-        forwardStatus: event.forwardStatus,
+        forwardStatus: blocked ? 'blocked' : event.forwardStatus,
         method: event.method,
         path: event.path,
         bodyPreview: JSON.stringify(event.body).slice(0, 200),
@@ -230,6 +231,8 @@ export class IngressService {
         `WebSocket broadcast failed for event ${event.id}: ${(err as Error).message}`,
       );
     }
+
+    if (blocked) return;
 
     if (opts.skipForward) {
       await this.eventRepo.update(event.id, { forwardStatus: 'skipped' });

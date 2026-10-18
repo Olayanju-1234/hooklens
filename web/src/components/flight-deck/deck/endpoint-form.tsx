@@ -18,6 +18,7 @@ export function EndpointForm({ endpoint, onSaved, onCancel }: Props) {
   const [webhookSecret, setWebhookSecret] = useState("");
   const [retryMaxAttempts, setRetryMaxAttempts] = useState(String(endpoint?.retryMaxAttempts ?? 3));
   const [retryBackoffMs, setRetryBackoffMs] = useState(String(endpoint?.retryBackoffMs ?? 1000));
+  const [blockInvalidSignatures, setBlockInvalidSignatures] = useState(endpoint?.blockInvalidSignatures ?? false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -37,9 +38,10 @@ export function EndpointForm({ endpoint, onSaved, onCancel }: Props) {
           webhookSecret: webhookSecret || undefined,
           retryMaxAttempts: retries,
           retryBackoffMs: backoff,
+          blockInvalidSignatures,
         } as Parameters<typeof endpointsApi.create>[0]);
       } else {
-        const update: Record<string, unknown> = { name, provider, forwardUrl: forwardUrl || null, retryMaxAttempts: retries, retryBackoffMs: backoff };
+        const update: Record<string, unknown> = { name, provider, forwardUrl: forwardUrl || null, retryMaxAttempts: retries, retryBackoffMs: backoff, blockInvalidSignatures };
         if (webhookSecret) update.webhookSecret = webhookSecret;
         saved = await endpointsApi.update(endpoint.id, update as Partial<Endpoint>);
       }
@@ -92,6 +94,7 @@ export function EndpointForm({ endpoint, onSaved, onCancel }: Props) {
           <span>Backoff (ms)</span>
           <input className="fd-input" type="number" min="100" max="60000" value={retryBackoffMs} onChange={(e) => setRetryBackoffMs(e.target.value)} />
         </label>
+        <BlockInvalidToggle checked={blockInvalidSignatures} onChange={setBlockInvalidSignatures} />
       </div>
       {error && <p className="form-error">{error}</p>}
       <div className="route-form-actions">
@@ -103,5 +106,20 @@ export function EndpointForm({ endpoint, onSaved, onCancel }: Props) {
         </button>
       </div>
     </form>
+  );
+}
+
+export function BlockInvalidToggle({ checked, onChange, disabled, compact }: { checked: boolean; onChange: (next: boolean) => void; disabled?: boolean; compact?: boolean }) {
+  return (
+    <label className="fd-toggle" data-on={checked || undefined} data-compact={compact || undefined}>
+      <input type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        <b>Block webhooks with an invalid signature</b>
+        <small>
+          Invalid signature: <em>{checked ? "blocked at the gate, never forwarded" : "recorded and forwarded, marked ✗"}</em>
+        </small>
+        {!compact && <small>Needs a signing secret. Without one nothing is verified, so nothing is blocked.</small>}
+      </span>
+    </label>
   );
 }

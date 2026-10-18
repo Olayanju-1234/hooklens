@@ -176,6 +176,7 @@ export const endpoints = {
     provider: string;
     forwardUrl?: string;
     webhookSecret?: string;
+    blockInvalidSignatures?: boolean;
   }) => request<Endpoint>("/endpoints", { method: "POST", body: data }),
   update: (id: string, data: Partial<Endpoint>) =>
     request<Endpoint>(`/endpoints/${id}`, { method: "PATCH", body: data }),
