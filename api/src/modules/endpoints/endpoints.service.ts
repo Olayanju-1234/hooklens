@@ -58,6 +58,8 @@ export class EndpointsService {
       signingSecret: generateSigningSecret(),
       retryMaxAttempts: dto.retryMaxAttempts ?? 3,
       retryBackoffMs: dto.retryBackoffMs ?? 5000,
+      responseStatusCode: dto.responseStatusCode ?? 200,
+      responseBody: dto.responseBody ?? null,
       blockInvalidSignatures: dto.blockInvalidSignatures ?? false,
     });
     const saved = await this.endpointRepo.save(endpoint);

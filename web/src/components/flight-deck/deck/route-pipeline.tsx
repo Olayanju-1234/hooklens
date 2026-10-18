@@ -98,7 +98,16 @@ export function RoutePipeline({ route, ingressSlug, highlighted, onChange, onEdi
         </header>
 
         <div className="pipe" data-flowing={flowing || undefined}>
-          <Stage n="01" title="Source" meta={code}>
+          <Stage
+            n="01"
+            title="Source"
+            meta={code}
+            tools={
+              <span className="label-sm stage-policy" title={ep.responseBody ?? undefined}>
+                reply {ep.responseStatusCode ?? 200} · {ep.responseBody ? "custom body" : "default body"}
+              </span>
+            }
+          >
             <p className="stage-lede">{provider.value === ep.provider ? provider.description : "Any sender"}</p>
             {ingressUrl && (
               <button type="button" className="ingress-chip stage-url" title="Copy ingress URL" onClick={() => copy(ingressUrl, "Ingress URL")}>
