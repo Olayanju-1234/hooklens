@@ -226,8 +226,17 @@ export class EventsService {
       });
     }
 
-    // Events from before per-attempt results were recorded only have the aggregate fields
-    if (
+    // Not a delivery step, so the dashboard doesn't draw a forward lane for it
+    if (event.forwardStatus === 'blocked') {
+      steps.push({
+        step: 'blocked',
+        timestamp: processedAt.toISOString(),
+        latencyMs: null,
+        status: 'error',
+        detail: 'Blocked at the gate: invalid signature, not forwarded',
+      });
+    } else if (
+      // Events from before per-attempt results were recorded only have the aggregate fields
       !forwardResults.some((r) => !r.target) &&
       event.forwardStatus !== 'pending'
     ) {

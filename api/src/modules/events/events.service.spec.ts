@@ -81,6 +81,52 @@ describe('EventsService', () => {
     });
   });
 
+  describe('getTimeline', () => {
+    const event = (forwardStatus: string) => ({
+      id: 'evt-1',
+      userId: 'user-1',
+      method: 'POST',
+      eventType: 'push',
+      signatureValid: false,
+      forwardStatus,
+      forwardCode: null,
+      forwardLatency: null,
+      forwardedAt: null,
+      queuedAt: null,
+      receivedAt: new Date('2026-10-18T19:30:07Z'),
+      processedAt: new Date('2026-10-18T19:30:07Z'),
+      createdAt: new Date('2026-10-18T19:30:07Z'),
+    });
+
+    it('shows a blocked event as blocked, with no delivery step', async () => {
+      mockEventRepo.findOne.mockResolvedValue(event('blocked'));
+      mockForwardResultRepo.find.mockResolvedValue([]);
+
+      const { steps } = await service.getTimeline('evt-1', 'user-1');
+
+      expect(steps.map((s) => s.step)).toEqual([
+        'received',
+        'parsed',
+        'verified',
+        'blocked',
+      ]);
+      expect(steps.at(-1)).toMatchObject({ status: 'error' });
+    });
+
+    it('still shows the aggregate forward step for older events', async () => {
+      mockEventRepo.findOne.mockResolvedValue(event('failed'));
+      mockForwardResultRepo.find.mockResolvedValue([]);
+
+      const { steps } = await service.getTimeline('evt-1', 'user-1');
+
+      expect(steps.at(-1)).toMatchObject({
+        step: 'forwarded',
+        status: 'error',
+        detail: 'Forward failed (N/A)',
+      });
+    });
+  });
+
   describe('diff', () => {
     it('should compute differences between two event bodies', async () => {
       const event1 = {
