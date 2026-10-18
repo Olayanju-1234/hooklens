@@ -84,7 +84,8 @@ export interface UpdateEndpointParams {
   retryMaxAttempts?: number;
   retryBackoffMs?: number;
   responseStatusCode?: number;
-  responseBody?: string;
+  /** JSON object or array as a string; null resets the reply to {"status":"ok"}. */
+  responseBody?: string | null;
   blockInvalidSignatures?: boolean;
 }
 

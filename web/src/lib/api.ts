@@ -164,6 +164,8 @@ export interface Endpoint {
   isActive: boolean;
   retryMaxAttempts?: number;
   retryBackoffMs?: number;
+  responseStatusCode?: number;
+  responseBody?: string | null;
   blockInvalidSignatures?: boolean;
   createdAt: string;
 }
@@ -176,6 +178,10 @@ export const endpoints = {
     provider: string;
     forwardUrl?: string;
     webhookSecret?: string;
+    retryMaxAttempts?: number;
+    retryBackoffMs?: number;
+    responseStatusCode?: number;
+    responseBody?: string;
     blockInvalidSignatures?: boolean;
   }) => request<Endpoint>("/endpoints", { method: "POST", body: data }),
   update: (id: string, data: Partial<Endpoint>) =>

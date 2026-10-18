@@ -50,39 +50,102 @@ describe('blockInvalidSignatures on the endpoint DTOs', () => {
   });
 });
 
-describe('EndpointsService blockInvalidSignatures', () => {
-  let rows: Map<string, Endpoint>;
-  let endpointRepo: {
-    create: jest.Mock;
-    save: jest.Mock;
-    findOne: jest.Mock;
-    update: jest.Mock;
+describe('reply settings on the endpoint DTOs', () => {
+  const bodies = [
+    [
+      'CreateEndpointDto',
+      CreateEndpointDto,
+      { name: 'GH', provider: 'github' },
+    ],
+    ['UpdateEndpointDto', UpdateEndpointDto, {}],
+  ] as const;
+
+  it.each(bodies)('%s accepts a 2xx status', async (_label, cls, base) => {
+    for (const value of [200, 202, 204, 299]) {
+      const dto = await parse<{ responseStatusCode?: number }>(cls, {
+        ...base,
+        responseStatusCode: value,
+      });
+      expect(dto.responseStatusCode).toBe(value);
+    }
+  });
+
+  it.each(bodies)(
+    '%s rejects a status outside 2xx',
+    async (_label, cls, base) => {
+      for (const value of [199, 301, 400, 500, 202.5, '202']) {
+        await expect(
+          parse(cls, { ...base, responseStatusCode: value }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      }
+    },
+  );
+
+  it.each(bodies)(
+    '%s accepts a JSON object or array body',
+    async (_label, cls, base) => {
+      for (const value of ['{"received":true}', '[1,2]']) {
+        const dto = await parse<{ responseBody?: string }>(cls, {
+          ...base,
+          responseBody: value,
+        });
+        expect(dto.responseBody).toBe(value);
+      }
+    },
+  );
+
+  it.each(bodies)(
+    '%s rejects a body ingress would not send',
+    async (_label, cls, base) => {
+      const tooLong = JSON.stringify({ pad: 'x'.repeat(4096) });
+      for (const value of ['ok', '', '42', '"ok"', '{bad', tooLong, 12]) {
+        await expect(
+          parse(cls, { ...base, responseBody: value }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      }
+    },
+  );
+
+  it('UpdateEndpointDto accepts a null body to reset the reply', async () => {
+    const dto = await parse(UpdateEndpointDto, { responseBody: null });
+    expect(dto.responseBody).toBeNull();
+  });
+});
+
+// In-memory endpoint repo, enough for create, findOne and update
+function fakeService() {
+  const rows = new Map<string, Endpoint>();
+  const endpointRepo = {
+    create: jest.fn((data: Partial<Endpoint>) => ({ ...data })),
+    save: jest.fn((ep: Endpoint) => {
+      const saved = { ...ep, id: ep.id ?? `ep-${rows.size + 1}` };
+      rows.set(saved.id, saved);
+      return Promise.resolve(saved);
+    }),
+    findOne: jest.fn(({ where }: { where: { id: string } }) =>
+      Promise.resolve(rows.has(where.id) ? { ...rows.get(where.id) } : null),
+    ),
+    update: jest.fn((id: string, changes: Partial<Endpoint>) => {
+      rows.set(id, { ...rows.get(id)!, ...changes });
+      return Promise.resolve(undefined);
+    }),
   };
+  const service = new EndpointsService(
+    endpointRepo as unknown as Repository<Endpoint>,
+    {} as Repository<ForwardDestination>,
+    { isMember: jest.fn() } as unknown as WorkspacesService,
+    { get: jest.fn() } as unknown as ConfigService,
+  );
+  return { rows, endpointRepo, service };
+}
+
+describe('EndpointsService blockInvalidSignatures', () => {
+  let rows: ReturnType<typeof fakeService>['rows'];
+  let endpointRepo: ReturnType<typeof fakeService>['endpointRepo'];
   let service: EndpointsService;
 
   beforeEach(() => {
-    rows = new Map();
-    endpointRepo = {
-      create: jest.fn((data: Partial<Endpoint>) => ({ ...data })),
-      save: jest.fn((ep: Endpoint) => {
-        const saved = { ...ep, id: ep.id ?? `ep-${rows.size + 1}` };
-        rows.set(saved.id, saved);
-        return Promise.resolve(saved);
-      }),
-      findOne: jest.fn(({ where }: { where: { id: string } }) =>
-        Promise.resolve(rows.has(where.id) ? { ...rows.get(where.id) } : null),
-      ),
-      update: jest.fn((id: string, changes: Partial<Endpoint>) => {
-        rows.set(id, { ...rows.get(id)!, ...changes });
-        return Promise.resolve(undefined);
-      }),
-    };
-    service = new EndpointsService(
-      endpointRepo as unknown as Repository<Endpoint>,
-      {} as Repository<ForwardDestination>,
-      { isMember: jest.fn() } as unknown as WorkspacesService,
-      { get: jest.fn() } as unknown as ConfigService,
-    );
+    ({ rows, endpointRepo, service } = fakeService());
   });
 
   it('saves it on create', async () => {
@@ -137,5 +200,86 @@ describe('EndpointsService blockInvalidSignatures', () => {
     });
     expect(updated.name).toBe('Renamed');
     expect(updated.blockInvalidSignatures).toBe(true);
+  });
+});
+
+describe('EndpointsService reply settings', () => {
+  let rows: ReturnType<typeof fakeService>['rows'];
+  let endpointRepo: ReturnType<typeof fakeService>['endpointRepo'];
+  let service: EndpointsService;
+
+  beforeEach(() => {
+    ({ rows, endpointRepo, service } = fakeService());
+  });
+
+  it('saves them on create', async () => {
+    const dto = await parse(CreateEndpointDto, {
+      name: 'GH',
+      provider: 'github',
+      responseStatusCode: 202,
+      responseBody: '{"received":true}',
+    });
+    const created = await service.create('user-1', dto, 'ws-1');
+
+    expect(rows.get(created.id)).toMatchObject({
+      responseStatusCode: 202,
+      responseBody: '{"received":true}',
+    });
+  });
+
+  it('defaults to 200 and no body on create', async () => {
+    const created = await service.create(
+      'user-1',
+      { name: 'GH', provider: 'github' },
+      'ws-1',
+    );
+    expect(rows.get(created.id)).toMatchObject({
+      responseStatusCode: 200,
+      responseBody: null,
+    });
+  });
+
+  it('changes them through update and keeps them when left out', async () => {
+    const { id } = await service.create(
+      'user-1',
+      { name: 'GH', provider: 'github' },
+      'ws-1',
+    );
+    await service.update(
+      id,
+      'user-1',
+      await parse(UpdateEndpointDto, {
+        responseStatusCode: 204,
+        responseBody: '{"ok":1}',
+      }),
+    );
+    const renamed = await service.update(
+      id,
+      'user-1',
+      await parse(UpdateEndpointDto, { name: 'Renamed' }),
+    );
+
+    expect(endpointRepo.update).toHaveBeenLastCalledWith(id, {
+      name: 'Renamed',
+    });
+    expect(renamed).toMatchObject({
+      name: 'Renamed',
+      responseStatusCode: 204,
+      responseBody: '{"ok":1}',
+    });
+  });
+
+  it('clears the body when an update sends null', async () => {
+    const { id } = await service.create(
+      'user-1',
+      { name: 'GH', provider: 'github', responseBody: '{"ok":1}' },
+      'ws-1',
+    );
+    const updated = await service.update(
+      id,
+      'user-1',
+      await parse(UpdateEndpointDto, { responseBody: null }),
+    );
+    expect(updated.responseBody).toBeNull();
   });
 });

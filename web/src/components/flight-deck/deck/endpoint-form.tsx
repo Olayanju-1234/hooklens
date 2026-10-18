@@ -19,16 +19,24 @@ export function EndpointForm({ endpoint, onSaved, onCancel }: Props) {
   const [retryMaxAttempts, setRetryMaxAttempts] = useState(String(endpoint?.retryMaxAttempts ?? 3));
   const [retryBackoffMs, setRetryBackoffMs] = useState(String(endpoint?.retryBackoffMs ?? 1000));
   const [blockInvalidSignatures, setBlockInvalidSignatures] = useState(endpoint?.blockInvalidSignatures ?? false);
+  const [responseStatusCode, setResponseStatusCode] = useState(String(endpoint?.responseStatusCode ?? 200));
+  const [responseBody, setResponseBody] = useState(endpoint?.responseBody ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
+    const replyBody = responseBody.trim();
+    if (replyBody && !isJsonObject(replyBody)) {
+      setError("Reply body must be a JSON object or array");
+      return;
+    }
     setSubmitting(true);
     try {
       const retries = parseInt(retryMaxAttempts) || 3;
       const backoff = parseInt(retryBackoffMs) || 1000;
+      const replyStatus = parseInt(responseStatusCode) || 200;
       let saved: Endpoint;
       if (!endpoint) {
         saved = await endpointsApi.create({
@@ -38,10 +46,21 @@ export function EndpointForm({ endpoint, onSaved, onCancel }: Props) {
           webhookSecret: webhookSecret || undefined,
           retryMaxAttempts: retries,
           retryBackoffMs: backoff,
+          responseStatusCode: replyStatus,
+          responseBody: replyBody || undefined,
           blockInvalidSignatures,
-        } as Parameters<typeof endpointsApi.create>[0]);
+        });
       } else {
-        const update: Record<string, unknown> = { name, provider, forwardUrl: forwardUrl || null, retryMaxAttempts: retries, retryBackoffMs: backoff, blockInvalidSignatures };
+        const update: Record<string, unknown> = {
+          name,
+          provider,
+          forwardUrl: forwardUrl || null,
+          retryMaxAttempts: retries,
+          retryBackoffMs: backoff,
+          responseStatusCode: replyStatus,
+          responseBody: replyBody || null,
+          blockInvalidSignatures,
+        };
         if (webhookSecret) update.webhookSecret = webhookSecret;
         saved = await endpointsApi.update(endpoint.id, update as Partial<Endpoint>);
       }
@@ -94,6 +113,24 @@ export function EndpointForm({ endpoint, onSaved, onCancel }: Props) {
           <span>Backoff (ms)</span>
           <input className="fd-input" type="number" min="100" max="60000" value={retryBackoffMs} onChange={(e) => setRetryBackoffMs(e.target.value)} />
         </label>
+        <label className="fd-field">
+          <span>Reply status</span>
+          <input className="fd-input" type="number" min="200" max="299" value={responseStatusCode} onChange={(e) => setResponseStatusCode(e.target.value)} />
+          <small>2xx only. Senders retry anything else.</small>
+        </label>
+        <label className="fd-field fd-field--wide">
+          <span>Reply body (JSON)</span>
+          <textarea
+            className="fd-input"
+            rows={3}
+            maxLength={4096}
+            spellCheck={false}
+            value={responseBody}
+            onChange={(e) => setResponseBody(e.target.value)}
+            placeholder='{"status":"ok"}'
+          />
+          <small>What the sender gets back. Blank sends {'{"status":"ok"}'}.</small>
+        </label>
         <BlockInvalidToggle checked={blockInvalidSignatures} onChange={setBlockInvalidSignatures} />
       </div>
       {error && <p className="form-error">{error}</p>}
@@ -122,4 +159,13 @@ export function BlockInvalidToggle({ checked, onChange, disabled, compact }: { c
       </span>
     </label>
   );
+}
+
+function isJsonObject(text: string): boolean {
+  try {
+    const value: unknown = JSON.parse(text);
+    return typeof value === "object" && value !== null;
+  } catch {
+    return false;
+  }
 }

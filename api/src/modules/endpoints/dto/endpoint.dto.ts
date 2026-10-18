@@ -5,12 +5,20 @@ import {
   IsUrl,
   IsBoolean,
   IsInt,
+  IsJSON,
   Min,
   Max,
+  MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PROVIDERS } from '../../../entities/endpoint.entity.js';
 import type { Provider } from '../../../entities/endpoint.entity.js';
+
+// Senders treat any non-2xx reply, redirects included, as a failed delivery and retry or disable the webhook
+const REPLY_STATUS_MIN = 200;
+const REPLY_STATUS_MAX = 299;
+// Ingress only replays a JSON object or array (IsJSON's default), so other bodies are rejected up front
+const REPLY_BODY_MAX_LENGTH = 4096;
 
 export class CreateEndpointDto {
   @ApiProperty({
@@ -63,6 +71,32 @@ export class CreateEndpointDto {
   @Min(0)
   @Max(3_600_000)
   retryBackoffMs?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'HTTP status Hookdash replies to the sender with. Limited to 2xx because senders retry or disable webhooks on anything else. Defaults to 200',
+    example: 202,
+    default: 200,
+    minimum: REPLY_STATUS_MIN,
+    maximum: REPLY_STATUS_MAX,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(REPLY_STATUS_MIN)
+  @Max(REPLY_STATUS_MAX)
+  responseStatusCode?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'JSON object or array Hookdash replies to the sender with, as a string. Defaults to {"status":"ok"}',
+    example: '{"received":true}',
+    maxLength: REPLY_BODY_MAX_LENGTH,
+  })
+  @IsOptional()
+  @IsString()
+  @IsJSON()
+  @MaxLength(REPLY_BODY_MAX_LENGTH)
+  responseBody?: string;
 
   @ApiPropertyOptional({
     description:
@@ -136,6 +170,33 @@ export class UpdateEndpointDto {
   @Min(0)
   @Max(3_600_000)
   retryBackoffMs?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'HTTP status Hookdash replies to the sender with. Limited to 2xx because senders retry or disable webhooks on anything else',
+    example: 202,
+    minimum: REPLY_STATUS_MIN,
+    maximum: REPLY_STATUS_MAX,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(REPLY_STATUS_MIN)
+  @Max(REPLY_STATUS_MAX)
+  responseStatusCode?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'JSON object or array Hookdash replies to the sender with, as a string. Send null to go back to {"status":"ok"}',
+    example: '{"received":true}',
+    maxLength: REPLY_BODY_MAX_LENGTH,
+    nullable: true,
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  @IsJSON()
+  @MaxLength(REPLY_BODY_MAX_LENGTH)
+  responseBody?: string | null;
 
   @ApiPropertyOptional({
     description:

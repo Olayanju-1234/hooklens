@@ -877,6 +877,7 @@ textarea.fd-input { height: auto; padding: 8px 9px; line-height: 1.6; resize: ve
 .board-tools--fields { gap: 8px 12px; }
 .fd-field { display: grid; gap: 5px; min-width: 0; }
 .fd-field .fd-input { width: 100%; }
+.fd-field--wide { grid-column: 1 / -1; }
 .fd-field small { font-family: var(--fd-mono); font-variation-settings: "wdth" 80; font-size: 9.5px; color: var(--ink-mute); }
 .fd-toggle { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; }
 .fd-toggle[data-compact] { padding: 8px 9px; }
