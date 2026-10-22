@@ -62,7 +62,9 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT ?? 3000;
-  await app.listen(port);
+  // Production sets HOST=127.0.0.1 so only nginx on the same box can reach the API.
+  const host = process.env.HOST;
+  await (host ? app.listen(port, host) : app.listen(port));
 
   const logger = new Logger('Bootstrap');
   logger.log(`Hookdash API running on port ${port}`);
