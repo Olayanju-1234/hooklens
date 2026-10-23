@@ -303,11 +303,22 @@ function DestinationNode({ dest, stats, onToggle }: { dest: (typeof DESTINATIONS
   );
 }
 
+/** Screen-space framing per layout: a share of the viewport to slide the picture by, and a zoom. */
+function framingFor(chapter: ChapterId, width: number): { x: number; y: number; zoom: number } {
+  // Phones: the hero copy and strips sit on the lower part, so the chart lives in the band above them.
+  if (width < 720) return { x: 0, y: 0.13, zoom: 0.56 };
+  if (width < 1024) return { x: -0.08, y: 0.18, zoom: 0.64 };
+  // Wide hero: pull back and slide right so the gate and destinations clear the headline column.
+  if (chapter === "hero") return { x: 0.08, y: 0, zoom: 0.85 };
+  return { x: 0, y: 0, zoom: 1 };
+}
+
 function CameraRig({ chapter, reducedMotion }: { chapter: ChapterId; reducedMotion: boolean }) {
   const { camera, pointer, size } = useThree();
   const look = useRef(new THREE.Vector3(...SHOTS.hero.target));
   const goal = useRef(new THREE.Vector3());
   const goalLook = useRef(new THREE.Vector3());
+  const frame = useRef(framingFor(chapter, size.width));
   const narrow = size.width < 720;
 
   useFrame((_, delta) => {
@@ -323,6 +334,18 @@ function CameraRig({ chapter, reducedMotion }: { chapter: ChapterId; reducedMoti
     camera.position.lerp(goal.current, k);
     look.current.lerp(goalLook.current, k);
     camera.lookAt(look.current);
+
+    const want = framingFor(chapter, size.width);
+    const f = frame.current;
+    f.x += (want.x - f.x) * k;
+    f.y += (want.y - f.y) * k;
+    f.zoom += (want.zoom - f.zoom) * k;
+    // A view window larger than the canvas zooms out; moving it left/down slides the picture right/up.
+    // drei's Html labels read the same projection, so they follow.
+    const { width: W, height: H } = size;
+    const w = W / f.zoom;
+    const h = H / f.zoom;
+    (camera as THREE.PerspectiveCamera).setViewOffset(W, H, (W - w) / 2 - f.x * w, (H - h) / 2 + f.y * h, w, h);
   });
   return null;
 }

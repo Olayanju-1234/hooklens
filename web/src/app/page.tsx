@@ -205,7 +205,7 @@ export default function LandingPage() {
         </Link>
       </header>
 
-      <div className="stage-wrap" ref={wrapRef}>
+      <div className="stage-wrap" ref={wrapRef} data-chapter={chapter}>
         <div className="stage">
           {webgl === true && (
             <HubScene
@@ -249,7 +249,8 @@ export default function LandingPage() {
                 <code>POST {INGRESS_HOST}/in/usr_…</code>
               </div>
               <p className="hero-hint">
-                Everything moving here is simulated traffic. Click a destination to take it down. ← → rewinds.
+                Everything moving here is simulated traffic. Click a destination to take it down.
+                <span className="hint-keys"> ← → rewinds.</span>
               </p>
             </div>
           </section>
