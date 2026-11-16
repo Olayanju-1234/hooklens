@@ -52,10 +52,17 @@ export class ChaosRunsController {
   @ApiResponse({ status: 429, description: 'Run or chaos limit reached' })
   run(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('id') id: string,
     @Body() dto: RunScenarioDto,
   ) {
-    return this.runsService.run(id, dto.endpointId, dto.target, user.sub);
+    return this.runsService.run(
+      id,
+      dto.endpointId,
+      dto.target,
+      user.sub,
+      workspaceId,
+    );
   }
 
   @Get('runs')
@@ -63,9 +70,10 @@ export class ChaosRunsController {
   @ApiQuery({ name: 'endpointId', type: String })
   runs(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
     @Query('endpointId', ParseUUIDPipe) endpointId: string,
   ) {
-    return this.runsService.listRuns(endpointId, user.sub);
+    return this.runsService.listRuns(endpointId, user.sub, workspaceId);
   }
 
   @Get('runs/:runId')
@@ -76,9 +84,10 @@ export class ChaosRunsController {
   @ApiParam({ name: 'runId', type: String })
   getRun(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('runId', ParseUUIDPipe) runId: string,
   ) {
-    return this.runsService.getRun(runId, user.sub);
+    return this.runsService.getRun(runId, user.sub, workspaceId);
   }
 
   @Get('active')

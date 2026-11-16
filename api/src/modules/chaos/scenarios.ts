@@ -156,8 +156,8 @@ export const SCENARIOS: ChaosScenario[] = [
       },
     ],
     checklist: [
-      "If you verify Hookdash's signature, the replay is rejected: its webhook-timestamp is outside the 5-minute tolerance.",
-      "Paystack's own signature has no timestamp, so if you only verify that, the replay must be caught as already processed.",
+      "If you verify Hookdash's signature with the SDK (5-minute tolerance by default), the replay is rejected: its webhook-timestamp is 10 minutes old.",
+      "Scenario events carry no Paystack signature. On real traffic, Paystack's newer Paystack-Signature header lets you reject anything signed more than 300 seconds ago; the older x-paystack-signature has no timestamp, so if that is all you check, catch replays as already processed.",
       'Either way, the customer is not credited twice.',
     ],
   },

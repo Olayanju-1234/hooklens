@@ -183,7 +183,11 @@ export default function ChaosPage() {
           <>
             <p className="chaos-lede">
               Does your webhook handler survive the same event twice, a late event, events out of order, or a replay with an old timestamp?
-              Run a scenario against your own handler, then check what it did.
+              Run a scenario against your own handler, then check what it did.{" "}
+              <Link href="/docs/chaos" className="fd-link">
+                How it works, and running it from CI
+              </Link>
+              .
             </p>
             {targets.length === 0 && (
               <p className="form-error">
