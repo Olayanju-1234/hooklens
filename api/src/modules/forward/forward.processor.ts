@@ -16,7 +16,10 @@ import { ForwardDestination } from '../../entities/forward-destination.entity.js
 import { ForwardResult } from '../../entities/forward-result.entity.js';
 import { DeadLetterEvent } from '../../entities/dead-letter-event.entity.js';
 import { TransformRule } from '../../entities/transform-rule.entity.js';
-import { WebhookGateway } from '../websocket/webhook.gateway.js';
+import {
+  WebhookGateway,
+  type ChaosDeliveryPayload,
+} from '../websocket/webhook.gateway.js';
 import { AlertingService } from '../alerting/alerting.service.js';
 import { applyOperations } from '../transform/transform.service.js';
 import type { TransformOperationDto } from '../transform/dto/transform.dto.js';
@@ -39,12 +42,20 @@ import {
   type ChaosPlan,
 } from '../chaos/chaos-plan.js';
 
+/** A scenario run's event: delivered to one target with an exact chaos plan. */
+export interface ScenarioDelivery {
+  runId: string;
+  destinationId: string | null;
+  plan: ChaosPlan;
+}
+
 /** Fan-out job: one per event. With `destinationId` it targets that destination only. */
 export interface ForwardJobData {
   eventId: string;
   endpointId: string;
   userId: string;
   destinationId?: string;
+  scenario?: ScenarioDelivery;
 }
 
 /** Delivery job: one per event and target. A null destination is the endpoint's fallback forward URL. */
@@ -87,6 +98,10 @@ export const FAN_OUT_JOB_OPTIONS: JobsOptions = {
 };
 
 const FALLBACK = 'fallback';
+
+function withRun(plan: ChaosPlan, runId: string): ChaosPlan {
+  return { ...plan, extras: plan.extras.map((e) => ({ ...e, runId })) };
+}
 
 type EventDeliveryFields = Partial<
   Pick<
@@ -147,7 +162,7 @@ export class ForwardProcessor extends WorkerHost {
 
   /** Splits an event into one delivery job per target so each retries independently. */
   private async fanOut(job: Job<ForwardJobData>): Promise<void> {
-    const { eventId, endpointId, userId, destinationId } = job.data;
+    const { eventId, endpointId, userId, destinationId, scenario } = job.data;
     const [event, endpoint] = await Promise.all([
       this.eventRepo.findOne({ where: { id: eventId } }),
       this.endpointRepo.findOne({ where: { id: endpointId } }),
@@ -159,17 +174,9 @@ export class ForwardProcessor extends WorkerHost {
       return;
     }
 
-    const destinations = await this.destinationRepo.find({
-      where: destinationId
-        ? { id: destinationId, endpointId }
-        : { endpointId, isActive: true },
-    });
-    const targets: (string | null)[] =
-      destinations.length > 0
-        ? destinations.map((d) => d.id)
-        : endpoint.forwardUrl
-          ? [null]
-          : [];
+    const targets = scenario
+      ? await this.scenarioTargets(endpoint, scenario)
+      : await this.fanOutTargets(endpoint, destinationId);
 
     if (targets.length === 0) {
       await this.safeUpdateEvent(eventId, {
@@ -191,12 +198,20 @@ export class ForwardProcessor extends WorkerHost {
       forwardStatus: 'pending',
     });
 
-    const plans = await this.planChaosFor(
-      event,
-      endpoint.id,
-      targets,
-      Boolean(destinationId),
-    );
+    // A scenario's extra copies were budgeted when the run started
+    const plans = scenario
+      ? new Map(
+          targets.map((t) => [
+            t ?? FALLBACK,
+            withRun(scenario.plan, scenario.runId),
+          ]),
+        )
+      : await this.planChaosFor(
+          event,
+          endpoint.id,
+          targets,
+          Boolean(destinationId),
+        );
 
     // Deterministic ids make a retried fan-out a no-op for deliveries already queued;
     // a targeted re-delivery must not collide with the original job id
@@ -236,6 +251,33 @@ export class ForwardProcessor extends WorkerHost {
         ];
       }),
     );
+  }
+
+  private async fanOutTargets(
+    endpoint: Endpoint,
+    destinationId: string | undefined,
+  ): Promise<(string | null)[]> {
+    const destinations = await this.destinationRepo.find({
+      where: destinationId
+        ? { id: destinationId, endpointId: endpoint.id }
+        : { endpointId: endpoint.id, isActive: true },
+    });
+    if (destinations.length > 0) return destinations.map((d) => d.id);
+    return endpoint.forwardUrl ? [null] : [];
+  }
+
+  /** A scenario run goes to the one target it was started against, if it still exists. */
+  private async scenarioTargets(
+    endpoint: Endpoint,
+    scenario: ScenarioDelivery,
+  ): Promise<(string | null)[]> {
+    if (scenario.destinationId === null) {
+      return endpoint.forwardUrl ? [null] : [];
+    }
+    const destination = await this.destinationRepo.findOne({
+      where: { id: scenario.destinationId, endpointId: endpoint.id },
+    });
+    return destination ? [destination.id] : [];
   }
 
   /** Chaos plans by target; none for re-deliveries, replays, or events outside a setting's scope. */
@@ -340,6 +382,17 @@ export class ForwardProcessor extends WorkerHost {
       }),
     );
 
+    if (chaos || event.chaosRunId) {
+      this.safeBroadcastChaos(userId, {
+        runId: event.chaosRunId ?? null,
+        eventId,
+        chaosKind: chaos?.kind ?? null,
+        chaosSeq: chaos?.seq ?? 0,
+        status: result.status,
+        responseCode: result.code,
+      });
+    }
+
     // An extra copy is only recorded: never retried, dead-lettered or counted in the event's status
     if (extra) return;
 
@@ -365,7 +418,9 @@ export class ForwardProcessor extends WorkerHost {
   private async extraCopyWanted(data: DeliverJobData): Promise<boolean> {
     const { eventId, endpointId, destinationId, chaos } = data;
     const [active, delivered] = await Promise.all([
-      this.chaosService.isActive(endpointId, destinationId),
+      chaos?.runId
+        ? Promise.resolve(true)
+        : this.chaosService.isActive(endpointId, destinationId),
       chaos?.kind === 'stale'
         ? this.resultRepo.exists({
             where: {
@@ -606,6 +661,19 @@ export class ForwardProcessor extends WorkerHost {
     } catch (err) {
       this.logger.error(
         `DB update failed for event ${eventId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  private safeBroadcastChaos(
+    userId: string,
+    payload: ChaosDeliveryPayload,
+  ): void {
+    try {
+      this.wsGateway.broadcastChaosDelivery(userId, payload);
+    } catch (err) {
+      this.logger.warn(
+        `WebSocket chaos broadcast failed for event ${payload.eventId}: ${(err as Error).message}`,
       );
     }
   }

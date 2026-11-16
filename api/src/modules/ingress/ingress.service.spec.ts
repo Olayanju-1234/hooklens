@@ -148,4 +148,29 @@ describe('IngressService.processEvent', () => {
     expect(updates[0]).not.toHaveProperty('signatureValid');
     expect(forwardQueue.add).toHaveBeenCalledTimes(1);
   });
+
+  it('skips signature checks, blocking and alerts for a trusted scenario event, and passes its plan on', async () => {
+    const plan = { primary: { kind: null, delayMs: 0 }, extras: [] };
+    await service.processEvent(
+      event({}),
+      endpoint({ blockInvalidSignatures: true }),
+      {
+        trusted: true,
+        scenario: { runId: 'run-1', destinationId: null, plan },
+      },
+    );
+
+    expect(savedUpdates()).not.toContainEqual(
+      expect.objectContaining({ forwardStatus: 'blocked' }),
+    );
+    expect(savedUpdates()[0]).not.toHaveProperty('signatureValid');
+    expect(alerting.evaluateSignatureFailure).not.toHaveBeenCalled();
+    expect(forwardQueue.add).toHaveBeenCalledWith(
+      'forward',
+      expect.objectContaining({
+        scenario: { runId: 'run-1', destinationId: null, plan },
+      }),
+      expect.anything(),
+    );
+  });
 });

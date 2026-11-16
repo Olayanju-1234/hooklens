@@ -8,6 +8,7 @@ import { validate } from 'class-validator';
 import {
   ChaosService,
   DEFAULT_CHAOS_MINUTES,
+  MAX_RUNS_PER_WINDOW,
   isChaosActive,
 } from './chaos.service.js';
 import { UpdateChaosDto } from './dto/chaos.dto.js';
@@ -437,6 +438,81 @@ describe('ChaosService', () => {
     it('skips Redis when nothing is wanted', async () => {
       expect(await service.reserveExtras(ENDPOINT.workspaceId, 0)).toBe(0);
       expect(redis.multi).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reserveExtras all or nothing', () => {
+    it('grants nothing and gives everything back when only part fits', async () => {
+      multi.exec.mockResolvedValue([
+        [null, MAX_EXTRAS_PER_WORKSPACE_MINUTE + 1],
+        [null, 1],
+      ]);
+      expect(
+        await service.reserveExtras(ENDPOINT.workspaceId, 2, {
+          allOrNothing: true,
+        }),
+      ).toBe(0);
+      expect(redis.decrby).toHaveBeenCalledWith(expect.any(String), 2);
+    });
+  });
+
+  describe('reserveRun', () => {
+    it('allows a run within the 10-minute allowance', async () => {
+      multi.exec.mockResolvedValue([
+        [null, MAX_RUNS_PER_WINDOW],
+        [null, 1],
+      ]);
+      expect(await service.reserveRun(ENDPOINT.workspaceId)).toBe(true);
+      expect(multi.incrby).toHaveBeenCalledWith(
+        expect.stringContaining(`chaos:runs:${ENDPOINT.workspaceId}:`),
+        1,
+      );
+    });
+
+    it('refuses the run past the allowance', async () => {
+      multi.exec.mockResolvedValue([
+        [null, MAX_RUNS_PER_WINDOW + 1],
+        [null, 1],
+      ]);
+      expect(await service.reserveRun(ENDPOINT.workspaceId)).toBe(false);
+      expect(redis.decrby).toHaveBeenCalledWith(expect.any(String), 1);
+    });
+
+    it('refuses the run when Redis fails', async () => {
+      multi.exec.mockRejectedValue(new Error('ECONNREFUSED'));
+      expect(await service.reserveRun(ENDPOINT.workspaceId)).toBe(false);
+    });
+  });
+
+  describe('activeInWorkspace', () => {
+    it('lists active chaos with route and target names', async () => {
+      settingRepo.find.mockResolvedValue([
+        row({
+          destinationId: DEST_ID,
+          endpoint: { name: 'Paystack' },
+          destination: { label: null, url: 'https://staging.example.com' },
+        } as Partial<ChaosSetting>),
+        row({
+          endpoint: { name: 'Paystack' },
+          destination: null,
+        } as Partial<ChaosSetting>),
+      ]);
+      const active = await service.activeInWorkspace(ENDPOINT.workspaceId);
+      expect(settingRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            workspaceId: ENDPOINT.workspaceId,
+            enabled: true,
+          }) as unknown,
+        }),
+      );
+      expect(
+        active.map((a) => [a.endpointName, a.target, a.targetLabel]),
+      ).toEqual([
+        ['Paystack', DEST_ID, 'https://staging.example.com'],
+        ['Paystack', 'fallback', 'forward URL'],
+      ]);
+      expect(active[0].faults).toMatchObject({ duplicateProbability: 1 });
     });
   });
 });

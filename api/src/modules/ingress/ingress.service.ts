@@ -13,6 +13,7 @@ import { WebhookGateway } from '../websocket/webhook.gateway.js';
 import {
   ForwardJobData,
   FAN_OUT_JOB_OPTIONS,
+  type ScenarioDelivery,
 } from '../forward/forward.processor.js';
 import { AlertingService } from '../alerting/alerting.service.js';
 
@@ -26,6 +27,8 @@ interface CaptureParams {
   body: Record<string, unknown> | null;
   sourceIp: string | null;
   isTest?: boolean;
+  chaosRunId?: string;
+  chaosStep?: number;
 }
 
 @Injectable()
@@ -117,6 +120,8 @@ export class IngressService {
       rawBody: params.rawBody,
       sourceIp: params.sourceIp,
       isTest: params.isTest ?? false,
+      chaosRunId: params.chaosRunId ?? null,
+      chaosStep: params.chaosStep ?? null,
       bodyHash,
       receivedAt: new Date(),
     });
@@ -153,7 +158,13 @@ export class IngressService {
   async processEvent(
     event: WebhookEvent,
     endpoint: Endpoint,
-    opts: { skipForward?: boolean; urls?: string[] } = {},
+    opts: {
+      skipForward?: boolean;
+      urls?: string[];
+      // Built in-process by Hookdash (a scenario run), so there is no sender signature to check
+      trusted?: boolean;
+      scenario?: ScenarioDelivery;
+    } = {},
   ): Promise<void> {
     const { eventType, deliveryId } = this.signatureService.identify(
       endpoint.provider,
@@ -171,7 +182,7 @@ export class IngressService {
       updates.idempotencyKey = deliveryId;
     }
 
-    if (endpoint.webhookSecret) {
+    if (endpoint.webhookSecret && !opts.trusted) {
       const { valid } = this.signatureService.verifyRequest(
         endpoint.provider,
         {
@@ -250,6 +261,7 @@ export class IngressService {
         eventId: event.id,
         endpointId: endpoint.id,
         userId: event.userId,
+        ...(opts.scenario && { scenario: opts.scenario }),
       };
       await this.forwardQueue.add('forward', jobData, FAN_OUT_JOB_OPTIONS);
     } catch (err) {

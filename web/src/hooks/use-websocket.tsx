@@ -35,9 +35,19 @@ export interface ForwardResult {
   forwardLatency: number | null;
 }
 
+export interface ChaosDelivery {
+  runId: string | null;
+  eventId: string;
+  chaosKind: string | null;
+  chaosSeq: number;
+  status: string;
+  responseCode: number | null;
+}
+
 export type SocketMessage =
   | { kind: "webhook"; event: LiveEvent }
-  | { kind: "forward_result"; result: ForwardResult };
+  | { kind: "forward_result"; result: ForwardResult }
+  | { kind: "chaos_delivery"; delivery: ChaosDelivery };
 
 interface WebSocketContextType {
   connected: boolean;
@@ -95,6 +105,10 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     socket.on("forward_result", (result: ForwardResult) => {
       updateForwardStatus(result);
       listeners.current.forEach((fn) => fn({ kind: "forward_result", result }));
+    });
+
+    socket.on("chaos_delivery", (delivery: ChaosDelivery) => {
+      listeners.current.forEach((fn) => fn({ kind: "chaos_delivery", delivery }));
     });
 
     socketRef.current = socket;

@@ -25,6 +25,7 @@ const secondaryGroups = [
     label: "Tools",
     items: [
       { label: "Simulator", href: "/dashboard/test" },
+      { label: "Chaos", href: "/dashboard/chaos" },
       { label: "Alerts", href: "/dashboard/alerts" },
       { label: "Bags source", href: "/dashboard/bags" },
     ],

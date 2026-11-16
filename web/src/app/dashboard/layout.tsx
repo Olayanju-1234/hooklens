@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { TabRail } from "@/components/layout/tab-rail";
 import { WebSocketProvider } from "@/hooks/use-websocket";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { ChaosBanner } from "@/components/chaos/chaos-banner";
 
 export default function DashboardLayout({
   children,
@@ -34,6 +35,7 @@ export default function DashboardLayout({
     <WebSocketProvider>
       <div className="flex flex-col h-screen overflow-hidden bg-bg-primary">
         <TabRail />
+        <ChaosBanner />
         <main className="flex-1 overflow-y-auto">
           <ErrorBoundary key={pathname}>{children}</ErrorBoundary>
         </main>

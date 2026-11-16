@@ -505,11 +505,145 @@ export const testPayloads = {
       `/test-payloads/${provider}/${eventType}`,
     ),
   send: (provider: string, eventType: string, customPayload?: Record<string, unknown>) =>
-    request<{ status: string }>(
+    request<TestSendResult>(
       `/test-payloads/${provider}/${eventType}/send`,
       { method: "POST", body: customPayload },
     ),
 };
+
+export interface TestSendResult {
+  sent: boolean;
+  provider: string;
+  eventType: string;
+  ingressUrl: string;
+  eventId: string | null;
+  responseStatus: number;
+  responseBody: Record<string, unknown>;
+  status?: string;
+}
+
+// Chaos mode
+export type ChaosKind = "duplicate" | "delay" | "reorder" | "stale";
+export type ChaosScope = "test" | "all";
+
+export interface ChaosFaults {
+  duplicateProbability: number;
+  duplicateCopies: number;
+  duplicateGapMs: number;
+  delayProbability: number;
+  delayMinMs: number;
+  delayMaxMs: number;
+  reorderProbability: number;
+  reorderWindowMs: number;
+  staleProbability: number;
+}
+
+export interface ChaosSetting extends ChaosFaults {
+  id: string;
+  target: string;
+  destinationId: string | null;
+  enabled: boolean;
+  active: boolean;
+  expiresAt: string | null;
+  scope: ChaosScope;
+  seed: string;
+  updatedAt: string;
+}
+
+export interface ChaosTarget {
+  target: string;
+  destinationId: string | null;
+  label: string;
+  url: string;
+  chaos: ChaosSetting | null;
+}
+
+export interface ChaosUpdate extends Partial<ChaosFaults> {
+  enabled: boolean;
+  durationMinutes?: number;
+  scope?: ChaosScope;
+  seed?: string;
+}
+
+export interface ActiveChaos {
+  endpointId: string;
+  endpointName: string;
+  target: string;
+  targetLabel: string;
+  scope: ChaosScope;
+  expiresAt: string;
+  faults: Partial<ChaosFaults>;
+}
+
+export interface ChaosScenario {
+  id: string;
+  title: string;
+  provider: string;
+  summary: string;
+  steps: { eventType: string; note: string }[];
+  checklist: string[];
+  expectedDeliveries: number;
+  longestHoldMs: number;
+}
+
+export interface ChaosRunDelivery {
+  eventId: string;
+  step: number | null;
+  eventType: string | null;
+  chaosKind: ChaosKind | null;
+  chaosSeq: number;
+  attempt: number;
+  status: string;
+  responseCode: number | null;
+  latencyMs: number | null;
+  startedAt: string | null;
+  offsetMs: number | null;
+  bodyExcerpt: string | null;
+}
+
+export interface ChaosRun {
+  id: string;
+  scenarioId: string;
+  title: string;
+  provider: string;
+  endpointId: string;
+  endpointName: string;
+  target: string;
+  targetLabel: string;
+  createdAt: string;
+  finishesBy: string;
+  expectedDeliveries: number;
+  recordedDeliveries: number;
+  complete: boolean;
+  checklist: string[];
+  steps: { index: number; eventType: string; note: string; eventId: string | null }[];
+  deliveries: ChaosRunDelivery[];
+}
+
+export interface ChaosRunSummary {
+  id: string;
+  scenarioId: string;
+  title: string;
+  target: string;
+  createdAt: string;
+}
+
+export const chaos = {
+  targets: (endpointId: string) => request<ChaosTarget[]>(`/endpoints/${endpointId}/chaos`),
+  update: (endpointId: string, target: string, data: ChaosUpdate) =>
+    request<ChaosSetting>(`/endpoints/${endpointId}/chaos/${target}`, { method: "PUT", body: data }),
+  disable: (endpointId: string, target: string) =>
+    request<void>(`/endpoints/${endpointId}/chaos/${target}`, { method: "DELETE" }),
+  active: () => request<ActiveChaos[]>("/chaos/active"),
+  scenarios: () => request<ChaosScenario[]>("/chaos/scenarios"),
+  run: (scenarioId: string, endpointId: string, target: string) =>
+    request<ChaosRun>(`/chaos/scenarios/${scenarioId}/run`, { method: "POST", body: { endpointId, target } }),
+  runs: (endpointId: string) => request<ChaosRunSummary[]>(`/chaos/runs?endpointId=${encodeURIComponent(endpointId)}`),
+  getRun: (runId: string) => request<ChaosRun>(`/chaos/runs/${runId}`),
+};
+
+/** Fired after chaos settings change, so the banner refreshes without waiting for its poll. */
+export const CHAOS_CHANGED_EVENT = "hookdash:chaos-changed";
 
 // Docs
 export interface ProviderDoc {
@@ -547,6 +681,8 @@ export interface TimelineStep {
   latencyMs: number | null;
   status: "success" | "warning" | "error" | "pending";
   detail: string;
+  chaosKind?: ChaosKind | null;
+  chaosSeq?: number;
 }
 
 export const timeline = {

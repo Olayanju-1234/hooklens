@@ -15,5 +15,6 @@ import { IngressModule } from '../ingress/ingress.module.js';
   ],
   controllers: [TestPayloadsController],
   providers: [TestPayloadsService],
+  exports: [TestPayloadsService],
 })
 export class TestPayloadsModule {}

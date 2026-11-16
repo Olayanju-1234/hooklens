@@ -39,6 +39,8 @@ export function lanesFromTimeline(steps: TimelineStep[], receivedAt: string): La
   const lanes = new Map<string, Lane>();
   for (const s of steps) {
     if (!FORWARD_STEPS.has(s.step) || s.status === "warning") continue;
+    // Chaos copies are extras, never the event's real delivery
+    if ((s.chaosSeq ?? 0) > 0) continue;
     const [left, right] = s.detail.includes(" → ") ? s.detail.split(" → ") : ["forward URL", s.detail];
     const lane = lanes.get(left) ?? { key: left, attempts: [] };
     lane.attempts.push({

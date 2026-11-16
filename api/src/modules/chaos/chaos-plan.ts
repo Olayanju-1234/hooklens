@@ -29,6 +29,8 @@ export interface ChaosDelivery {
   kind: ChaosKind;
   seq: number;
   delayMs: number;
+  // Set for a scenario run, whose copies go out whatever the target's chaos settings say
+  runId?: string;
 }
 
 export interface ChaosPlan {

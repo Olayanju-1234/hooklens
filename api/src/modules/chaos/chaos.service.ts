@@ -27,6 +27,8 @@ import type { UpdateChaosDto } from './dto/chaos.dto.js';
 
 export const FALLBACK_TARGET = 'fallback';
 export const DEFAULT_CHAOS_MINUTES = 30;
+export const MAX_RUNS_PER_WINDOW = 10;
+export const RUN_WINDOW_MS = 10 * 60_000;
 
 const FAULT_FIELDS = [
   'duplicateProbability',
@@ -69,6 +71,16 @@ export interface ChaosSettingView extends ChaosFaults {
   scope: ChaosScope;
   seed: string;
   updatedAt: string;
+}
+
+export interface ActiveChaosView {
+  endpointId: string;
+  endpointName: string;
+  target: string;
+  targetLabel: string;
+  scope: ChaosScope;
+  expiresAt: string;
+  faults: Partial<ChaosFaults>;
 }
 
 export interface ChaosTargetView {
@@ -260,30 +272,79 @@ export class ChaosService {
   }
 
   /** Grants up to `wanted` extra deliveries within the workspace's per-minute budget; 0 if Redis fails. */
-  async reserveExtras(workspaceId: string, wanted: number): Promise<number> {
+  reserveExtras(
+    workspaceId: string,
+    wanted: number,
+    opts: { allOrNothing?: boolean } = {},
+  ): Promise<number> {
+    return this.takeBudget(
+      `chaos:extras:${workspaceId}:${Math.floor(Date.now() / 60_000)}`,
+      wanted,
+      MAX_EXTRAS_PER_WORKSPACE_MINUTE,
+      120,
+      opts.allOrNothing ?? false,
+    );
+  }
+
+  /** One scenario run out of the workspace's allowance per 10 minutes. */
+  async reserveRun(workspaceId: string): Promise<boolean> {
+    const granted = await this.takeBudget(
+      `chaos:runs:${workspaceId}:${Math.floor(Date.now() / RUN_WINDOW_MS)}`,
+      1,
+      MAX_RUNS_PER_WINDOW,
+      (RUN_WINDOW_MS / 1000) * 2,
+      true,
+    );
+    return granted === 1;
+  }
+
+  private async takeBudget(
+    key: string,
+    wanted: number,
+    cap: number,
+    ttlSeconds: number,
+    allOrNothing: boolean,
+  ): Promise<number> {
     if (wanted <= 0) return 0;
-    const key = `chaos:extras:${workspaceId}:${Math.floor(Date.now() / 60_000)}`;
     try {
       const redis = await this.forwardQueue.client;
       const replies = await redis
         .multi()
         .incrby(key, wanted)
-        .expire(key, 120)
+        .expire(key, ttlSeconds)
         .exec();
       const total = Number(replies?.[0]?.[1]);
       if (!Number.isFinite(total)) return 0;
-      const granted = Math.max(
-        0,
-        Math.min(wanted, MAX_EXTRAS_PER_WORKSPACE_MINUTE - (total - wanted)),
-      );
+      const left = Math.max(0, Math.min(wanted, cap - (total - wanted)));
+      const granted = allOrNothing && left < wanted ? 0 : left;
       if (granted < wanted) await redis.decrby(key, wanted - granted);
       return granted;
     } catch (err) {
       this.logger.warn(
-        `Chaos budget check failed for workspace ${workspaceId}, sending no extra copies: ${(err as Error).message}`,
+        `Chaos budget check failed for ${key}, granting nothing: ${(err as Error).message}`,
       );
       return 0;
     }
+  }
+
+  /** Chaos that is on right now anywhere in the workspace, for the dashboard banner. */
+  async activeInWorkspace(workspaceId: string): Promise<ActiveChaosView[]> {
+    const settings = await this.settingRepo.find({
+      where: { workspaceId, enabled: true, expiresAt: MoreThan(new Date()) },
+      relations: ['endpoint', 'destination'],
+      order: { expiresAt: 'ASC' },
+    });
+    return settings.map((s) => ({
+      endpointId: s.endpointId,
+      endpointName: s.endpoint?.name ?? 'route',
+      target: s.destinationId ?? FALLBACK_TARGET,
+      targetLabel: s.destination
+        ? s.destination.label || s.destination.url
+        : 'forward URL',
+      scope: s.scope,
+      expiresAt: s.expiresAt!.toISOString(),
+      faults: pickFaults(s),
+    }));
   }
 
   /** Switches off settings whose time ran out and records it in the audit log. */
@@ -307,7 +368,8 @@ export class ChaosService {
     return due.length;
   }
 
-  private async resolveTarget(
+  /** The endpoint (checked for access) and the destination a target names; null is the fallback URL. */
+  async resolveTarget(
     endpointId: string,
     target: string,
     userId: string,
