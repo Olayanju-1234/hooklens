@@ -4,7 +4,10 @@ import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
-import { ForwardResult } from '../../entities/forward-result.entity.js';
+import {
+  ForwardResult,
+  type ChaosKind,
+} from '../../entities/forward-result.entity.js';
 import { DeadLetterEvent } from '../../entities/dead-letter-event.entity.js';
 import { EventsQueryDto } from './dto/events-query.dto.js';
 import { LocalDeliveryDto } from './dto/local-delivery.dto.js';
@@ -21,6 +24,9 @@ export interface TimelineStep {
   latencyMs: number | null;
   status: 'success' | 'warning' | 'error' | 'pending';
   detail: string;
+  // Forward steps only: the chaos fault behind this delivery, and 0 for the real one or 1..n for extra copies
+  chaosKind?: ChaosKind | null;
+  chaosSeq?: number;
 }
 
 @Injectable()
@@ -207,6 +213,8 @@ export class EventsService {
               ? 'pending'
               : 'error',
         detail: `${result.target ?? label(result.destination)} → ${result.responseCode || result.status}`,
+        chaosKind: result.chaosKind ?? null,
+        chaosSeq: result.chaosSeq ?? 0,
       });
     }
 

@@ -101,6 +101,10 @@ export class WebhookEvent {
   @Column({ type: 'uuid', nullable: true })
   originalEventId!: string | null;
 
+  // Sent from Hookdash's test payloads in-process; the public ingress can't set it
+  @Column({ type: 'boolean', default: false })
+  isTest!: boolean;
+
   // Deduplication
   @Column({ type: 'varchar', length: 64, nullable: true })
   bodyHash!: string | null;

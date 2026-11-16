@@ -25,6 +25,7 @@ interface CaptureParams {
   rawBody: string;
   body: Record<string, unknown> | null;
   sourceIp: string | null;
+  isTest?: boolean;
 }
 
 @Injectable()
@@ -115,6 +116,7 @@ export class IngressService {
       body: params.body,
       rawBody: params.rawBody,
       sourceIp: params.sourceIp,
+      isTest: params.isTest ?? false,
       bodyHash,
       receivedAt: new Date(),
     });

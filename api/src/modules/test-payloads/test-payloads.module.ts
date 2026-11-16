@@ -5,9 +5,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../../entities/user.entity.js';
 import { TestPayloadsService } from './test-payloads.service.js';
 import { TestPayloadsController } from './test-payloads.controller.js';
+import { IngressModule } from '../ingress/ingress.module.js';
 
 @Module({
-  imports: [AuthModule, TypeOrmModule.forFeature([User, Endpoint])],
+  imports: [
+    AuthModule,
+    TypeOrmModule.forFeature([User, Endpoint]),
+    IngressModule,
+  ],
   controllers: [TestPayloadsController],
   providers: [TestPayloadsService],
 })

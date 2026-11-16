@@ -5,6 +5,7 @@ import type { Request, Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { IngressService } from './ingress.service.js';
 import { SignatureService } from '../signature/signature.service.js';
+import { ingressResponseBody } from './ingress-response.js';
 
 // Source slugs are src_ + 24 hex; legacy user and workspace slugs usr_/ws_ + 12 hex
 const SLUG_PATTERN = /^(src_[a-f0-9]{24}|(usr|ws)_[a-f0-9]{12})$/;
@@ -147,7 +148,7 @@ export class IngressController {
 
     return res
       .status(endpoint.responseStatusCode ?? 200)
-      .json(this.responseBody(endpoint.responseBody));
+      .json(ingressResponseBody(endpoint.responseBody));
   }
 
   // URL-signing senders (Twilio) sign the URL they were given: normally API_URL, else the host nginx saw
@@ -186,10 +187,5 @@ export class IngressController {
     } catch {
       return null;
     }
-  }
-
-  private responseBody(configured: string | null): Record<string, unknown> {
-    if (!configured) return { status: 'ok' };
-    return this.tryJson(configured) ?? { status: 'ok' };
   }
 }
