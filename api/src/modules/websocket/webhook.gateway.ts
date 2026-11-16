@@ -26,6 +26,15 @@ interface BroadcastPayload {
   bodyPreview: string;
 }
 
+export interface ChaosDeliveryPayload {
+  runId: string | null;
+  eventId: string;
+  chaosKind: string | null;
+  chaosSeq: number;
+  status: string;
+  responseCode: number | null;
+}
+
 interface ForwardResultPayload {
   eventId: string;
   forwardStatus: string;
@@ -97,5 +106,10 @@ export class WebhookGateway
 
   broadcastForwardResult(userId: string, payload: ForwardResultPayload) {
     this.server.to(`user:${userId}`).emit('forward_result', payload);
+  }
+
+  /** A delivery shaped by chaos mode, or any delivery of a scenario run's event. */
+  broadcastChaosDelivery(userId: string, payload: ChaosDeliveryPayload) {
+    this.server.to(`user:${userId}`).emit('chaos_delivery', payload);
   }
 }

@@ -105,6 +105,13 @@ export class WebhookEvent {
   @Column({ type: 'boolean', default: false })
   isTest!: boolean;
 
+  // Set for events sent by a chaos scenario run, with the scripted step they belong to
+  @Column({ type: 'uuid', nullable: true })
+  chaosRunId!: string | null;
+
+  @Column({ type: 'smallint', nullable: true })
+  chaosStep!: number | null;
+
   // Deduplication
   @Column({ type: 'varchar', length: 64, nullable: true })
   bodyHash!: string | null;

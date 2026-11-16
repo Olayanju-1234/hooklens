@@ -124,6 +124,7 @@ export function RecorderView({ event, steps, attempts, maxAttempts, replaying, o
   const received = sig?.value;
   const status = liveStatus(event.forwardStatus, attempts, maxAttempts);
   const lanes = lanesFromTimeline(steps, event.receivedAt);
+  const chaosCopies = steps.filter((s) => (s.chaosSeq ?? 0) > 0);
   const span = Math.max(1, ...lanes.flatMap((l) => l.attempts.map((a) => a.at + 0.5)));
   const pct = (s: number) => `${Math.max(0, Math.min(100, (s / span) * 100))}%`;
   const raw = event.rawBody ?? JSON.stringify(event.body ?? {});
@@ -246,6 +247,12 @@ export function RecorderView({ event, steps, attempts, maxAttempts, replaying, o
             );
           })}
         </div>
+      )}
+      {chaosCopies.length > 0 && (
+        <p className="fr-note">
+          <span className="tone-magenta">Chaos mode</span> also sent {chaosCopies.length} extra cop{chaosCopies.length === 1 ? "y" : "ies"}:{" "}
+          {chaosCopies.map((c) => `${c.chaosKind} → ${c.detail.split(" → ").pop()}`).join(", ")}. They never count towards this event&apos;s status.
+        </p>
       )}
     </section>
   );

@@ -140,6 +140,7 @@ export default function HistoryPage() {
           setFresh((n) => n + 1);
           return;
         }
+        if (m.kind !== "forward_result") return;
         const { eventId, forwardStatus, forwardCode, forwardLatency } = m.result;
         setRevisions((r) => ({ ...r, [eventId]: (r[eventId] ?? 0) + 1 }));
         setItems((list) =>

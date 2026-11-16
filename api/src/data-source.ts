@@ -8,6 +8,7 @@ import { WorkspaceInvite } from './entities/workspace-invite.entity.js';
 import { ForwardDestination } from './entities/forward-destination.entity.js';
 import { ForwardResult } from './entities/forward-result.entity.js';
 import { ChaosSetting } from './entities/chaos-setting.entity.js';
+import { ChaosRun } from './entities/chaos-run.entity.js';
 import { DeadLetterEvent } from './entities/dead-letter-event.entity.js';
 import { TransformRule } from './entities/transform-rule.entity.js';
 import { AlertChannel } from './entities/alert-channel.entity.js';
@@ -46,6 +47,7 @@ export const AppDataSource = new DataSource({
     ForwardDestination,
     ForwardResult,
     ChaosSetting,
+    ChaosRun,
     DeadLetterEvent,
     TransformRule,
     AlertChannel,

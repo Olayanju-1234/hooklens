@@ -10,6 +10,7 @@ import {
   endpoints as endpointsApi,
   events as eventsApi,
   timeline as timelineApi,
+  testPayloads as testPayloadsApi,
   INGRESS_BASE,
   type Endpoint,
   type WebhookEvent,
@@ -31,16 +32,25 @@ const FILTERS: { id: Filter; label: string; tone?: string }[] = [
   { id: "skipped", label: "No route" },
 ];
 
-const TEST_PAYLOADS = [
+// Sent through the test-payload API so chaos mode treats them as test payloads
+const TEST_PAYLOADS: { provider: string; eventType: string; body: Record<string, unknown> }[] = [
   {
+    provider: "paystack",
+    eventType: "charge.success",
+    body: {
     event: "charge.success",
     data: { id: 3_000_000_123, domain: "test", status: "success", reference: "test_ref", amount: 50000, currency: "NGN", channel: "card", customer: { email: "test@example.com" } },
+    },
   },
   {
+    provider: "flutterwave",
+    eventType: "charge.completed",
+    body: {
     event: "charge.completed",
     data: { id: 482_119, tx_ref: "flw_test_ref", amount: 250, currency: "NGN", status: "successful", payment_type: "card" },
+    },
   },
-  { event: "ping", message: "Hello from Hookdash" },
+  { provider: "custom", eventType: "ping", body: { event: "ping", message: "Hello from Hookdash" } },
 ];
 
 interface Row {
@@ -176,6 +186,7 @@ export default function TrafficPage() {
           void resolveEndpoint(m.event.id).then((ep) => ep && traffic.setEndpoint(m.event.id, ep));
           return;
         }
+        if (m.kind !== "forward_result") return;
         const { eventId, forwardStatus } = m.result;
         setRevisions((r) => ({ ...r, [eventId]: (r[eventId] ?? 0) + 1 }));
         if (!traffic.hasTrack(eventId) || forwardStatus === "skipped") return;
@@ -272,9 +283,8 @@ export default function TrafficPage() {
     if (!ingressUrl) return;
     setSending(true);
     try {
-      const body = TEST_PAYLOADS[Math.floor(Math.random() * TEST_PAYLOADS.length)];
-      const res = await fetch(ingressUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error(`Ingress responded with ${res.status}`);
+      const pick = TEST_PAYLOADS[Math.floor(Math.random() * TEST_PAYLOADS.length)];
+      await testPayloadsApi.send(pick.provider, pick.eventType, pick.body);
       if (!connected) window.setTimeout(() => void loadHistory(), 900);
     } catch (err) {
       toast.error(err instanceof Error ? `Test event failed: ${err.message}` : "Failed to send test event");
