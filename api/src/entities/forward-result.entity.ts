@@ -10,6 +10,9 @@ import {
 import { WebhookEvent } from './webhook-event.entity.js';
 import { ForwardDestination } from './forward-destination.entity.js';
 
+export const CHAOS_KINDS = ['duplicate', 'delay', 'reorder', 'stale'] as const;
+export type ChaosKind = (typeof CHAOS_KINDS)[number];
+
 @Entity('forward_results')
 @Index('idx_forward_results_event', ['eventId'])
 export class ForwardResult {
@@ -47,6 +50,17 @@ export class ForwardResult {
 
   @Column({ type: 'integer', default: 1 })
   attempt!: number;
+
+  // Chaos mode: the fault that shaped this delivery, null for an ordinary one
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  chaosKind!: ChaosKind | null;
+
+  // 0 is the real delivery; 1..n are extra chaos copies, which never count towards the event's status
+  @Column({ type: 'smallint', default: 0 })
+  chaosSeq!: number;
+
+  @Column({ type: 'integer', nullable: true })
+  chaosDelayMs!: number | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;

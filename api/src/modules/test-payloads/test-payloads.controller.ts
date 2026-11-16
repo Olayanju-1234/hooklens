@@ -26,6 +26,8 @@ import { Endpoint, type Provider } from '../../entities/endpoint.entity.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
 import { TestPayloadsService } from './test-payloads.service.js';
+import { IngressService } from '../ingress/ingress.service.js';
+import { ingressResponseBody } from '../ingress/ingress-response.js';
 
 @ApiTags('Test Payloads')
 @ApiBearerAuth()
@@ -41,6 +43,7 @@ export class TestPayloadsController {
     private readonly userRepo: Repository<User>,
     @InjectRepository(Endpoint)
     private readonly endpointRepo: Repository<Endpoint>,
+    private readonly ingressService: IngressService,
   ) {}
 
   @Get()
@@ -107,24 +110,45 @@ export class TestPayloadsController {
       },
       order: { createdAt: 'DESC' },
     });
+    const slug = endpoint ? endpoint.ingressSlug : user.ingressSlug;
     // Ingress route is excluded from global 'api' prefix — must NOT include /api/
-    const ingressUrl = endpoint
-      ? `${baseUrl}/in/${endpoint.ingressSlug}`
-      : `${baseUrl}/in/${user.ingressSlug}`;
+    const ingressUrl = `${baseUrl}/in/${slug}`;
 
     try {
-      const response = await fetch(ingressUrl, {
+      // In-process rather than over HTTP, so only Hookdash itself can mark an event as a test
+      const resolved = await this.ingressService.resolveEndpoint(slug, {
+        headers: {},
+      });
+      if (!resolved) {
+        return {
+          sent: true,
+          provider,
+          eventType,
+          ingressUrl,
+          eventId: null,
+          responseStatus: 200,
+          responseBody: { status: 'ok' },
+        };
+      }
+
+      const rawBody = JSON.stringify(payload);
+      const event = await this.ingressService.capture({
+        endpointId: resolved.endpoint.id,
+        userId: resolved.userId,
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        path: `/in/${slug}`,
+        headers: { 'content-type': 'application/json' },
+        rawBody,
+        body: payload,
+        sourceIp: null,
+        isTest: true,
+      });
+      await this.ingressService.processEvent(event, resolved.endpoint, {
+        urls: [ingressUrl],
       });
 
-      const responseBody = (await response.json()) as Record<string, unknown>;
-
       this.logger.log(
-        `Test payload sent: ${provider}/${eventType} to ${ingressUrl} for user ${jwtUser.sub}`,
+        `Test payload sent: ${provider}/${eventType} as event ${event.id} for user ${jwtUser.sub}`,
       );
 
       return {
@@ -132,8 +156,9 @@ export class TestPayloadsController {
         provider,
         eventType,
         ingressUrl,
-        responseStatus: response.status,
-        responseBody,
+        eventId: event.id,
+        responseStatus: resolved.endpoint.responseStatusCode ?? 200,
+        responseBody: ingressResponseBody(resolved.endpoint.responseBody),
       };
     } catch (err) {
       const message = (err as Error).message;

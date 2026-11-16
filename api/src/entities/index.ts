@@ -6,6 +6,7 @@ export { WorkspaceMember } from './workspace-member.entity.js';
 export { WorkspaceInvite } from './workspace-invite.entity.js';
 export { ForwardDestination } from './forward-destination.entity.js';
 export { ForwardResult } from './forward-result.entity.js';
+export { ChaosSetting } from './chaos-setting.entity.js';
 export { DeadLetterEvent } from './dead-letter-event.entity.js';
 export { TransformRule } from './transform-rule.entity.js';
 export { AlertChannel } from './alert-channel.entity.js';

@@ -10,10 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { Job, JobsOptions, Queue } from 'bullmq';
-import {
-  WebhookEvent,
-  type ForwardStatus,
-} from '../../entities/webhook-event.entity.js';
+import { WebhookEvent } from '../../entities/webhook-event.entity.js';
 import { Endpoint } from '../../entities/endpoint.entity.js';
 import { ForwardDestination } from '../../entities/forward-destination.entity.js';
 import { ForwardResult } from '../../entities/forward-result.entity.js';
@@ -28,6 +25,19 @@ import {
   forwardableHeaders,
   hookdashSignatureHeaders,
 } from './outbound-headers.js';
+import { aggregateDeliveryStatus } from './delivery-status.js';
+import { ChaosService } from '../chaos/chaos.service.js';
+import {
+  MAX_EXTRAS_PER_EVENT,
+  STALE_AGE_MS,
+  capExtras,
+  chaosRng,
+  countExtras,
+  isExtraCopy,
+  planChaos,
+  type ChaosDelivery,
+  type ChaosPlan,
+} from '../chaos/chaos-plan.js';
 
 /** Fan-out job: one per event. With `destinationId` it targets that destination only. */
 export interface ForwardJobData {
@@ -43,6 +53,8 @@ export interface DeliverJobData {
   endpointId: string;
   userId: string;
   destinationId: string | null;
+  // Set by chaos mode; seq 0 is the real delivery held back, seq > 0 an extra copy
+  chaos?: ChaosDelivery;
 }
 
 interface SendResult {
@@ -116,6 +128,7 @@ export class ForwardProcessor extends WorkerHost {
     private readonly httpService: HttpService,
     private readonly wsGateway: WebhookGateway,
     private readonly alertingService: AlertingService,
+    private readonly chaosService: ChaosService,
     configService: ConfigService,
   ) {
     super();
@@ -178,24 +191,100 @@ export class ForwardProcessor extends WorkerHost {
       forwardStatus: 'pending',
     });
 
+    const plans = await this.planChaosFor(
+      event,
+      endpoint.id,
+      targets,
+      Boolean(destinationId),
+    );
+
     // Deterministic ids make a retried fan-out a no-op for deliveries already queued;
     // a targeted re-delivery must not collide with the original job id
     await this.forwardQueue.addBulk(
-      targets.map((target) => ({
-        name: 'deliver',
-        data: { eventId, endpointId, userId, destinationId: target },
-        opts: {
-          ...deliveryJobOptions(endpoint),
-          ...(!destinationId && {
-            jobId: `deliver-${eventId}-${target ?? FALLBACK}`,
-          }),
-        },
-      })),
+      targets.flatMap((target) => {
+        const data: DeliverJobData = {
+          eventId,
+          endpointId,
+          userId,
+          destinationId: target,
+        };
+        const jobId = `deliver-${eventId}-${target ?? FALLBACK}`;
+        const plan = plans.get(target ?? FALLBACK);
+        const held: ChaosDelivery | undefined = plan?.primary.kind
+          ? { kind: plan.primary.kind, seq: 0, delayMs: plan.primary.delayMs }
+          : undefined;
+        return [
+          {
+            name: 'deliver',
+            data: held ? { ...data, chaos: held } : data,
+            opts: {
+              ...deliveryJobOptions(endpoint),
+              ...(!destinationId && { jobId }),
+              ...(held && { delay: held.delayMs }),
+            },
+          },
+          // One attempt each: a failing copy is the result being tested, not something to retry
+          ...(plan?.extras ?? []).map((chaos) => ({
+            name: 'deliver',
+            data: { ...data, chaos },
+            opts: {
+              attempts: 1,
+              delay: chaos.delayMs,
+              jobId: `${jobId}-c${chaos.seq}`,
+            },
+          })),
+        ];
+      }),
     );
   }
 
+  /** Chaos plans by target; none for re-deliveries, replays, or events outside a setting's scope. */
+  private async planChaosFor(
+    event: WebhookEvent,
+    endpointId: string,
+    targets: (string | null)[],
+    targeted: boolean,
+  ): Promise<Map<string, ChaosPlan>> {
+    if (targeted || event.isReplay) return new Map();
+    try {
+      const settings = await this.chaosService.activeForEndpoint(endpointId);
+      const plans = new Map<string, ChaosPlan>();
+      for (const target of targets) {
+        const setting = settings.find((s) => s.destinationId === target);
+        if (!setting || (setting.scope === 'test' && !event.isTest)) continue;
+        const key = target ?? FALLBACK;
+        plans.set(
+          key,
+          planChaos(setting, chaosRng(setting.seed, event.id, key)),
+        );
+      }
+
+      const planned = countExtras(plans);
+      const granted =
+        planned > 0
+          ? await this.chaosService.reserveExtras(
+              event.workspaceId,
+              Math.min(planned, MAX_EXTRAS_PER_EVENT),
+            )
+          : 0;
+      if (granted < planned) {
+        this.logger.warn(
+          `Chaos for event ${event.id}: sending ${granted} of ${planned} planned extra copies (limits)`,
+        );
+      }
+      return capExtras(plans, granted);
+    } catch (err) {
+      this.logger.error(
+        `Chaos planning failed for event ${event.id}, delivering normally: ${(err as Error).message}`,
+      );
+      return new Map();
+    }
+  }
+
   private async deliver(job: Job<DeliverJobData>): Promise<void> {
-    const { eventId, endpointId, userId, destinationId } = job.data;
+    const { eventId, endpointId, userId, destinationId, chaos } = job.data;
+    const extra = isExtraCopy(chaos);
+    if (extra && !(await this.extraCopyWanted(job.data))) return;
     const [event, endpoint, destination, transformRules] = await Promise.all([
       this.eventRepo.findOne({ where: { id: eventId } }),
       this.endpointRepo
@@ -231,6 +320,7 @@ export class ForwardProcessor extends WorkerHost {
       event.id,
       payload,
       endpoint.signingSecret,
+      chaos?.kind === 'stale' ? new Date(Date.now() - STALE_AGE_MS) : undefined,
     );
 
     await this.resultRepo.save(
@@ -244,8 +334,14 @@ export class ForwardProcessor extends WorkerHost {
         startedAt: result.startedAt,
         forwardedAt: new Date(),
         attempt,
+        chaosKind: chaos?.kind ?? null,
+        chaosSeq: chaos?.seq ?? 0,
+        chaosDelayMs: chaos?.delayMs ?? null,
       }),
     );
+
+    // An extra copy is only recorded: never retried, dead-lettered or counted in the event's status
+    if (extra) return;
 
     if (result.status === 'failed') {
       if (attempt < (job.opts?.attempts ?? 1)) {
@@ -265,6 +361,35 @@ export class ForwardProcessor extends WorkerHost {
     await this.settle(eventId, userId);
   }
 
+  /** An extra copy goes out only while chaos is still on; a stale replay only once the event was delivered. */
+  private async extraCopyWanted(data: DeliverJobData): Promise<boolean> {
+    const { eventId, endpointId, destinationId, chaos } = data;
+    const [active, delivered] = await Promise.all([
+      this.chaosService.isActive(endpointId, destinationId),
+      chaos?.kind === 'stale'
+        ? this.resultRepo.exists({
+            where: {
+              eventId,
+              destinationId: destinationId ?? IsNull(),
+              target: IsNull(),
+              chaosSeq: 0,
+              status: 'forwarded',
+            },
+          })
+        : Promise.resolve(true),
+    ]);
+    if (!active) {
+      this.logger.log(
+        `Chaos is off for event ${eventId} (${destinationId ?? FALLBACK}), dropping ${chaos?.kind} copy ${chaos?.seq}`,
+      );
+    } else if (!delivered) {
+      this.logger.log(
+        `Event ${eventId} not delivered to ${destinationId ?? FALLBACK} yet, skipping the stale replay`,
+      );
+    }
+    return active && delivered;
+  }
+
   // Only reached for unexpected errors on the last attempt; delivery failures are dead-lettered in deliver()
   @OnWorkerEvent('failed')
   async onFailed(
@@ -280,6 +405,7 @@ export class ForwardProcessor extends WorkerHost {
     if (job.name !== 'deliver') return;
 
     const data = job.data as DeliverJobData;
+    if (isExtraCopy(data.chaos)) return;
     await this.writeDeadLetter(
       data.eventId,
       data.endpointId,
@@ -303,50 +429,24 @@ export class ForwardProcessor extends WorkerHost {
         if (!event) return null;
 
         const [results, deadLetters] = await Promise.all([
-          // Locally reported deliveries (target set) don't count towards the event's status
+          // Only real deliveries count: not locally reported ones (target set) or chaos copies
           m.find(ForwardResult, {
-            where: { eventId, target: IsNull() },
+            where: { eventId, target: IsNull(), chaosSeq: 0 },
             order: { createdAt: 'ASC' },
           }),
           m.find(DeadLetterEvent, { where: { eventId } }),
         ]);
 
-        const key = (id: string | null) => id ?? FALLBACK;
-        const delivered = new Map<string, ForwardResult>();
-        for (const r of results) {
-          if (r.status === 'forwarded') delivered.set(key(r.destinationId), r);
-        }
-        const dead = new Set(
-          deadLetters
-            .map((d) => key(d.destinationId))
-            .filter((k) => !delivered.has(k)),
+        const update: EventDeliveryFields = aggregateDeliveryStatus(
+          results,
+          deadLetters,
+          event.targetCount,
         );
-        const targets = event.targetCount ?? 1;
-        const resolved = delivered.size + dead.size;
-        const status: ForwardStatus =
-          resolved < targets
-            ? 'pending'
-            : dead.size > 0
-              ? 'failed'
-              : 'forwarded';
-
-        const last = results[results.length - 1];
-        const successes = [...delivered.values()];
-        const update: EventDeliveryFields = {
-          forwardStatus: status,
-          forwardCode:
-            successes[successes.length - 1]?.responseCode ??
-            last?.responseCode ??
-            null,
-          forwardLatency: successes.length
-            ? Math.max(...successes.map((r) => r.latency ?? 0))
-            : null,
-          forwardedAt: last?.forwardedAt ?? null,
-          ...(targets === 1 && { forwardBody: last?.responseBody ?? null }),
-        };
         await m.update(WebhookEvent, eventId, update);
         return {
-          becameFailed: status === 'failed' && event.forwardStatus !== 'failed',
+          becameFailed:
+            update.forwardStatus === 'failed' &&
+            event.forwardStatus !== 'failed',
           workspaceId: event.workspaceId,
           update,
         };
@@ -419,13 +519,19 @@ export class ForwardProcessor extends WorkerHost {
     eventId: string,
     payload: { data: string; headers: Record<string, string> },
     signingSecret: string | undefined,
+    signedAt?: Date,
   ): Promise<SendResult> {
     const startedAt = new Date();
     try {
       const guard = await outboundRequestOptions(url, this.allowPrivate);
       // Signed per attempt so the timestamp stays inside the receiver's tolerance on retries
       const signature = signingSecret
-        ? hookdashSignatureHeaders(signingSecret, eventId, payload.data)
+        ? hookdashSignatureHeaders(
+            signingSecret,
+            eventId,
+            payload.data,
+            signedAt,
+          )
         : {};
       const response = await this.httpService.axiosRef({
         method: 'POST',

@@ -113,6 +113,41 @@ describe('EventsService', () => {
       expect(steps.at(-1)).toMatchObject({ status: 'error' });
     });
 
+    it('labels chaos copies on their forward steps and leaves ordinary ones at 0', async () => {
+      mockEventRepo.findOne.mockResolvedValue(event('forwarded'));
+      const result = (over: object) => ({
+        destinationId: null,
+        destination: null,
+        target: null,
+        status: 'forwarded',
+        responseCode: 200,
+        latency: 30,
+        attempt: 1,
+        chaosKind: null,
+        chaosSeq: 0,
+        createdAt: new Date('2026-10-18T19:30:08Z'),
+        ...over,
+      });
+      mockForwardResultRepo.find.mockResolvedValue([
+        result({ startedAt: new Date('2026-10-18T19:30:08Z') }),
+        result({
+          startedAt: new Date('2026-10-18T19:30:11Z'),
+          chaosKind: 'duplicate',
+          chaosSeq: 1,
+          status: 'failed',
+          responseCode: 500,
+        }),
+      ]);
+
+      const { steps } = await service.getTimeline('evt-1', 'user-1');
+      const forwards = steps.filter((s) => s.step === 'forwarded');
+
+      expect(forwards.map((s) => [s.chaosKind, s.chaosSeq, s.status])).toEqual([
+        [null, 0, 'success'],
+        ['duplicate', 1, 'error'],
+      ]);
+    });
+
     it('still shows the aggregate forward step for older events', async () => {
       mockEventRepo.findOne.mockResolvedValue(event('failed'));
       mockForwardResultRepo.find.mockResolvedValue([]);

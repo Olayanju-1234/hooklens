@@ -14,6 +14,7 @@ import { WorkspaceMember } from './entities/workspace-member.entity.js';
 import { WorkspaceInvite } from './entities/workspace-invite.entity.js';
 import { ForwardDestination } from './entities/forward-destination.entity.js';
 import { ForwardResult } from './entities/forward-result.entity.js';
+import { ChaosSetting } from './entities/chaos-setting.entity.js';
 import { DeadLetterEvent } from './entities/dead-letter-event.entity.js';
 import { TransformRule } from './entities/transform-rule.entity.js';
 import { AlertChannel } from './entities/alert-channel.entity.js';
@@ -24,6 +25,7 @@ import { AuditLog } from './entities/audit-log.entity.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { EndpointsModule } from './modules/endpoints/endpoints.module.js';
 import { IngressModule } from './modules/ingress/ingress.module.js';
+import { ChaosModule } from './modules/chaos/chaos.module.js';
 import { ForwardModule } from './modules/forward/forward.module.js';
 import { EventsModule } from './modules/events/events.module.js';
 import { StatsModule } from './modules/stats/stats.module.js';
@@ -87,6 +89,7 @@ import { BagsModule } from './modules/bags/bags.module.js';
             WorkspaceInvite,
             ForwardDestination,
             ForwardResult,
+            ChaosSetting,
             DeadLetterEvent,
             TransformRule,
             AlertChannel,
@@ -140,6 +143,7 @@ import { BagsModule } from './modules/bags/bags.module.js';
     AuditModule,
     DeadLetterModule,
     BagsModule,
+    ChaosModule,
   ],
   providers: [
     {

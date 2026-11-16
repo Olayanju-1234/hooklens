@@ -131,6 +131,35 @@ describe('IngressController', () => {
     });
   });
 
+  describe('POST (public ingress)', () => {
+    it('never marks a public delivery as a test payload, whatever headers it sends', async () => {
+      ingress.resolveEndpoint.mockResolvedValue({
+        endpoint: endpoint('paystack', null),
+        userId: 'user-1',
+      });
+      const { res, sent } = fakeResponse();
+      await controller.receive(
+        SLUG,
+        fakeRequest({
+          headers: {
+            'content-type': 'application/json',
+            'x-hookdash-test': 'true',
+          },
+          rawBody: '{"event":"charge.success"}',
+          body: { event: 'charge.success' },
+        }),
+        res,
+      );
+
+      expect(ingress.capture).toHaveBeenCalledTimes(1);
+      const params = (
+        ingress.capture.mock.calls as unknown[][]
+      )[0][0] as Record<string, unknown>;
+      expect(params).not.toHaveProperty('isTest');
+      expect(sent).toEqual({ status: 202, body: { status: 'ok' } });
+    });
+  });
+
   describe('POST (Slack url_verification)', () => {
     const secret = 'slack_signing_secret';
     const rawBody =
