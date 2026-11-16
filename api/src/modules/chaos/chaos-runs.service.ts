@@ -16,7 +16,11 @@ import {
 import { EndpointsService } from '../endpoints/endpoints.service.js';
 import { IngressService } from '../ingress/ingress.service.js';
 import { TestPayloadsService } from '../test-payloads/test-payloads.service.js';
-import { ChaosService, FALLBACK_TARGET } from './chaos.service.js';
+import {
+  ChaosService,
+  FALLBACK_TARGET,
+  assertInWorkspace,
+} from './chaos.service.js';
 import {
   SCENARIOS,
   buildScenarioBodies,
@@ -131,6 +135,7 @@ export class ChaosRunsService {
     endpointId: string,
     target: string,
     userId: string,
+    workspaceId?: string,
   ): Promise<ChaosRunView> {
     const scenario = findScenario(scenarioId);
     if (!scenario) throw new NotFoundException('Scenario not found');
@@ -138,6 +143,7 @@ export class ChaosRunsService {
       endpointId,
       target,
       userId,
+      workspaceId,
     );
 
     if (!(await this.chaosService.reserveRun(endpoint.workspaceId))) {
@@ -194,15 +200,21 @@ export class ChaosRunsService {
     this.logger.log(
       `Chaos scenario ${scenario.id} run ${run.id} started on ${endpoint.id} (${destinationId ?? FALLBACK_TARGET})`,
     );
-    return this.getRun(run.id, userId);
+    return this.getRun(run.id, userId, workspaceId);
   }
 
-  async getRun(runId: string, userId: string): Promise<ChaosRunView> {
+  async getRun(
+    runId: string,
+    userId: string,
+    workspaceId?: string,
+  ): Promise<ChaosRunView> {
     const run = await this.runRepo.findOne({
       where: { id: runId },
       relations: ['destination'],
     });
-    if (!run) throw new NotFoundException('Run not found');
+    if (!run || (workspaceId && run.workspaceId !== workspaceId)) {
+      throw new NotFoundException('Run not found');
+    }
     const endpoint = await this.endpointsService.findOne(
       run.endpointId,
       userId,
@@ -281,8 +293,10 @@ export class ChaosRunsService {
   async listRuns(
     endpointId: string,
     userId: string,
+    workspaceId?: string,
   ): Promise<ChaosRunSummary[]> {
-    await this.endpointsService.findOne(endpointId, userId);
+    const endpoint = await this.endpointsService.findOne(endpointId, userId);
+    assertInWorkspace(endpoint, workspaceId);
     const runs = await this.runRepo.find({
       where: { endpointId },
       order: { createdAt: 'DESC' },

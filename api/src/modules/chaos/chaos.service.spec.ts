@@ -283,6 +283,36 @@ describe('ChaosService', () => {
       expect(settingRepo.save).not.toHaveBeenCalled();
     });
 
+    it("404s a route outside the request's workspace, as an API key from another workspace would see it", async () => {
+      await expect(
+        service.upsert(
+          ENDPOINT.id,
+          'fallback',
+          USER,
+          { enabled: true, duplicateProbability: 1 },
+          'other-workspace',
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(settingRepo.save).not.toHaveBeenCalled();
+      await expect(
+        service.list(ENDPOINT.id, USER, 'other-workspace'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.disable(ENDPOINT.id, 'fallback', USER, 'other-workspace'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('accepts a route in the request workspace', async () => {
+      const view = await service.upsert(
+        ENDPOINT.id,
+        'fallback',
+        USER,
+        { enabled: true, duplicateProbability: 1 },
+        ENDPOINT.workspaceId,
+      );
+      expect(view.active).toBe(true);
+    });
+
     it('rejects the fallback target when the source has no forward URL', async () => {
       endpointsService.findOne.mockResolvedValue({
         ...ENDPOINT,

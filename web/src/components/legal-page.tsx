@@ -30,6 +30,7 @@ export function LegalPage({ title, updated, children }: LegalPageProps) {
 
         <div className="mt-16 pt-6 border-t border-border-primary flex flex-wrap gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-[0.08em] text-text-tertiary">
           <Link href="/" className="hover:text-text-primary transition-colors">Home</Link>
+          <Link href="/docs/chaos" className="hover:text-text-primary transition-colors">Chaos mode</Link>
           <Link href="/privacy" className="hover:text-text-primary transition-colors">Privacy</Link>
           <Link href="/terms" className="hover:text-text-primary transition-colors">Terms</Link>
         </div>

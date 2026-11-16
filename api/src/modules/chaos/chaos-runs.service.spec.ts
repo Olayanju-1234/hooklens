@@ -88,6 +88,7 @@ describe('ChaosRunsService', () => {
         'ep-1',
         'fallback',
         'member-1',
+        undefined,
       );
       expect(runRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -316,6 +317,54 @@ describe('ChaosRunsService', () => {
       await expect(service.getRun('nope', 'u')).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+  });
+
+  describe('workspace scoping (API keys are pinned to their workspace)', () => {
+    it('passes the request workspace to target resolution when running', async () => {
+      runRepo.findOne.mockResolvedValue({
+        id: 'run-1',
+        workspaceId: 'ws-1',
+        endpointId: 'ep-1',
+        destinationId: null,
+        scenarioId: 'paystack-stale-replay',
+        createdAt: new Date(),
+      });
+      await service.run(
+        'paystack-stale-replay',
+        'ep-1',
+        'fallback',
+        'u',
+        'ws-1',
+      );
+      expect(chaosService.resolveTarget).toHaveBeenCalledWith(
+        'ep-1',
+        'fallback',
+        'u',
+        'ws-1',
+      );
+    });
+
+    it('404s a run from another workspace before loading it', async () => {
+      runRepo.findOne.mockResolvedValue({
+        id: 'run-1',
+        workspaceId: 'ws-1',
+        endpointId: 'ep-1',
+        scenarioId: 'paystack-stale-replay',
+        createdAt: new Date(),
+      });
+      await expect(
+        service.getRun('run-1', 'u', 'ws-other'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(endpointsService.findOne).not.toHaveBeenCalled();
+      expect(eventRepo.find).not.toHaveBeenCalled();
+    });
+
+    it("404s listing runs for another workspace's route", async () => {
+      await expect(
+        service.listRuns('ep-1', 'u', 'ws-other'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(runRepo.find).not.toHaveBeenCalled();
     });
   });
 

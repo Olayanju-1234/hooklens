@@ -79,6 +79,7 @@ hookdash/
 - **Payload transforms** — configurable rules to mutate or reshape webhook bodies before forwarding
 - **Per-destination delivery** — each destination is its own job with its own retries and backoff, so a slow or failing receiver never delays the others; attempts record real stage timings (parsed, queued, sent, responded)
 - **Dead letter queue** — failed forwards are captured per destination and retryable
+- **Chaos mode**: send your own handler duplicates, delays, reordering and stale replays, per delivery target or as one-click Paystack and Flutterwave scenarios, from the dashboard or from CI with an API key
 - **Alerting** — Slack, Discord, and Email notifications
 - **Workspace management** — multi-tenant, team-friendly
 - **API keys** — key-based auth alongside JWT
@@ -86,6 +87,17 @@ hookdash/
 - **Test payloads** — send synthetic events without a live provider
 - **Retention policies** — configurable event TTL
 - **SDK & CLI** — programmatic and terminal access
+
+## Chaos mode
+
+Does your handler survive the same webhook twice, a late webhook, webhooks out of order, or a replay with an old timestamp? Chaos mode sends deliveries to your own handler with those faults added and shows what it answered each time.
+
+- **Per target:** turn on duplicates (1 to 3 copies with the same `webhook-id`), delays (up to 15 min), reorder jitter and stale replays (signed 10 minutes in the past) for one destination or the fallback forward URL. Off by default, switches itself off after 30 minutes (max 24 h), test payloads only unless the workspace owner widens it, with a seed for reproducible runs.
+- **Scenarios:** Paystack `charge.success` delivered 3 times, `transfer.reversed` before `transfer.success`, `refund.processed` before `charge.success`, Flutterwave `charge.completed` twice with `transfer.completed` 2 minutes late, and a stale replay. Each run has a timeline and a "what correct looks like" checklist.
+- **Never counted:** extra copies are recorded but never change an event's status, create a dead letter or fire an alert.
+- **From CI:** `POST /api/chaos/scenarios/:id/run` with an `x-api-key`, then poll `GET /api/chaos/runs/:runId` until `complete`.
+
+The guide, with each provider's retry behaviour and idempotent handler examples in NestJS and Express, is at `/docs/chaos` in the web app.
 
 ## CLI
 

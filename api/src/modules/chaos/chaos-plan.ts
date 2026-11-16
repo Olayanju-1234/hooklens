@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import type { ChaosKind } from '../../entities/forward-result.entity.js';
 
-/** A stale copy is signed this far in the past, beyond the usual 5-minute tolerance. */
+/** A stale copy is signed this far in the past, beyond the 5-minute tolerance the Hookdash SDK and Stripe's libraries default to. */
 export const STALE_AGE_MS = 10 * 60_000;
 /** A stale copy follows the real delivery by this much, so there is usually a delivered event to replay. */
 export const STALE_AFTER_MS = 30_000;

@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -44,9 +45,10 @@ export class ChaosController {
   @ApiParam({ name: 'id', type: String })
   list(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.chaosService.list(id, user.sub);
+    return this.chaosService.list(id, user.sub, workspaceId);
   }
 
   @Put(':target')
@@ -59,11 +61,12 @@ export class ChaosController {
   @ApiResponse({ status: 403, description: 'Scope `all` needs the owner' })
   upsert(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('target') target: string,
     @Body() dto: UpdateChaosDto,
   ) {
-    return this.chaosService.upsert(id, target, user.sub, dto);
+    return this.chaosService.upsert(id, target, user.sub, dto, workspaceId);
   }
 
   @Delete(':target')
@@ -73,9 +76,10 @@ export class ChaosController {
   @ApiParam(TARGET_PARAM)
   disable(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('target') target: string,
   ) {
-    return this.chaosService.disable(id, target, user.sub);
+    return this.chaosService.disable(id, target, user.sub, workspaceId);
   }
 }

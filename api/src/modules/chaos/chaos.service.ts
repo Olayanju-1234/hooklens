@@ -106,6 +106,19 @@ export function isChaosActive(
   );
 }
 
+/**
+ * The route must belong to the request's workspace: an API key is pinned to its own,
+ * even when the key's creator is also a member elsewhere.
+ */
+export function assertInWorkspace(
+  endpoint: Pick<Endpoint, 'workspaceId'>,
+  workspaceId: string | undefined,
+): void {
+  if (workspaceId && endpoint.workspaceId !== workspaceId) {
+    throw new NotFoundException('Endpoint not found');
+  }
+}
+
 function pickFaults(
   source: Partial<Record<keyof ChaosFaults, number | undefined>> | null,
 ): Partial<ChaosFaults> {
@@ -134,8 +147,13 @@ export class ChaosService {
   ) {}
 
   /** Every delivery target of an endpoint with its chaos settings, if any. */
-  async list(endpointId: string, userId: string): Promise<ChaosTargetView[]> {
+  async list(
+    endpointId: string,
+    userId: string,
+    workspaceId?: string,
+  ): Promise<ChaosTargetView[]> {
     const endpoint = await this.endpointsService.findOne(endpointId, userId);
+    assertInWorkspace(endpoint, workspaceId);
     const [destinations, settings] = await Promise.all([
       this.destinationRepo.find({
         where: { endpointId },
@@ -175,11 +193,13 @@ export class ChaosService {
     target: string,
     userId: string,
     dto: UpdateChaosDto,
+    workspaceId?: string,
   ): Promise<ChaosSettingView> {
     const { endpoint, destinationId } = await this.resolveTarget(
       endpointId,
       target,
       userId,
+      workspaceId,
     );
     const existing = await this.findSetting(endpointId, destinationId);
 
@@ -236,11 +256,13 @@ export class ChaosService {
     endpointId: string,
     target: string,
     userId: string,
+    workspaceId?: string,
   ): Promise<void> {
     const { destinationId } = await this.resolveTarget(
       endpointId,
       target,
       userId,
+      workspaceId,
     );
     const existing = await this.findSetting(endpointId, destinationId);
     if (!existing?.enabled) return;
@@ -373,8 +395,10 @@ export class ChaosService {
     endpointId: string,
     target: string,
     userId: string,
+    workspaceId?: string,
   ): Promise<{ endpoint: Endpoint; destinationId: string | null }> {
     const endpoint = await this.endpointsService.findOne(endpointId, userId);
+    assertInWorkspace(endpoint, workspaceId);
     if (target === FALLBACK_TARGET) {
       if (!endpoint.forwardUrl) {
         throw new BadRequestException('This source has no forward URL');

@@ -195,6 +195,7 @@ export default function LandingPage() {
         <nav className="fd-nav" aria-label="Site">
           <a href="#sources">Sources</a>
           <Link href="/demo">Live demo</Link>
+          <Link href="/docs/chaos">Chaos mode</Link>
           <a href={REPO} target="_blank" rel="noreferrer">
             GitHub
           </a>
@@ -530,9 +531,40 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section className="fd-section" id="chaos" aria-labelledby="chaos-title">
+        <div className="fd-section-inner split">
+          <div>
+            <div className="section-head" style={{ gridTemplateColumns: "1fr", marginBottom: 20 }}>
+              <span className="eyebrow">Chaos mode</span>
+              <h2 id="chaos-title">Send your handler the same webhook twice.</h2>
+            </div>
+            <p>
+              Providers retry when an acknowledgement gets lost, events overtake each other, and a replay can turn up
+              minutes later. Chaos mode sends your own handler duplicates, delays, reordering and stale replays built
+              from Paystack and Flutterwave test payloads, and shows what it answered each time.
+            </p>
+            <p>It switches itself off after 30 minutes and only touches test payloads unless the workspace owner says otherwise.</p>
+            <div className="hero-cta">
+              <Link href="/docs/chaos" className="btn btn--ghost">
+                How chaos mode works →
+              </Link>
+            </div>
+          </div>
+          <pre className="term" aria-label="Example chaos run against a handler with no duplicate check">
+            <span className="p"># </span>charge.success delivered 3 times → your handler{"\n\n"}
+            <span className="p">  </span>+0.1s  real         <span className="ok">200</span>  {"{"}&quot;timesCredited&quot;:1{"}"}{"\n"}
+            <span className="p">  </span>+2.1s  <span className="rep">duplicate 1</span>  <span className="ok">200</span>  {"{"}&quot;timesCredited&quot;:2{"}"}{"\n"}
+            <span className="p">  </span>+5.1s  <span className="rep">duplicate 2</span>  <span className="ok">200</span>  {"{"}&quot;timesCredited&quot;:3{"}"}{"\n\n"}
+            <span className="p">  </span>
+            <span className="warn">✗</span> one payment, credited three times
+          </pre>
+        </div>
+      </section>
+
       <footer className="fd-foot">
         <span>© {new Date().getFullYear()} Hookdash · MIT · built in Lagos</span>
         <span className="fd-foot-links">
+          <Link href="/docs/chaos">Chaos mode</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
           <a href={REPO} target="_blank" rel="noreferrer">
