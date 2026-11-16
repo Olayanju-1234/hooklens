@@ -4,6 +4,8 @@ export interface ProviderOption {
   label: string;
   description: string;
   secretHint: string;
+  /** Shown under the secret field when the hint alone can't say which secret to paste. */
+  secretNote?: string;
 }
 
 export const PROVIDERS: ProviderOption[] = [
@@ -17,7 +19,9 @@ export const PROVIDERS: ProviderOption[] = [
     value: "paystack",
     label: "Paystack",
     description: "Payment processing — charges, transfers, refunds",
-    secretHint: "Paystack secret key (sk_…)",
+    secretHint: "Signing secret (whsec_…) or secret key (sk_…)",
+    secretNote:
+      "Paste the whsec_ webhook signing secret (Developers > API configuration) to verify Paystack-Signature. Use your sk_ secret key only while your events don't carry that header yet.",
   },
   {
     value: "flutterwave",

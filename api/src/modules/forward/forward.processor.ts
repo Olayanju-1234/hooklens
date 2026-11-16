@@ -538,6 +538,7 @@ export class ForwardProcessor extends WorkerHost {
     const original = event.headers ?? {};
     const signature =
       original['x-paystack-signature'] ??
+      original['paystack-signature'] ??
       original['verif-hash'] ??
       original['stripe-signature'] ??
       '';

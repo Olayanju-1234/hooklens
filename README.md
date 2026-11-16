@@ -34,7 +34,7 @@ No more `ngrok` + `console.log` guesswork.
 | Provider | Signature verification |
 |----------|----------------------|
 | Stripe | HMAC-SHA256 hex over `t.body`, 5 min timestamp tolerance |
-| Paystack | HMAC-SHA512 hex |
+| Paystack | With a `whsec_` signing secret: HMAC-SHA512 hex over `t.body` in `Paystack-Signature` (`t=…,v1=whk_…:…`, any v1 may match during rotation), 5 min tolerance. With an `sk_` secret key: HMAC-SHA512 hex of the body in `X-Paystack-Signature` |
 | Flutterwave | Secret hash in `verif-hash` |
 | Mono | Secret in `mono-webhook-secret` |
 | Bags.fm | HMAC-SHA256 hex (WebSocket stream for Solana token launch events) |

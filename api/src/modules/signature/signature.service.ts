@@ -2,7 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 import {
   RECIPES,
+  allSignatureHeaders,
   getRecipe,
+  verificationFor,
   type DigestEncoding,
   type FieldLocator,
   type HmacVerification,
@@ -56,10 +58,8 @@ export class SignatureService {
     now: number = Date.now(),
   ): VerificationResult {
     const recipe = getRecipe(provider);
-    const header = firstHeader(
-      request.headers,
-      recipe.verification.signatureHeaders,
-    );
+    const verification = verificationFor(recipe, secret);
+    const header = firstHeader(request.headers, verification.signatureHeaders);
     if (header === null) {
       return recipe.signatureOptional
         ? { valid: null }
@@ -68,9 +68,9 @@ export class SignatureService {
 
     try {
       const result =
-        recipe.verification.kind === 'shared-secret'
+        verification.kind === 'shared-secret'
           ? this.compareSecret(secret, header)
-          : this.verifyHmac(recipe.verification, header, request, secret, now);
+          : this.verifyHmac(verification, header, request, secret, now);
       if (!result.valid) {
         this.logger.warn(
           `Signature rejected for ${provider}: ${result.failure ?? 'unknown'}`,
@@ -92,7 +92,10 @@ export class SignatureService {
     signature: string,
     secret: string,
   ): boolean {
-    const [header] = getRecipe(provider).verification.signatureHeaders;
+    const [header] = verificationFor(
+      getRecipe(provider),
+      secret,
+    ).signatureHeaders;
     return (
       this.verifyRequest(
         provider,
@@ -142,17 +145,14 @@ export class SignatureService {
   }
 
   extractSignature(provider: string, headers: Headers): string | null {
-    return firstHeader(
-      headers,
-      getRecipe(provider).verification.signatureHeaders,
-    );
+    return firstHeader(headers, allSignatureHeaders(getRecipe(provider)));
   }
 
   /** Providers whose identifying header is present on the request. */
   detectProviders(headers: Headers): string[] {
     return Object.entries(RECIPES)
       .filter(([, recipe]) =>
-        (recipe.detectHeaders ?? recipe.verification.signatureHeaders).some(
+        (recipe.detectHeaders ?? allSignatureHeaders(recipe)).some(
           (name) => firstHeader(headers, [name]) !== null,
         ),
       )
@@ -197,14 +197,20 @@ export class SignatureService {
     let timestamp: string | null = null;
 
     if (recipe.entries) {
+      const { signatureKey, timestampKey, keyIdSeparator } = recipe.entries;
       const entries = parseEntries(header, recipe.entries);
       signatures = entries
-        .filter(([key]) => key === recipe.entries?.signatureKey)
-        .map(([, value]) => value);
-      if (recipe.entries.timestampKey) {
-        timestamp =
-          entries.find(([key]) => key === recipe.entries?.timestampKey)?.[1] ??
-          null;
+        .filter(([key]) => key === signatureKey)
+        .map(([, value]) =>
+          keyIdSeparator ? dropKeyId(value, keyIdSeparator) : value,
+        )
+        .filter((value): value is string => value !== null);
+      if (timestampKey) {
+        const stamps = entries.filter(([key]) => key === timestampKey);
+        if (stamps.length > 1) {
+          return { valid: false, failure: 'malformed-signature' };
+        }
+        timestamp = stamps[0]?.[1] ?? null;
       }
     } else {
       const value = header.trim();
@@ -327,8 +333,16 @@ function parseEntries(
     .filter((part) => part.includes(format.keySeparator))
     .map((part) => {
       const at = part.indexOf(format.keySeparator);
-      return [part.slice(0, at), part.slice(at + format.keySeparator.length)];
+      return [
+        part.slice(0, at).trim(),
+        part.slice(at + format.keySeparator.length).trim(),
+      ];
     });
+}
+
+function dropKeyId(value: string, separator: string): string | null {
+  const at = value.indexOf(separator);
+  return at === -1 ? null : value.slice(at + separator.length);
 }
 
 function decodeDigest(value: string, encoding: DigestEncoding): Buffer | null {
