@@ -126,6 +126,11 @@ export default function DemoTowerPage() {
   }, [rows, selected, replay, toggleFollow]);
 
   const down = stats ? DESTINATIONS.filter((d) => stats.dests[d.id]?.down).map((d) => d.host) : [];
+  const chaosOn = sim.world.chaosAt(sim.clock.live);
+  const toggleChaos = useCallback(() => {
+    if (sim.clock.rewound) return;
+    sim.world.act(sim.world.chaosAt(sim.clock.live) ? "chaos-off" : "chaos-on", sim.clock.live);
+  }, [sim]);
   const billingDown = !!stats?.dests.billing?.down;
 
   return (
@@ -188,6 +193,17 @@ export default function DemoTowerPage() {
                 </button>
               </div>
             </div>
+            <div className="chaos-demo-note" data-on={chaosOn || undefined}>
+              <button type="button" className="chip" data-tone="magenta" aria-pressed={chaosOn} onClick={toggleChaos} disabled={rewound}>
+                {chaosOn ? "Chaos mode on" : "Chaos mode"}
+              </button>
+              <p>
+                {chaosOn
+                  ? "Some deliveries get a duplicate copy (magenta), some are held back at the hub (amber) so later events overtake them. Copies never change an event's status."
+                  : "Send duplicates and hold deliveries back, the way providers sometimes do, and watch what changes."}{" "}
+                <Link href="/docs/chaos">How it works</Link>
+              </p>
+            </div>
           </section>
 
           <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--line)" }}>
@@ -233,7 +249,8 @@ export default function DemoTowerPage() {
                 <tbody>
                   {rows.map(({ e, j, status }) => {
                     const gen = j.replayStarts.filter((t) => t <= T).length;
-                    const branches = j.branches.filter((b) => b.generation === gen);
+                    const branches = j.branches.filter((b) => b.generation === gen && b.chaos !== "duplicate");
+                    const copies = j.branches.filter((b) => b.chaos === "duplicate" && b.marks[0].t <= T).length;
                     const gated = T >= j.tGate;
                     return (
                       <tr
@@ -251,6 +268,11 @@ export default function DemoTowerPage() {
                         <td className="t-time">{clockTime(sim.epoch, e.t0)}</td>
                         <td>
                           <Flap text={e.eventType} width={26} reduced={reduced} enter />
+                          {copies > 0 && (
+                            <span className="replay-tag" title="Chaos mode sent the same event again">
+                              copy ×{copies}
+                            </span>
+                          )}
                         </td>
                         <td className="t-src">{SOURCE_BY_ID.get(e.source)!.label.toLowerCase()}</td>
                         <td className={!gated ? "t-time" : j.rejected ? "seal-bad" : "seal-ok"}>{!gated ? "···" : j.rejected ? "✗ forged" : "✓ sealed"}</td>

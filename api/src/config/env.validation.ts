@@ -46,4 +46,7 @@ export const envValidationSchema = Joi.object({
   GITHUB_CLIENT_ID: Joi.string().allow('').default(''),
   GITHUB_CLIENT_SECRET: Joi.string().allow('').default(''),
   GITHUB_CALLBACK_URL: Joi.string().allow('').default(''),
+
+  // ── Admin (optional: unset means nobody can read the usage metric) ──
+  ADMIN_EMAILS: Joi.string().allow('').default(''),
 }).options({ allowUnknown: true });

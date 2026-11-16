@@ -83,6 +83,8 @@ export interface Branch {
   generation: number;
   marks: Mark[];
   attempts: Attempt[];
+  /** Chaos mode: a duplicate copy (never counted), or the real delivery held back so later events overtake it. */
+  chaos?: "duplicate" | "held";
 }
 
 export interface Journey {
@@ -95,7 +97,7 @@ export interface Journey {
   endT: number;
 }
 
-export type ActionType = "outage" | "restore" | "forge" | "burst" | "replay-dead" | "replay-event";
+export type ActionType = "outage" | "restore" | "forge" | "burst" | "replay-dead" | "replay-event" | "chaos-on" | "chaos-off";
 
 export interface Action {
   id: number;
@@ -136,6 +138,8 @@ export interface WorldStats {
 
 const INF = 1e7;
 const HISTORY = 900;
+const CHAOS_DUPLICATE_P = 0.45;
+const CHAOS_HOLD_P = 0.3;
 
 const SOURCE_WEIGHT_TOTAL = SOURCES.reduce((s, p) => s + p.weight, 0);
 
@@ -293,6 +297,17 @@ export class World {
     return down;
   }
 
+  /** Whether chaos mode was on at time t. */
+  chaosAt(t: number): boolean {
+    let on = false;
+    for (const a of this.actions) {
+      if (a.t > t) break;
+      if (a.type === "chaos-on") on = true;
+      else if (a.type === "chaos-off") on = false;
+    }
+    return on;
+  }
+
   outageWindows(dest: string, until: number): [number, number][] {
     const out: [number, number][] = [];
     let start: number | null = null;
@@ -349,7 +364,27 @@ export class World {
     }
 
     const tDepart = tGate + 0.12;
-    for (const destId of src.routes) branches.push(this.runBranch(e, destId, HUB, tDepart, 0, false, legs));
+    const chaos = this.chaosAt(tDepart);
+    for (const destId of src.routes) {
+      if (!chaos) {
+        branches.push(this.runBranch(e, destId, HUB, tDepart, 0, false, legs));
+        continue;
+      }
+      // Fixed draw order, so the same event always gets the same chaos
+      const cr = mulberry32(hash(e.seed, DEST_INDEX.get(destId)!, 0xc4a05));
+      const holdRoll = cr();
+      const holdFor = 1.5 + cr() * 3;
+      const dupRoll = cr();
+      const dupGap = 0.8 + cr() * 1.6;
+      const held = holdRoll < CHAOS_HOLD_P ? holdFor : 0;
+      if (held) {
+        legs.push({ t0: tDepart, t1: tDepart + held, type: LEG.ember, size: 0.16, ease: EASE.linear, tone: "amber", a: HUB, b: [0, 0, 0], c: [0, 0, 0] });
+      }
+      const real = this.runBranch(e, destId, HUB, tDepart + held, 0, false, legs);
+      if (held) real.chaos = "held";
+      branches.push(real);
+      if (dupRoll < CHAOS_DUPLICATE_P) branches.push(this.copyBranch(e, destId, tDepart + held + dupGap, legs));
+    }
 
     const replayStarts: number[] = [];
     let gen = 1;
@@ -364,6 +399,39 @@ export class World {
     let endT = tGate + 0.5;
     for (const l of legs) endT = Math.max(endT, l.t1);
     return { event: e, legs, tGate, rejected: false, branches, replayStarts, endT };
+  }
+
+  /** A chaos duplicate: one attempt, same event, never retried or dead-lettered. */
+  private copyBranch(e: SimEvent, destId: string, start: number, legs: Leg[]): Branch {
+    const dest = DEST_BY_ID.get(destId)!;
+    const di = DEST_INDEX.get(destId)!;
+    const d = dist(HUB, dest.pos);
+    const lat = e.latency[destId];
+    const dur = 0.32 + d * 0.16 + Math.log10(lat) * 0.07;
+    legs.push({
+      t0: start, t1: start + dur, type: LEG.flight, size: 0.14, ease: EASE.inOut, tone: "magenta",
+      a: HUB, b: arcCtrl(HUB, dest.pos, 0.75 + d * 0.13), c: dest.pos,
+    });
+    const tArr = start + dur;
+    const roll = rand01(e.seed, di, 0xd0b);
+    // A handler without a duplicate check often trips over the copy (a unique-key violation answered with a 500)
+    const ok = !this.isDown(destId, tArr) && roll > 0.35;
+    const code = ok ? 200 : 500;
+    legs.push(
+      ok
+        ? { t0: tArr, t1: tArr + 0.6, type: LEG.pulse, size: 0.6, ease: EASE.out, tone: "magenta", a: dest.pos, b: [0, 0, 0], c: [0, 0, 0] }
+        : { t0: tArr, t1: tArr + 0.35, type: LEG.flash, size: 0.28, ease: EASE.out, tone: "red", a: dest.pos, b: [0, 0, 0], c: [0, 0, 0] },
+    );
+    return {
+      dest: destId,
+      generation: 0,
+      chaos: "duplicate",
+      marks: [
+        { t: start, state: "flying", attempt: 1 },
+        { t: tArr, state: ok ? "delivered" : "dead", attempt: 1 },
+      ],
+      attempts: [{ dest: destId, n: 1, tSend: start, tArrive: tArr, ok, code, latencyMs: ok ? lat : Math.round(lat * 0.4 + 6), replay: false }],
+    };
   }
 
   private runBranch(e: SimEvent, destId: string, from: Vec3, start: number, generation: number, replay: boolean, legs: Leg[]): Branch {
@@ -465,10 +533,12 @@ export class World {
     if (j.rejected) return { phase: "rejected", label: "REJECTED", attempt: 0 };
     let gen = 0;
     for (let i = 0; i < j.replayStarts.length; i++) if (j.replayStarts[i] <= T) gen = i + 1;
-    const marks = j.branches
-      .filter((b) => b.generation === gen)
-      .map((b) => this.branchStateAt(b, T))
-      .filter((m): m is Mark => m !== null);
+    // Chaos copies never count towards an event's status, the same as on the real gateway
+    const real = j.branches.filter((b) => b.generation === gen && b.chaos !== "duplicate");
+    const marks = real.map((b) => this.branchStateAt(b, T)).filter((m): m is Mark => m !== null);
+    if (real.some((b) => b.chaos === "held" && !this.branchStateAt(b, T))) {
+      return { phase: "flying", label: "HELD BACK", attempt: 1 };
+    }
     if (!marks.length) return { phase: "flying", label: "EN ROUTE", attempt: 1 };
     const holding = marks.filter((m) => m.state === "holding");
     if (holding.length) {
@@ -508,6 +578,7 @@ export class World {
       }
       if (j.endT < T - 60 && j.endT < INF) continue;
       for (const b of j.branches) {
+        if (b.chaos === "duplicate") continue;
         const m = this.branchStateAt(b, T);
         if (!m) continue;
         const ds = dests[b.dest];

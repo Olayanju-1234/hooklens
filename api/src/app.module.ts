@@ -27,6 +27,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { EndpointsModule } from './modules/endpoints/endpoints.module.js';
 import { IngressModule } from './modules/ingress/ingress.module.js';
 import { ChaosModule } from './modules/chaos/chaos.module.js';
+import { AdminModule } from './modules/admin/admin.module.js';
 import { ForwardModule } from './modules/forward/forward.module.js';
 import { EventsModule } from './modules/events/events.module.js';
 import { StatsModule } from './modules/stats/stats.module.js';
@@ -146,6 +147,7 @@ import { BagsModule } from './modules/bags/bags.module.js';
     DeadLetterModule,
     BagsModule,
     ChaosModule,
+    AdminModule,
   ],
   providers: [
     {

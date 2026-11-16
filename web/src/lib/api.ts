@@ -642,6 +642,23 @@ export const chaos = {
   getRun: (runId: string) => request<ChaosRun>(`/chaos/runs/${runId}`),
 };
 
+// Admin
+export interface UsageReport {
+  windowDays: number;
+  generatedAt: string;
+  excludedWorkspaces: number;
+  workspacesWithVerifiedEvents: number;
+  workspacesThatTurnedChaosOn: number;
+  workspacesWithChaosRuns: number;
+  chaosRuns: number;
+  sdk: { package: string; published: boolean | null; downloadsLastMonth: number | null };
+  github: { repo: string; stars: number | null };
+}
+
+export const admin = {
+  usage: () => request<UsageReport>("/admin/usage"),
+};
+
 /** Fired after chaos settings change, so the banner refreshes without waiting for its poll. */
 export const CHAOS_CHANGED_EVENT = "hookdash:chaos-changed";
 
