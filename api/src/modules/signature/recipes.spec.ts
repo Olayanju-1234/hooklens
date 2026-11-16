@@ -71,6 +71,18 @@ const FORM_HEADERS = { 'content-type': 'application/x-www-form-urlencoded' };
 const WHSEC = `whsec_${Buffer.from('standard-webhooks-test-secret').toString('base64')}`;
 const WRONG_WHSEC = `whsec_${Buffer.from('another-secret-entirely').toString('base64')}`;
 
+// As Paystack's webhook docs: t=<seconds>,v1=<key id>:<hex HMAC-SHA512 of t.body keyed with the whole whsec_>
+const PAYSTACK_WHSEC = 'whsec_paystack_signing_test';
+const paystackV1 = (secret: string, t: number, body = BODY) =>
+  hmac('sha512', secret, `${t}.${body}`, 'hex');
+const paystackSignature = (
+  body: string,
+  secret: string,
+  now: number,
+): Headers => ({
+  'paystack-signature': `t=${now},v1=whk_3f9a1c2e:${paystackV1(secret, now, body)}`,
+});
+
 const CASES: Case[] = [
   {
     provider: 'stripe',
@@ -89,6 +101,14 @@ const CASES: Case[] = [
     sign: (body, secret) => ({
       'x-paystack-signature': hmac('sha512', secret, body, 'hex'),
     }),
+    bodySigned: true,
+  },
+  {
+    provider: 'paystack',
+    secret: PAYSTACK_WHSEC,
+    wrongSecret: 'whsec_paystack_wrong',
+    sign: paystackSignature,
+    toleranceSeconds: 300,
     bodySigned: true,
   },
   {
@@ -381,6 +401,102 @@ describe('verification recipes', () => {
           NOW,
         ).failure,
       ).toBe('missing-timestamp');
+    });
+  });
+
+  describe('Paystack', () => {
+    const SK = 'sk_test_paystack';
+    const ROTATED = 'whsec_paystack_rotated';
+    const legacy = (body = BODY) => ({
+      'x-paystack-signature': hmac('sha512', SK, body, 'hex'),
+    });
+    const signedV1 = (header: string, secret = PAYSTACK_WHSEC) =>
+      verify('paystack', { 'paystack-signature': header }, BODY, secret);
+    const good = paystackV1(PAYSTACK_WHSEC, NOW_SECONDS);
+
+    it('accepts whichever v1 matches while two secrets overlap during rotation', () => {
+      const header = `t=${NOW_SECONDS},v1=whk_old:${good},v1=whk_new:${paystackV1(ROTATED, NOW_SECONDS)}`;
+      expect(signedV1(header)).toEqual({ valid: true });
+      expect(signedV1(header, ROTATED)).toEqual({ valid: true });
+      expect(signedV1(header, 'whsec_paystack_third')).toEqual({
+        valid: false,
+        failure: 'mismatch',
+      });
+    });
+
+    it('keys the HMAC with the whole whsec_ secret, prefix included', () => {
+      const stripped = paystackV1(
+        PAYSTACK_WHSEC.replace('whsec_', ''),
+        NOW_SECONDS,
+      );
+      expect(signedV1(`t=${NOW_SECONDS},v1=whk_1:${stripped}`).failure).toBe(
+        'mismatch',
+      );
+    });
+
+    it('rejects a signature replayed under another t', () => {
+      expect(signedV1(`t=${NOW_SECONDS - 10},v1=whk_1:${good}`)).toEqual({
+        valid: false,
+        failure: 'mismatch',
+      });
+    });
+
+    it('ignores other fields and v1 values without a key id', () => {
+      const header = `t=${NOW_SECONDS},v0=whk_1:${'0'.repeat(128)},v1=${'0'.repeat(128)},v1=whk_1:${good},x=y`;
+      expect(signedV1(header)).toEqual({ valid: true });
+      expect(signedV1(`t=${NOW_SECONDS},v1=${good}`).failure).toBe(
+        'malformed-signature',
+      );
+    });
+
+    it('rejects a header without t or with t twice', () => {
+      expect(signedV1(`v1=whk_1:${good}`).failure).toBe('missing-timestamp');
+      expect(
+        signedV1(`t=${NOW_SECONDS},t=${NOW_SECONDS},v1=whk_1:${good}`).failure,
+      ).toBe('malformed-signature');
+    });
+
+    it('checks the header that matches the stored secret on a request carrying both', () => {
+      const both = {
+        ...legacy(),
+        ...paystackSignature(BODY, PAYSTACK_WHSEC, NOW_SECONDS),
+      };
+      expect(verify('paystack', both, BODY, SK)).toEqual({ valid: true });
+      expect(verify('paystack', both, BODY, PAYSTACK_WHSEC)).toEqual({
+        valid: true,
+      });
+
+      const forgedLegacy = { ...both, 'x-paystack-signature': 'ab'.repeat(64) };
+      expect(verify('paystack', forgedLegacy, BODY, SK).failure).toBe(
+        'mismatch',
+      );
+      expect(verify('paystack', forgedLegacy, BODY, PAYSTACK_WHSEC).valid).toBe(
+        true,
+      );
+
+      const forgedV1 = {
+        ...both,
+        'paystack-signature': `t=${NOW_SECONDS},v1=whk_1:${'ab'.repeat(64)}`,
+      };
+      expect(verify('paystack', forgedV1, BODY, PAYSTACK_WHSEC).failure).toBe(
+        'mismatch',
+      );
+      expect(verify('paystack', forgedV1, BODY, SK).valid).toBe(true);
+    });
+
+    it("reports a missing signature when only the other scheme's header was sent", () => {
+      expect(verify('paystack', legacy(), BODY, PAYSTACK_WHSEC)).toEqual({
+        valid: false,
+        failure: 'missing-signature',
+      });
+      expect(
+        verify(
+          'paystack',
+          paystackSignature(BODY, PAYSTACK_WHSEC, NOW_SECONDS),
+          BODY,
+          SK,
+        ),
+      ).toEqual({ valid: false, failure: 'missing-signature' });
     });
   });
 
@@ -707,6 +823,15 @@ describe('verification recipes', () => {
         'resend',
         'openai',
       ]);
+    });
+
+    it('recognises both Paystack signature headers', () => {
+      expect(
+        service.detectProviders({ 'paystack-signature': 't=1,v1=whk_1:ab' }),
+      ).toEqual(['paystack']);
+      expect(service.detectProviders({ 'x-paystack-signature': 'ab' })).toEqual(
+        ['paystack'],
+      );
     });
 
     it('never claims a request for the custom recipe', () => {

@@ -15,6 +15,8 @@ export interface SignatureEntries {
   keySeparator: string;
   signatureKey: string;
   timestampKey?: string;
+  /** Each signature reads `<key id><keyIdSeparator><digest>`, e.g. Paystack's `v1=whk_…:hex`; values without it are skipped. */
+  keyIdSeparator?: string;
 }
 
 export interface HmacVerification {
@@ -55,9 +57,18 @@ export interface BodyChallenge {
   echo: string[];
 }
 
+export type Verification = HmacVerification | SharedSecretVerification;
+
+/** A scheme used instead of the recipe's default when the stored secret starts with `secretPrefix`. */
+export interface SecretScheme {
+  secretPrefix: string;
+  verification: Verification;
+}
+
 export interface Recipe {
   label: string;
-  verification: HmacVerification | SharedSecretVerification;
+  verification: Verification;
+  secretSchemes?: SecretScheme[];
   challenge?: BodyChallenge;
   /** A request without any signature header stays unverified instead of failing. */
   signatureOptional?: boolean;
@@ -113,6 +124,8 @@ export const RECIPES: Record<Provider, Recipe> = {
     eventType: [{ body: ['type'] }],
     deliveryId: [{ body: ['id'] }],
   },
+  // https://paystack.com/docs/payments/webhooks/: an sk_ secret key verifies x-paystack-signature,
+  // a whsec_ signing secret (the whole string is the key) verifies the timestamped Paystack-Signature
   paystack: {
     label: 'Paystack',
     verification: {
@@ -123,6 +136,27 @@ export const RECIPES: Record<Provider, Recipe> = {
       signedPayload: '{body}',
       secret: { encoding: 'utf8' },
     },
+    secretSchemes: [
+      {
+        secretPrefix: 'whsec_',
+        verification: {
+          kind: 'hmac',
+          signatureHeaders: ['paystack-signature'],
+          algorithm: 'sha512',
+          encoding: 'hex',
+          signedPayload: '{timestamp}.{body}',
+          entries: {
+            separator: ',',
+            keySeparator: '=',
+            signatureKey: 'v1',
+            timestampKey: 't',
+            keyIdSeparator: ':',
+          },
+          secret: { encoding: 'utf8' },
+          timestamp: { toleranceSeconds: FIVE_MINUTES },
+        },
+      },
+    ],
     eventType: [{ body: ['event'] }],
     deliveryId: [{ body: ['data', 'id'] }, { body: ['data', 'reference'] }],
   },
@@ -290,4 +324,20 @@ export function getRecipe(provider: string): Recipe {
   return Object.hasOwn(RECIPES, provider)
     ? RECIPES[provider as Provider]
     : RECIPES.custom;
+}
+
+export function verificationFor(recipe: Recipe, secret: string): Verification {
+  return (
+    recipe.secretSchemes?.find((scheme) =>
+      secret.startsWith(scheme.secretPrefix),
+    )?.verification ?? recipe.verification
+  );
+}
+
+/** Every header any of the recipe's schemes reads a signature from, default scheme first. */
+export function allSignatureHeaders(recipe: Recipe): string[] {
+  return [
+    recipe.verification,
+    ...(recipe.secretSchemes ?? []).map((scheme) => scheme.verification),
+  ].flatMap((verification) => verification.signatureHeaders);
 }

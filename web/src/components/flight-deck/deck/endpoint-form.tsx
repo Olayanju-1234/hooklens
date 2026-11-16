@@ -99,6 +99,7 @@ export function EndpointForm({ endpoint, onSaved, onCancel }: Props) {
             onChange={(e) => setWebhookSecret(e.target.value)}
             placeholder={editing ? "New secret to rotate" : findProvider(provider).secretHint}
           />
+          {findProvider(provider).secretNote && <small>{findProvider(provider).secretNote}</small>}
         </label>
         <label className="fd-field">
           <span>Fallback forward URL</span>

@@ -37,9 +37,9 @@ const PROVIDERS: ProviderDoc[] = [
     displayName: 'Paystack',
     description:
       'Paystack is a payments platform for Africa. Webhooks are sent as POST requests with a JSON body. All amounts are in the smallest currency unit (kobo for NGN).',
-    signatureHeader: 'x-paystack-signature',
+    signatureHeader: 'Paystack-Signature, x-paystack-signature',
     signatureMethod:
-      'HMAC SHA-512 of the raw request body using your secret key',
+      'Paystack-Signature: HMAC SHA-512 hex of t.body with your whsec_ webhook signing secret, t within 300 s. x-paystack-signature (sent only while you have a secret key): HMAC SHA-512 hex of the raw body with your sk_ secret key',
     events: [
       {
         eventType: 'charge.success',

@@ -154,6 +154,7 @@ function Stage({ n, title, meta, children, tools }: { n: string; title: string; 
 function SealStage({ route, onChange }: { route: RouteData; onChange: (r: RouteData) => void }) {
   const ep = route.endpoint;
   const scheme = SCHEMES[ep.provider] ?? SCHEMES.custom;
+  const option = findProvider(ep.provider);
   const [rotating, setRotating] = useState(false);
   const [secret, setSecret] = useState("");
   const [saving, setSaving] = useState(false);
@@ -223,7 +224,7 @@ function SealStage({ route, onChange }: { route: RouteData; onChange: (r: RouteD
             autoComplete="off"
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
-            placeholder="New signing secret"
+            placeholder={option.value === ep.provider ? option.secretHint : "New signing secret"}
             aria-label="New signing secret"
             autoFocus
           />

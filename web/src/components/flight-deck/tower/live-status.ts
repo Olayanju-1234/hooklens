@@ -74,7 +74,12 @@ export interface Scheme {
 
 export const SCHEMES: Record<string, Scheme> = {
   stripe: { scheme: "HMAC-SHA256 · t=,v1= · 5 min tolerance", header: "stripe-signature", kind: "payments" },
-  paystack: { scheme: "HMAC-SHA512 · hex", header: "x-paystack-signature", kind: "payments" },
+  paystack: {
+    scheme: "HMAC-SHA512 · t=,v1= · 5 min tolerance (whsec_) or hex (sk_)",
+    header: "x-paystack-signature",
+    altHeaders: ["paystack-signature"],
+    kind: "payments",
+  },
   flutterwave: { scheme: "secret hash", header: "verif-hash", kind: "payments" },
   mono: { scheme: "secret in header", header: "mono-webhook-secret", kind: "open banking" },
   bags: { scheme: "HMAC-SHA256 · hex", header: "x-bags-signature", kind: "on-chain" },
