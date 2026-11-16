@@ -44,6 +44,11 @@ export default () => {
     appUrl: (process.env.APP_URL || 'http://localhost:3001').replace(/\/$/, ''),
     apiUrl,
     allowPrivateForwarding: process.env.ALLOW_PRIVATE_FORWARDING === 'true',
+    // Who may read the usage metric; their own workspaces are left out of it
+    adminEmails: (process.env.ADMIN_EMAILS || '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID || '',
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',

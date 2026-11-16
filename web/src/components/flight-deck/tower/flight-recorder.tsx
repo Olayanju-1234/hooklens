@@ -180,11 +180,19 @@ export function FlightRecorder({ world, journey, status, T, epoch, canAct, onRep
                   <div className="lane-head">
                     <span>
                       {b.generation > 0 ? <span className="tone-magenta">replay {b.generation} · </span> : null}
+                      {b.chaos === "duplicate" ? <span className="tone-magenta">chaos copy · </span> : null}
+                      {b.chaos === "held" ? <span className="tone-amber">held back · </span> : null}
                       {dest.host}
                     </span>
-                    <span className={m?.state === "delivered" ? "tone-green" : m?.state === "dead" ? "tone-orange" : m?.state === "holding" ? "tone-amber" : "tone-cyan"}>
-                      {m ? (m.state === "holding" ? `holding ${m.attempt}/${MAX_ATTEMPTS}` : m.state) : "queued"}
-                    </span>
+                    {b.chaos === "duplicate" ? (
+                      <span className={m?.state === "delivered" ? "tone-green" : m?.state === "dead" ? "tone-red" : "tone-magenta"}>
+                        {m ? (m.state === "flying" ? "in flight" : `${b.attempts[0].code}, not counted`) : "queued"}
+                      </span>
+                    ) : (
+                      <span className={m?.state === "delivered" ? "tone-green" : m?.state === "dead" ? "tone-orange" : m?.state === "holding" ? "tone-amber" : "tone-cyan"}>
+                        {m ? (m.state === "holding" ? `holding ${m.attempt}/${MAX_ATTEMPTS}` : m.state) : b.chaos === "held" ? "held back" : "queued"}
+                      </span>
+                    )}
                   </div>
                   <div className="lane-track" aria-hidden>
                     {segs.map((s, i) => (
