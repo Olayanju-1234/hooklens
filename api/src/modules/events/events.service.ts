@@ -17,6 +17,7 @@ import {
 } from '../forward/forward.processor.js';
 import { Endpoint } from '../../entities/endpoint.entity.js';
 import { WorkspacesService } from '../workspaces/workspaces.service.js';
+import { canReach } from '../workspaces/workspace-scope.js';
 
 export interface TimelineStep {
   step: string;
@@ -122,18 +123,23 @@ export class EventsService {
     return { items, nextCursor, hasMore };
   }
 
-  async findOne(id: string, userId: string): Promise<WebhookEvent> {
+  async findOne(
+    id: string,
+    userId: string,
+    workspaceId?: string,
+  ): Promise<WebhookEvent> {
     const event = await this.eventRepo.findOne({ where: { id } });
-    const allowed =
-      event &&
-      (event.userId === userId ||
-        (await this.workspacesService.isMember(event.workspaceId, userId)));
-    if (!event || !allowed) throw new NotFoundException('Event not found');
+    if (
+      !event ||
+      !(await canReach(event, userId, workspaceId, this.workspacesService))
+    ) {
+      throw new NotFoundException('Event not found');
+    }
     return event;
   }
 
-  async getTimeline(eventId: string, userId: string) {
-    const event = await this.findOne(eventId, userId);
+  async getTimeline(eventId: string, userId: string, workspaceId?: string) {
+    const event = await this.findOne(eventId, userId, workspaceId);
 
     const [forwardResults, deadLetters] = await Promise.all([
       this.forwardResultRepo.find({
@@ -274,8 +280,9 @@ export class EventsService {
     id: string,
     userId: string,
     dto: LocalDeliveryDto,
+    workspaceId?: string,
   ): Promise<ForwardResult> {
-    await this.findOne(id, userId);
+    await this.findOne(id, userId, workspaceId);
     const target = `cli · ${dto.target}`;
     const previous = await this.forwardResultRepo.count({
       where: { eventId: id, target },
@@ -297,10 +304,10 @@ export class EventsService {
     );
   }
 
-  async diff(id1: string, id2: string, userId: string) {
+  async diff(id1: string, id2: string, userId: string, workspaceId?: string) {
     const [event1, event2] = await Promise.all([
-      this.findOne(id1, userId),
-      this.findOne(id2, userId),
+      this.findOne(id1, userId, workspaceId),
+      this.findOne(id2, userId, workspaceId),
     ]);
 
     return {
@@ -319,8 +326,12 @@ export class EventsService {
     };
   }
 
-  async replay(id: string, userId: string): Promise<WebhookEvent> {
-    const original = await this.findOne(id, userId);
+  async replay(
+    id: string,
+    userId: string,
+    workspaceId?: string,
+  ): Promise<WebhookEvent> {
+    const original = await this.findOne(id, userId, workspaceId);
     const endpoint = await this.endpointRepo.findOne({
       where: { id: original.endpointId },
     });
@@ -364,8 +375,12 @@ export class EventsService {
     return saved;
   }
 
-  async delete(id: string, userId: string): Promise<{ deleted: true }> {
-    const event = await this.findOne(id, userId);
+  async delete(
+    id: string,
+    userId: string,
+    workspaceId?: string,
+  ): Promise<{ deleted: true }> {
+    const event = await this.findOne(id, userId, workspaceId);
     await this.eventRepo.remove(event);
     this.logger.log(`Deleted event ${id}`);
     return { deleted: true };

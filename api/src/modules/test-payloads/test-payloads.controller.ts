@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Headers,
   UseGuards,
   Logger,
   HttpException,
@@ -23,11 +24,13 @@ import {
 } from '@nestjs/swagger';
 import { User } from '../../entities/user.entity.js';
 import { Endpoint, type Provider } from '../../entities/endpoint.entity.js';
+import { Workspace } from '../../entities/workspace.entity.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../../common/decorators/current-user.decorator.js';
 import { TestPayloadsService } from './test-payloads.service.js';
 import { IngressService } from '../ingress/ingress.service.js';
 import { ingressResponseBody } from '../ingress/ingress-response.js';
+import { WorkspacesService } from '../workspaces/workspaces.service.js';
 
 @ApiTags('Test Payloads')
 @ApiBearerAuth()
@@ -44,6 +47,9 @@ export class TestPayloadsController {
     @InjectRepository(Endpoint)
     private readonly endpointRepo: Repository<Endpoint>,
     private readonly ingressService: IngressService,
+    @InjectRepository(Workspace)
+    private readonly workspaceRepo: Repository<Workspace>,
+    private readonly workspacesService: WorkspacesService,
   ) {}
 
   @Get()
@@ -87,6 +93,7 @@ export class TestPayloadsController {
     @Param('provider') provider: string,
     @Param('eventType') eventType: string,
     @Body() body: Record<string, unknown>,
+    @Headers('x-workspace-id') workspaceId?: string,
   ) {
     // Use custom body if provided, otherwise fall back to template payload
     const payload =
@@ -98,19 +105,28 @@ export class TestPayloadsController {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+    if (workspaceId) {
+      await this.workspacesService.assertMembership(workspaceId, user.id);
+    }
 
     const port = this.configService.get<number>('port') ?? 3000;
     const baseUrl = `http://localhost:${port}`;
-    // Route to this provider's endpoint when there is one, else the shared slug URL
+    // Route to this provider's endpoint in the request's workspace (or, without one, the user's), else the shared URL
     const endpoint = await this.endpointRepo.findOne({
       where: {
-        userId: user.id,
+        ...(workspaceId ? { workspaceId } : { userId: user.id }),
         provider: provider as Provider,
         isActive: true,
       },
       order: { createdAt: 'DESC' },
     });
-    const slug = endpoint ? endpoint.ingressSlug : user.ingressSlug;
+    const workspace =
+      !endpoint && workspaceId
+        ? await this.workspaceRepo.findOne({ where: { id: workspaceId } })
+        : null;
+    const slug = endpoint
+      ? endpoint.ingressSlug
+      : (workspace?.slug ?? user.ingressSlug);
     // Ingress route is excluded from global 'api' prefix — must NOT include /api/
     const ingressUrl = `${baseUrl}/in/${slug}`;
 

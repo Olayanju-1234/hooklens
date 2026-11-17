@@ -228,7 +228,7 @@ export class IngressService {
 
     // Broadcast to WebSocket — non-critical, don't let it block
     try {
-      this.wsGateway.broadcastWebhook(event.userId, {
+      this.wsGateway.broadcastWebhook(event.userId, event.workspaceId, {
         id: event.id,
         provider: endpoint.provider,
         eventType,

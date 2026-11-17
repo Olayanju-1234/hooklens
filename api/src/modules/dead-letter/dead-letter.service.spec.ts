@@ -58,6 +58,7 @@ describe('DeadLetterService', () => {
       expect(mockEndpointsService.findOne).toHaveBeenCalledWith(
         'ep-1',
         'user-1',
+        undefined,
       );
       expect(mockDeadLetterRepo.find).toHaveBeenCalledWith({
         where: { endpointId: 'ep-1' },

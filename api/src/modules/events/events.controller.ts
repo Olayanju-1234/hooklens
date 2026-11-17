@@ -116,9 +116,10 @@ export class EventsController {
   @ApiParam({ name: 'id', type: String })
   findOne(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.eventsService.findOne(id, user.sub);
+    return this.eventsService.findOne(id, user.sub, workspaceId);
   }
 
   @Get(':id/timeline')
@@ -127,9 +128,10 @@ export class EventsController {
   @ApiParam({ name: 'id', type: String })
   getTimeline(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.eventsService.getTimeline(id, user.sub);
+    return this.eventsService.getTimeline(id, user.sub, workspaceId);
   }
 
   @Get(':id/diff/:otherId')
@@ -142,10 +144,11 @@ export class EventsController {
   @ApiParam({ name: 'otherId', type: String })
   diff(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('otherId', ParseUUIDPipe) otherId: string,
   ) {
-    return this.eventsService.diff(id, otherId, user.sub);
+    return this.eventsService.diff(id, otherId, user.sub, workspaceId);
   }
 
   @Post(':id/replay')
@@ -154,9 +157,10 @@ export class EventsController {
   @ApiParam({ name: 'id', type: String })
   replay(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.eventsService.replay(id, user.sub);
+    return this.eventsService.replay(id, user.sub, workspaceId);
   }
 
   @Post(':id/local-deliveries')
@@ -168,10 +172,16 @@ export class EventsController {
   @ApiParam({ name: 'id', type: String })
   recordLocalDelivery(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: LocalDeliveryDto,
   ) {
-    return this.eventsService.recordLocalDelivery(id, user.sub, dto);
+    return this.eventsService.recordLocalDelivery(
+      id,
+      user.sub,
+      dto,
+      workspaceId,
+    );
   }
 
   @Delete(':id')
@@ -180,8 +190,9 @@ export class EventsController {
   @ApiParam({ name: 'id', type: String })
   delete(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.eventsService.delete(id, user.sub);
+    return this.eventsService.delete(id, user.sub, workspaceId);
   }
 }

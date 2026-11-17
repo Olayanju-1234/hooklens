@@ -17,6 +17,8 @@ const SOURCE = {
 describe('TestPayloadsController.sendTestPayload', () => {
   const userRepo = { findOne: jest.fn() };
   const endpointRepo = { findOne: jest.fn() };
+  const workspaceRepo = { findOne: jest.fn() };
+  const workspaces = { assertMembership: jest.fn() };
   const ingress = {
     resolveEndpoint: jest.fn(),
     capture: jest.fn(),
@@ -44,6 +46,8 @@ describe('TestPayloadsController.sendTestPayload', () => {
       userRepo as never,
       endpointRepo as never,
       ingress as never,
+      workspaceRepo as never,
+      workspaces as never,
     );
   });
 

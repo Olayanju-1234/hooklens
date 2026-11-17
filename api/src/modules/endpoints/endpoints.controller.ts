@@ -90,9 +90,10 @@ export class EndpointsController {
   @ApiParam({ name: 'id', type: String })
   findOne(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.endpointsService.findOne(id, user.sub);
+    return this.endpointsService.findOne(id, user.sub, workspaceId);
   }
 
   @Patch(':id')
@@ -105,7 +106,12 @@ export class EndpointsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateEndpointDto,
   ) {
-    const endpoint = await this.endpointsService.update(id, user.sub, dto);
+    const endpoint = await this.endpointsService.update(
+      id,
+      user.sub,
+      dto,
+      workspaceId,
+    );
     this.auditService
       .log({
         workspaceId,
@@ -130,9 +136,10 @@ export class EndpointsController {
   @ApiParam({ name: 'id', type: String })
   getSigningSecret(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.endpointsService.getSigningSecret(id, user.sub);
+    return this.endpointsService.getSigningSecret(id, user.sub, workspaceId);
   }
 
   @Post(':id/signing-secret/rotate')
@@ -150,6 +157,7 @@ export class EndpointsController {
     const result = await this.endpointsService.rotateSigningSecret(
       id,
       user.sub,
+      workspaceId,
     );
     this.auditService
       .log({
@@ -176,7 +184,7 @@ export class EndpointsController {
     @Headers('x-workspace-id') workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    await this.endpointsService.remove(id, user.sub);
+    await this.endpointsService.remove(id, user.sub, workspaceId);
     this.auditService
       .log({
         workspaceId,
@@ -198,25 +206,28 @@ export class EndpointsController {
   @ApiOperation({ summary: 'List all forward destinations for an endpoint' })
   getDestinations(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.endpointsService.getDestinations(id, user.sub);
+    return this.endpointsService.getDestinations(id, user.sub, workspaceId);
   }
 
   @Post(':id/destinations')
   @ApiOperation({ summary: 'Add a forward destination to an endpoint' })
   addDestination(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateDestinationDto,
   ) {
-    return this.endpointsService.addDestination(id, user.sub, dto);
+    return this.endpointsService.addDestination(id, user.sub, dto, workspaceId);
   }
 
   @Patch(':id/destinations/:destinationId')
   @ApiOperation({ summary: 'Update a forward destination' })
   updateDestination(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('destinationId', ParseUUIDPipe) destinationId: string,
     @Body() dto: UpdateDestinationDto,
@@ -226,6 +237,7 @@ export class EndpointsController {
       destinationId,
       user.sub,
       dto,
+      workspaceId,
     );
   }
 
@@ -234,9 +246,15 @@ export class EndpointsController {
   @ApiOperation({ summary: 'Remove a forward destination' })
   removeDestination(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('destinationId', ParseUUIDPipe) destinationId: string,
   ) {
-    return this.endpointsService.removeDestination(id, destinationId, user.sub);
+    return this.endpointsService.removeDestination(
+      id,
+      destinationId,
+      user.sub,
+      workspaceId,
+    );
   }
 }

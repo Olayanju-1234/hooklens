@@ -183,7 +183,7 @@ export class ForwardProcessor extends WorkerHost {
         forwardStatus: 'skipped',
         targetCount: 0,
       });
-      this.safeBroadcast(userId, {
+      this.safeBroadcast(userId, event.workspaceId, {
         eventId,
         forwardStatus: 'skipped',
         forwardCode: null,
@@ -383,7 +383,7 @@ export class ForwardProcessor extends WorkerHost {
     );
 
     if (chaos || event.chaosRunId) {
-      this.safeBroadcastChaos(userId, {
+      this.safeBroadcastChaos(userId, event.workspaceId, {
         runId: event.chaosRunId ?? null,
         eventId,
         chaosKind: chaos?.kind ?? null,
@@ -508,7 +508,7 @@ export class ForwardProcessor extends WorkerHost {
       });
       if (!outcome) return;
 
-      this.safeBroadcast(userId, {
+      this.safeBroadcast(userId, outcome.workspaceId, {
         eventId,
         forwardStatus: outcome.update.forwardStatus!,
         forwardCode: outcome.update.forwardCode ?? null,
@@ -667,10 +667,11 @@ export class ForwardProcessor extends WorkerHost {
 
   private safeBroadcastChaos(
     userId: string,
+    workspaceId: string,
     payload: ChaosDeliveryPayload,
   ): void {
     try {
-      this.wsGateway.broadcastChaosDelivery(userId, payload);
+      this.wsGateway.broadcastChaosDelivery(userId, workspaceId, payload);
     } catch (err) {
       this.logger.warn(
         `WebSocket chaos broadcast failed for event ${payload.eventId}: ${(err as Error).message}`,
@@ -680,6 +681,7 @@ export class ForwardProcessor extends WorkerHost {
 
   private safeBroadcast(
     userId: string,
+    workspaceId: string,
     payload: {
       eventId: string;
       forwardStatus: string;
@@ -688,7 +690,7 @@ export class ForwardProcessor extends WorkerHost {
     },
   ): void {
     try {
-      this.wsGateway.broadcastForwardResult(userId, payload);
+      this.wsGateway.broadcastForwardResult(userId, workspaceId, payload);
     } catch (err) {
       this.logger.warn(
         `WebSocket broadcast failed for event ${payload.eventId}: ${(err as Error).message}`,

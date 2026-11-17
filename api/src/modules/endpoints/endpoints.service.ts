@@ -16,6 +16,7 @@ import {
   UpdateDestinationDto,
 } from './dto/destination.dto.js';
 import { WorkspacesService } from '../workspaces/workspaces.service.js';
+import { canReach } from '../workspaces/workspace-scope.js';
 import {
   assertPublicUrl,
   UnsafeUrlError,
@@ -81,18 +82,17 @@ export class EndpointsService {
     });
   }
 
-  /** Loads an endpoint the user created or can reach through workspace membership. */
-  async findOne(id: string, userId: string): Promise<Endpoint> {
+  /** Loads an endpoint in the request's workspace, or one the user can reach when the request names none. */
+  async findOne(
+    id: string,
+    userId: string,
+    workspaceId?: string,
+  ): Promise<Endpoint> {
     const endpoint = await this.endpointRepo.findOne({ where: { id } });
-    const allowed =
-      endpoint &&
-      (endpoint.userId === userId ||
-        (endpoint.workspaceId &&
-          (await this.workspacesService.isMember(
-            endpoint.workspaceId,
-            userId,
-          ))));
-    if (!endpoint || !allowed) {
+    if (
+      !endpoint ||
+      !(await canReach(endpoint, userId, workspaceId, this.workspacesService))
+    ) {
       throw new NotFoundException('Endpoint not found');
     }
     return endpoint;
@@ -102,21 +102,23 @@ export class EndpointsService {
     id: string,
     userId: string,
     dto: UpdateEndpointDto,
+    workspaceId?: string,
   ): Promise<Endpoint> {
-    const endpoint = await this.findOne(id, userId);
+    const endpoint = await this.findOne(id, userId, workspaceId);
     if (dto.forwardUrl) await this.assertForwardable(dto.forwardUrl);
     const changes = definedOnly(dto);
     if (Object.keys(changes).length > 0) {
       await this.endpointRepo.update(endpoint.id, changes);
     }
-    return this.findOne(id, userId);
+    return this.findOne(id, userId, workspaceId);
   }
 
   async getSigningSecret(
     id: string,
     userId: string,
+    workspaceId?: string,
   ): Promise<{ signingSecret: string }> {
-    await this.findOne(id, userId);
+    await this.findOne(id, userId, workspaceId);
     const endpoint = await this.endpointRepo
       .createQueryBuilder('ep')
       .addSelect('ep.signingSecret')
@@ -128,16 +130,21 @@ export class EndpointsService {
   async rotateSigningSecret(
     id: string,
     userId: string,
+    workspaceId?: string,
   ): Promise<{ signingSecret: string }> {
-    await this.findOne(id, userId);
+    await this.findOne(id, userId, workspaceId);
     const signingSecret = generateSigningSecret();
     await this.endpointRepo.update(id, { signingSecret });
     this.logger.log(`Signing secret rotated for endpoint ${id}`);
     return { signingSecret };
   }
 
-  async remove(id: string, userId: string): Promise<void> {
-    const endpoint = await this.findOne(id, userId);
+  async remove(
+    id: string,
+    userId: string,
+    workspaceId?: string,
+  ): Promise<void> {
+    const endpoint = await this.findOne(id, userId, workspaceId);
     await this.endpointRepo.remove(endpoint);
     this.logger.log(`Endpoint deleted: ${id}`);
   }
@@ -147,8 +154,9 @@ export class EndpointsService {
   async getDestinations(
     endpointId: string,
     userId: string,
+    workspaceId?: string,
   ): Promise<ForwardDestination[]> {
-    await this.findOne(endpointId, userId);
+    await this.findOne(endpointId, userId, workspaceId);
     return this.destinationRepo.find({
       where: { endpointId },
       order: { createdAt: 'ASC' },
@@ -159,8 +167,9 @@ export class EndpointsService {
     endpointId: string,
     userId: string,
     dto: CreateDestinationDto,
+    workspaceId?: string,
   ): Promise<ForwardDestination> {
-    await this.findOne(endpointId, userId);
+    await this.findOne(endpointId, userId, workspaceId);
     await this.assertForwardable(dto.url);
     const destination = this.destinationRepo.create({
       endpointId,
@@ -176,8 +185,9 @@ export class EndpointsService {
     destinationId: string,
     userId: string,
     dto: UpdateDestinationDto,
+    workspaceId?: string,
   ): Promise<ForwardDestination> {
-    await this.findOne(endpointId, userId);
+    await this.findOne(endpointId, userId, workspaceId);
     const destination = await this.destinationRepo.findOne({
       where: { id: destinationId, endpointId },
     });
@@ -191,8 +201,9 @@ export class EndpointsService {
     endpointId: string,
     destinationId: string,
     userId: string,
+    workspaceId?: string,
   ): Promise<void> {
-    await this.findOne(endpointId, userId);
+    await this.findOne(endpointId, userId, workspaceId);
     const destination = await this.destinationRepo.findOne({
       where: { id: destinationId, endpointId },
     });

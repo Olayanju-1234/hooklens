@@ -5,6 +5,7 @@ import { Endpoint } from '../../entities/endpoint.entity.js';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
 import { IngressModule } from '../ingress/ingress.module.js';
 import { AlertingModule } from '../alerting/alerting.module.js';
+import { WorkspacesModule } from '../workspaces/workspaces.module.js';
 import { BagsService } from './bags.service.js';
 import { BagsController } from './bags.controller.js';
 
@@ -14,6 +15,7 @@ import { BagsController } from './bags.controller.js';
     TypeOrmModule.forFeature([Endpoint, WebhookEvent]),
     IngressModule,
     AlertingModule,
+    WorkspacesModule,
   ],
   controllers: [BagsController],
   providers: [BagsService],
