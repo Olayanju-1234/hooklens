@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Headers,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
@@ -46,10 +47,11 @@ export class TransformController {
   @ApiParam({ name: 'endpointId', type: String })
   async create(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('endpointId', ParseUUIDPipe) endpointId: string,
     @Body() dto: CreateTransformRuleDto,
   ) {
-    await this.endpointsService.findOne(endpointId, user.sub);
+    await this.endpointsService.findOne(endpointId, user.sub, workspaceId);
     return this.transformService.create(endpointId, dto);
   }
 
@@ -59,9 +61,10 @@ export class TransformController {
   @ApiParam({ name: 'endpointId', type: String })
   async findAll(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('endpointId', ParseUUIDPipe) endpointId: string,
   ) {
-    await this.endpointsService.findOne(endpointId, user.sub);
+    await this.endpointsService.findOne(endpointId, user.sub, workspaceId);
     return this.transformService.findByEndpoint(endpointId);
   }
 
@@ -75,11 +78,12 @@ export class TransformController {
   @ApiParam({ name: 'ruleId', type: String })
   async update(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('endpointId', ParseUUIDPipe) endpointId: string,
     @Param('ruleId', ParseUUIDPipe) ruleId: string,
     @Body() dto: UpdateTransformRuleDto,
   ) {
-    await this.endpointsService.findOne(endpointId, user.sub);
+    await this.endpointsService.findOne(endpointId, user.sub, workspaceId);
     return this.transformService.update(endpointId, ruleId, dto);
   }
 
@@ -93,10 +97,11 @@ export class TransformController {
   @ApiParam({ name: 'ruleId', type: String })
   async remove(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('endpointId', ParseUUIDPipe) endpointId: string,
     @Param('ruleId', ParseUUIDPipe) ruleId: string,
   ) {
-    await this.endpointsService.findOne(endpointId, user.sub);
+    await this.endpointsService.findOne(endpointId, user.sub, workspaceId);
     await this.transformService.remove(endpointId, ruleId);
     return { success: true };
   }

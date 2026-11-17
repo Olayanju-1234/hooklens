@@ -13,6 +13,7 @@ import { Endpoint } from '../../entities/endpoint.entity.js';
 import { WebhookEvent } from '../../entities/webhook-event.entity.js';
 import { IngressService } from '../ingress/ingress.service.js';
 import { AlertingService } from '../alerting/alerting.service.js';
+import { WorkspacesService } from '../workspaces/workspaces.service.js';
 
 interface BagsLaunchEvent {
   mint: string;
@@ -91,6 +92,7 @@ export class BagsService implements OnModuleInit, OnModuleDestroy {
     private readonly eventRepo: Repository<WebhookEvent>,
     private readonly ingressService: IngressService,
     private readonly alertingService: AlertingService,
+    private readonly workspacesService: WorkspacesService,
   ) {
     this.enabled = this.configService.get<boolean>('bags.enabled') ?? false;
     this.bagsApiKey = this.configService.get<string>('bags.apiKey') ?? '';
@@ -529,33 +531,45 @@ export class BagsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async getEventStats(userId: string): Promise<{
+  async getEventStats(
+    userId: string,
+    workspaceId?: string,
+  ): Promise<{
     total: number;
     last24h: number;
     byEventType: Array<{ eventType: string; count: number }>;
   }> {
-    const total = await this.eventRepo.count({
-      where: { userId, provider: 'bags' },
-    });
-
+    // Workspace members share the workspace's Bags events; without a workspace, only your own
+    if (workspaceId) {
+      await this.workspacesService.assertMembership(workspaceId, userId);
+    }
+    const owner: { workspaceId: string } | { userId: string } = workspaceId
+      ? { workspaceId }
+      : { userId };
+    const ownerClause = workspaceId
+      ? 'e.workspaceId = :workspaceId'
+      : 'e.userId = :userId';
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const last24h = await this.eventRepo
-      .createQueryBuilder('e')
-      .where('e.userId = :userId', { userId })
-      .andWhere('e.provider = :provider', { provider: 'bags' })
-      .andWhere('e.receivedAt > :since', { since })
-      .getCount();
 
-    const byEventType = await this.eventRepo
-      .createQueryBuilder('e')
-      .select('e.eventType', 'eventType')
-      .addSelect('COUNT(*)', 'count')
-      .where('e.userId = :userId', { userId })
-      .andWhere('e.provider = :provider', { provider: 'bags' })
-      .groupBy('e.eventType')
-      .orderBy('count', 'DESC')
-      .limit(10)
-      .getRawMany<{ eventType: string; count: string }>();
+    const [total, last24h, byEventType] = await Promise.all([
+      this.eventRepo.count({ where: { ...owner, provider: 'bags' } }),
+      this.eventRepo
+        .createQueryBuilder('e')
+        .where(ownerClause, owner)
+        .andWhere('e.provider = :provider', { provider: 'bags' })
+        .andWhere('e.receivedAt > :since', { since })
+        .getCount(),
+      this.eventRepo
+        .createQueryBuilder('e')
+        .select('e.eventType', 'eventType')
+        .addSelect('COUNT(*)', 'count')
+        .where(ownerClause, owner)
+        .andWhere('e.provider = :provider', { provider: 'bags' })
+        .groupBy('e.eventType')
+        .orderBy('count', 'DESC')
+        .limit(10)
+        .getRawMany<{ eventType: string; count: string }>(),
+    ]);
 
     return {
       total,

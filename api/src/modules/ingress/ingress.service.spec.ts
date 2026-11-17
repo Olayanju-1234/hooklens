@@ -91,6 +91,7 @@ describe('IngressService.processEvent', () => {
     expect(forwardQueue.add).not.toHaveBeenCalled();
     expect(wsGateway.broadcastWebhook).toHaveBeenCalledWith(
       'user-1',
+      'ws-1',
       expect.objectContaining({
         signatureValid: false,
         forwardStatus: 'blocked',
@@ -114,6 +115,7 @@ describe('IngressService.processEvent', () => {
     );
     expect(wsGateway.broadcastWebhook).toHaveBeenCalledWith(
       'user-1',
+      'ws-1',
       expect.objectContaining({
         signatureValid: true,
         forwardStatus: 'pending',

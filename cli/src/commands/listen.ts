@@ -216,7 +216,8 @@ export async function listenCommand(options: ListenOptions): Promise<void> {
 
   const spinner = ora('Connecting to Hookdash...').start();
   const socket: Socket = io(`${config.wsUrl}/live`, {
-    auth: config.apiKey ? { apiKey: config.apiKey } : { token: config.token },
+    // A session names its workspace so only that workspace's events arrive; a key is pinned to its own
+    auth: config.apiKey ? { apiKey: config.apiKey } : { token: config.token, workspaceId: config.workspaceId ?? undefined },
     transports: ['websocket'],
     reconnection: true,
     reconnectionAttempts: Infinity,

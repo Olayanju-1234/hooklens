@@ -663,14 +663,18 @@ describe('ForwardProcessor', () => {
     it('broadcasts every delivery of a run event, including the real one', async () => {
       event.chaosRunId = 'run-1';
       await deliver();
-      expect(wsGateway.broadcastChaosDelivery).toHaveBeenCalledWith('user-1', {
-        runId: 'run-1',
-        eventId: 'evt-1',
-        chaosKind: null,
-        chaosSeq: 0,
-        status: 'forwarded',
-        responseCode: 200,
-      });
+      expect(wsGateway.broadcastChaosDelivery).toHaveBeenCalledWith(
+        'user-1',
+        'ws-1',
+        {
+          runId: 'run-1',
+          eventId: 'evt-1',
+          chaosKind: null,
+          chaosSeq: 0,
+          status: 'forwarded',
+          responseCode: 200,
+        },
+      );
     });
 
     it('broadcasts chaos copies outside runs, but not ordinary deliveries', async () => {
@@ -679,6 +683,7 @@ describe('ForwardProcessor', () => {
       await deliver({ kind: 'duplicate', seq: 1, delayMs: 0 });
       expect(wsGateway.broadcastChaosDelivery).toHaveBeenCalledWith(
         'user-1',
+        'ws-1',
         expect.objectContaining({
           runId: null,
           chaosKind: 'duplicate',

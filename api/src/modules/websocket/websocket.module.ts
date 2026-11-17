@@ -5,11 +5,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../../entities/user.entity.js';
 import { WebhookGateway } from './webhook.gateway.js';
 import { ApiKeysModule } from '../api-keys/api-keys.module.js';
+import { WorkspacesModule } from '../workspaces/workspaces.module.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
     ApiKeysModule,
+    WorkspacesModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

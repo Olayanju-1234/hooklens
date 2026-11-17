@@ -22,8 +22,12 @@ export class DeadLetterService {
     private readonly forwardQueue: Queue<DeliverJobData>,
   ) {}
 
-  async list(endpointId: string, userId: string): Promise<DeadLetterEvent[]> {
-    await this.endpointsService.findOne(endpointId, userId);
+  async list(
+    endpointId: string,
+    userId: string,
+    workspaceId?: string,
+  ): Promise<DeadLetterEvent[]> {
+    await this.endpointsService.findOne(endpointId, userId, workspaceId);
     return this.deadLetterRepo.find({
       where: { endpointId },
       relations: ['event'],
@@ -35,8 +39,13 @@ export class DeadLetterService {
     endpointId: string,
     id: string,
     userId: string,
+    workspaceId?: string,
   ): Promise<{ success: boolean }> {
-    const endpoint = await this.endpointsService.findOne(endpointId, userId);
+    const endpoint = await this.endpointsService.findOne(
+      endpointId,
+      userId,
+      workspaceId,
+    );
 
     const deadLetter = await this.deadLetterRepo.findOne({
       where: { id, endpointId },
@@ -66,8 +75,9 @@ export class DeadLetterService {
     endpointId: string,
     id: string,
     userId: string,
+    workspaceId?: string,
   ): Promise<{ success: boolean }> {
-    await this.endpointsService.findOne(endpointId, userId);
+    await this.endpointsService.findOne(endpointId, userId, workspaceId);
 
     const deadLetter = await this.deadLetterRepo.findOne({
       where: { id, endpointId },

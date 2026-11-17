@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Headers, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -28,12 +28,15 @@ export class BagsController {
   }
 
   @Get('events/stats')
-  @ApiOperation({ summary: 'Get Bags event stats for current user' })
+  @ApiOperation({ summary: 'Get Bags event stats for the workspace' })
   @ApiResponse({
     status: 200,
     description: 'Returns total events, last 24h count, and breakdown by type',
   })
-  getEventStats(@CurrentUser() user: JwtPayload) {
-    return this.bagsService.getEventStats(user.sub);
+  getEventStats(
+    @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
+  ) {
+    return this.bagsService.getEventStats(user.sub, workspaceId);
   }
 }

@@ -4,6 +4,7 @@ import {
   Post,
   Delete,
   Param,
+  Headers,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
@@ -35,9 +36,10 @@ export class DeadLetterController {
   @ApiParam({ name: 'endpointId', type: String })
   list(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('endpointId', ParseUUIDPipe) endpointId: string,
   ) {
-    return this.deadLetterService.list(endpointId, user.sub);
+    return this.deadLetterService.list(endpointId, user.sub, workspaceId);
   }
 
   @Post(':id/retry')
@@ -50,10 +52,11 @@ export class DeadLetterController {
   @ApiParam({ name: 'id', type: String })
   retry(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('endpointId', ParseUUIDPipe) endpointId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.deadLetterService.retry(endpointId, id, user.sub);
+    return this.deadLetterService.retry(endpointId, id, user.sub, workspaceId);
   }
 
   @Delete(':id')
@@ -66,9 +69,15 @@ export class DeadLetterController {
   @ApiParam({ name: 'id', type: String })
   discard(
     @CurrentUser() user: JwtPayload,
+    @Headers('x-workspace-id') workspaceId: string | undefined,
     @Param('endpointId', ParseUUIDPipe) endpointId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.deadLetterService.discard(endpointId, id, user.sub);
+    return this.deadLetterService.discard(
+      endpointId,
+      id,
+      user.sub,
+      workspaceId,
+    );
   }
 }
