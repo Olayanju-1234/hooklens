@@ -7,15 +7,20 @@ import type { WebhookProvider } from './types.js';
  * Use these in your own server to verify that incoming webhooks
  * are genuinely from the provider, not spoofed.
  *
+ * Always pass the raw body exactly as received. Re-serialising a parsed body
+ * (`JSON.stringify(req.body)`) can change its bytes and fail real signatures.
+ *
  * @example
  * ```ts
  * import { verify } from 'hookdash-sdk/verify';
  *
- * app.post('/webhook/paystack', (req, res) => {
+ * app.post('/webhook/paystack', express.raw({ type: 'application/json' }), (req, res) => {
+ *   const raw = req.body.toString('utf8');
  *   const sig = req.headers['x-paystack-signature'] as string;
- *   if (!verify.paystack(JSON.stringify(req.body), sig, process.env.PAYSTACK_SECRET!)) {
+ *   if (!verify.paystack(raw, sig, process.env.PAYSTACK_SECRET!)) {
  *     return res.status(401).send('Invalid signature');
  *   }
+ *   const event = JSON.parse(raw);
  *   // process webhook...
  * });
  * ```

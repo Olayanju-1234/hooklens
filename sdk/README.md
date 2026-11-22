@@ -162,18 +162,21 @@ Requests older than 5 minutes are rejected. Pass `{ toleranceSeconds }` to chang
 ### Paystack
 
 ```ts
-app.post('/webhooks/paystack', (req, res) => {
+app.post('/webhooks/paystack', express.raw({ type: 'application/json' }), (req, res) => {
   const sig = req.headers['x-paystack-signature'] as string
-  const raw = JSON.stringify(req.body)
+  const raw = req.body.toString('utf8')
 
   if (!verify.paystack(raw, sig, process.env.PAYSTACK_SECRET!)) {
     return res.status(401).send('Invalid signature')
   }
 
+  const event = JSON.parse(raw)
   // Process verified webhook
   res.sendStatus(200)
 })
 ```
+
+Verify the raw body exactly as it arrived. `JSON.stringify(req.body)` after `express.json()` rebuilds the JSON, and spacing, escaped slashes or number formats can come out different, so genuine webhooks fail. Express body parsers read the request once, so register webhook routes before any global `app.use(express.json())`. In NestJS, create the app with `{ rawBody: true }` and pass `req.rawBody.toString('utf8')`.
 
 ### Flutterwave
 
@@ -185,16 +188,17 @@ const valid = verify.flutterwave(hash, process.env.FLW_SECRET!)
 ### Mono
 
 ```ts
-// Mono sends your secret itself in this header
+// Mono sends your secret itself in this header (route mounted with express.raw like the others)
 const headerSecret = req.headers['mono-webhook-secret'] as string
-const valid = verify.mono(JSON.stringify(req.body), headerSecret, process.env.MONO_SECRET!)
+const valid = verify.mono(req.body.toString('utf8'), headerSecret, process.env.MONO_SECRET!)
 ```
 
 ### Auto-detect Provider
 
 ```ts
+// req.body is the raw Buffer from express.raw()
 const { provider, valid } = verify.auto(
-  JSON.stringify(req.body),
+  req.body.toString('utf8'),
   req.headers,
   process.env.WEBHOOK_SECRET!,
 )
