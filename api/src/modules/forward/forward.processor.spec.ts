@@ -20,6 +20,7 @@ interface QueuedJob {
     jobId?: string;
     attempts?: number;
     delay?: number;
+    removeOnComplete?: unknown;
   };
 }
 
@@ -114,10 +115,11 @@ describe('ForwardProcessor', () => {
     } as Job<ForwardJobData>);
   const deliver = (
     chaos?: ChaosDelivery,
-    opts: { attempts?: number; attemptsMade?: number } = {},
+    opts: { attempts?: number; attemptsMade?: number; id?: string } = {},
     destinationId: string | null = null,
   ) =>
     processor.process({
+      id: opts.id,
       name: 'deliver',
       data: {
         eventId: 'evt-1',
@@ -292,6 +294,17 @@ describe('ForwardProcessor', () => {
       await fanOut({ destinationId: 'dest-1' });
       expect(queued()).toHaveLength(1);
       expect(queued()[0].opts.jobId).toBeUndefined();
+    });
+
+    it('keeps a finished first delivery in Redis for an hour so a re-run fan-out is deduped', async () => {
+      await fanOut();
+      expect(queued()[0].opts.removeOnComplete).toEqual({
+        age: 3600,
+        count: 5000,
+      });
+
+      await fanOut({ destinationId: 'dest-1' });
+      expect(queued(1)[0].opts.removeOnComplete).toBeUndefined();
     });
 
     it('applies chaos to the fallback forward URL target', async () => {
@@ -566,6 +579,49 @@ describe('ForwardProcessor', () => {
         }),
       );
       expect(alertingService.evaluateForwardFailure).not.toHaveBeenCalled();
+    });
+
+    it('skips a first delivery that already went through and settles the event again', async () => {
+      resultRepo.exists.mockResolvedValue(true);
+      txResults = [
+        {
+          destinationId: null,
+          target: null,
+          status: 'forwarded',
+          responseCode: 200,
+          chaosSeq: 0,
+        },
+      ];
+      await deliver(undefined, { id: 'deliver-evt-1-fallback' });
+
+      expect(resultRepo.exists).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          eventId: 'evt-1',
+          chaosSeq: 0,
+          status: 'forwarded',
+        }) as unknown,
+      });
+      expect(axiosRef).not.toHaveBeenCalled();
+      expect(resultRepo.save).not.toHaveBeenCalled();
+      expect(tx.update).toHaveBeenCalledWith(
+        expect.anything(),
+        'evt-1',
+        expect.objectContaining({ forwardStatus: 'forwarded' }),
+      );
+    });
+
+    it('sends a first delivery that has not gone through yet', async () => {
+      resultRepo.exists.mockResolvedValue(false);
+      await deliver(undefined, { id: 'deliver-evt-1-fallback' });
+      expect(axiosRef).toHaveBeenCalledTimes(1);
+      expect(resultRepo.save).toHaveBeenCalled();
+    });
+
+    it('always sends a targeted re-delivery, even after an earlier success', async () => {
+      resultRepo.exists.mockResolvedValue(true);
+      await deliver(undefined, { id: '42' }, 'dest-1');
+      expect(resultRepo.exists).not.toHaveBeenCalled();
+      expect(axiosRef).toHaveBeenCalledTimes(1);
     });
 
     it('still retries an ordinary failed delivery before its last attempt', async () => {

@@ -99,6 +99,13 @@ export const FAN_OUT_JOB_OPTIONS: JobsOptions = {
 
 const FALLBACK = 'fallback';
 
+// BullMQ only dedupes a job id while that job is in Redis, so keep first deliveries well past any fan-out retry
+const FIRST_DELIVERY_KEEP = { age: 3600, count: 5000 };
+
+function firstDeliveryJobId(eventId: string, target: string | null): string {
+  return `deliver-${eventId}-${target ?? FALLBACK}`;
+}
+
 function withRun(plan: ChaosPlan, runId: string): ChaosPlan {
   return { ...plan, extras: plan.extras.map((e) => ({ ...e, runId })) };
 }
@@ -213,8 +220,8 @@ export class ForwardProcessor extends WorkerHost {
           Boolean(destinationId),
         );
 
-    // Deterministic ids make a retried fan-out a no-op for deliveries already queued;
-    // a targeted re-delivery must not collide with the original job id
+    // Deterministic ids make a retried fan-out a no-op for deliveries still in Redis, and deliver() skips
+    // one that already succeeded; a targeted re-delivery must not collide with the original job id
     await this.forwardQueue.addBulk(
       targets.flatMap((target) => {
         const data: DeliverJobData = {
@@ -223,7 +230,7 @@ export class ForwardProcessor extends WorkerHost {
           userId,
           destinationId: target,
         };
-        const jobId = `deliver-${eventId}-${target ?? FALLBACK}`;
+        const jobId = firstDeliveryJobId(eventId, target);
         const plan = plans.get(target ?? FALLBACK);
         const held: ChaosDelivery | undefined = plan?.primary.kind
           ? { kind: plan.primary.kind, seq: 0, delayMs: plan.primary.delayMs }
@@ -234,7 +241,10 @@ export class ForwardProcessor extends WorkerHost {
             data: held ? { ...data, chaos: held } : data,
             opts: {
               ...deliveryJobOptions(endpoint),
-              ...(!destinationId && { jobId }),
+              ...(!destinationId && {
+                jobId,
+                removeOnComplete: FIRST_DELIVERY_KEEP,
+              }),
               ...(held && { delay: held.delayMs }),
             },
           },
@@ -327,6 +337,18 @@ export class ForwardProcessor extends WorkerHost {
     const { eventId, endpointId, userId, destinationId, chaos } = job.data;
     const extra = isExtraCopy(chaos);
     if (extra && !(await this.extraCopyWanted(job.data))) return;
+    if (
+      !extra &&
+      job.id === firstDeliveryJobId(eventId, destinationId) &&
+      (await this.delivered(eventId, destinationId))
+    ) {
+      this.logger.log(
+        `Event ${eventId} already delivered to ${destinationId ?? FALLBACK}, skipping the repeat`,
+      );
+      // A re-run fan-out reset the event to pending, so work its status out again
+      await this.settle(eventId, userId);
+      return;
+    }
     const [event, endpoint, destination, transformRules] = await Promise.all([
       this.eventRepo.findOne({ where: { id: eventId } }),
       this.endpointRepo
@@ -422,15 +444,7 @@ export class ForwardProcessor extends WorkerHost {
         ? Promise.resolve(true)
         : this.chaosService.isActive(endpointId, destinationId),
       chaos?.kind === 'stale'
-        ? this.resultRepo.exists({
-            where: {
-              eventId,
-              destinationId: destinationId ?? IsNull(),
-              target: IsNull(),
-              chaosSeq: 0,
-              status: 'forwarded',
-            },
-          })
+        ? this.delivered(eventId, destinationId)
         : Promise.resolve(true),
     ]);
     if (!active) {
@@ -443,6 +457,22 @@ export class ForwardProcessor extends WorkerHost {
       );
     }
     return active && delivered;
+  }
+
+  /** Whether the real delivery to this target has already gone through. */
+  private delivered(
+    eventId: string,
+    destinationId: string | null,
+  ): Promise<boolean> {
+    return this.resultRepo.exists({
+      where: {
+        eventId,
+        destinationId: destinationId ?? IsNull(),
+        target: IsNull(),
+        chaosSeq: 0,
+        status: 'forwarded',
+      },
+    });
   }
 
   // Only reached for unexpected errors on the last attempt; delivery failures are dead-lettered in deliver()
